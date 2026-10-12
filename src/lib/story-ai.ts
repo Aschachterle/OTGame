@@ -220,6 +220,7 @@ function buildNarrationInstructions(context: NarrationContext): string {
     '',
     '### Core Narrative Rules:',
     '- Deliver your narrative in exactly 3 distinct, complete sentences corresponding to the 3 lines.',
+    '- Do not reuse any exact sentence or stock phrase from the prior narration provided in the user context; each dispatch must feel distinct while preserving established facts.',
     '- Read the "DM Dossier" provided in the prompt. Adapt your tone to reflect the player\'s moral temperament, pace habits, and the crew\'s simmering sentiment.',
     '- If an action or decision was just resolved (e.g. river crossing, hunting, emergency treatment), provide immediate narrative payoff and describe what was risked or lost.',
     '- Escalate strangeness and surreal elements based on the Current Strangeness Level (0-10):',
@@ -231,6 +232,8 @@ function buildNarrationInstructions(context: NarrationContext): string {
     '- Never mention tile IDs, coordinates, or UI button names.',
     '- Use realistic pioneer supply units: rations, gallons, bundles, doses.',
     '- Only build an obstacle if the situation warrants an acute crisis; otherwise obstacle must be null.',
+    '- When building an obstacle, make it specific to the current situation and do not repeat any recent dilemma description or set of choices listed in the user context.',
+    '- If no distinct, consequential dilemma is warranted, set obstacle to null rather than reusing an earlier one.',
     '',
     'Allowed mutation motifs for inspiration when strangeness is high:',
     chaosCatalog
@@ -324,9 +327,34 @@ function summarizePriorNarration(context: NarrationContext): string {
     return 'none';
   }
   return entries
-    .slice(-3)
+    .slice(-6)
     .map((entry, index) => `beat${index + 1}: ${entry}`)
     .join(' || ');
+}
+
+function normalizeNarrationSentence(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function repeatsRecentNarrationSentence(body: string, context: NarrationContext): boolean {
+  const priorSentences = new Set(
+    (context.priorNarration ?? [])
+      .flatMap((entry) => entry.match(/[^.!?]+[.!?]?/g) ?? [])
+      .map(normalizeNarrationSentence)
+      .filter(Boolean)
+  );
+  const currentSentences = body.match(/[^.!?]+[.!?]?/g) ?? [body];
+  return currentSentences.some((sentence) => priorSentences.has(normalizeNarrationSentence(sentence)));
+}
+
+function summarizeObstacleHistory(context: NarrationContext): string {
+  const entries = (context.obstacleHistory ?? [])
+    .filter((entry) => context.day - entry.day <= 6 && context.day >= entry.day)
+    .slice(-6);
+  if (!entries.length) return 'none';
+  return entries
+    .map((entry) => `day ${entry.day}: ${entry.description} [choices: ${entry.choices.join(', ')}]`)
+    .join(' | ');
 }
 
 function summarizePriorKeyPoints(context: NarrationContext): string {
@@ -389,14 +417,32 @@ function buildObstacleChoice(
   };
 }
 
-function selectObstacleVariant(obstacles: Obstacle[], context: NarrationContext, salt = 0): Obstacle {
-  const historySize = context.historyLog?.length ?? 0;
-  const actionLength = context.lastAction?.actionType?.length ?? 0;
-  const index = (context.day + context.distanceToFrontier + historySize + actionLength + (context.strangenessLevel ?? 0) + salt) % obstacles.length;
-  return obstacles[index];
+function normalizeObstacleText(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-function chooseFallbackObstacle(context: NarrationContext): Obstacle {
+function isRecentlyUsedObstacle(obstacle: Obstacle, context: NarrationContext): boolean {
+  const recent = (context.obstacleHistory ?? []).filter((entry) => context.day - entry.day <= 6 && context.day >= entry.day);
+  const description = normalizeObstacleText(obstacle.description);
+  const choices = obstacle.choices.map((choice) => normalizeObstacleText(choice.label)).sort().join('|');
+
+  return recent.some((entry) => {
+    const previousDescription = normalizeObstacleText(entry.description);
+    const previousChoices = entry.choices.map(normalizeObstacleText).sort().join('|');
+    return description === previousDescription || (choices.length > 0 && choices === previousChoices);
+  });
+}
+
+function selectObstacleVariant(obstacles: Obstacle[], context: NarrationContext, salt = 0): Obstacle | undefined {
+  const freshObstacles = obstacles.filter((obstacle) => !isRecentlyUsedObstacle(obstacle, context));
+  if (!freshObstacles.length) return undefined;
+  const historySize = context.historyLog?.length ?? 0;
+  const actionLength = context.lastAction?.actionType?.length ?? 0;
+  const index = (context.day + context.distanceToFrontier + historySize + actionLength + (context.strangenessLevel ?? 0) + salt) % freshObstacles.length;
+  return freshObstacles[index];
+}
+
+function chooseFallbackObstacle(context: NarrationContext): Obstacle | undefined {
   if (context.riskState?.waterCritical) {
     return selectObstacleVariant([
       {
@@ -630,6 +676,7 @@ async function requestGeminiNarration(context: NarrationContext): Promise<Narrat
             `Action history log: ${summarizeHistory(context)}`,
             `Prior narration to avoid repeating: ${summarizePriorNarration(context)}`,
             `Prior key points to continue: ${summarizePriorKeyPoints(context)}`,
+            `Recent dilemmas to avoid repeating: ${summarizeObstacleHistory(context)}`,
             `Available action types for inspiration: ${context.availableActionTypes?.length ? context.availableActionTypes.join(', ') : 'none'}`,
             `Current unresolved obstacle: ${context.activeObstacle ? `${context.activeObstacle.description} | choices: ${context.activeObstacle.choices.map((choice) => choice.label).join(', ')}` : 'none'}`,
             `Available choices: ${context.decisionOptions?.length ? context.decisionOptions.join(', ') : 'none'}`,
@@ -703,8 +750,15 @@ async function requestGeminiNarration(context: NarrationContext): Promise<Narrat
         lastError = new Error(`Gemini narration was too short for ${model}`);
         continue;
       }
+      if (repeatsRecentNarrationSentence(beat.body, context)) {
+        console.warn('LLM narration repeated a recent sentence; using deterministic fallback.');
+        return createFallbackNarration(context);
+      }
       return {
         ...beat,
+        obstacle: beat.obstacle && isRecentlyUsedObstacle(beat.obstacle, context)
+          ? (Object.values(context.riskState ?? {}).some(Boolean) ? chooseFallbackObstacle(context) : undefined)
+          : beat.obstacle,
         tone: beat.tone ?? (context.journeyPhase === 'finish' ? 'melancholic' : 'uncanny')
       };
     } catch (error) {

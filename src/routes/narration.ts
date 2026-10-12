@@ -76,6 +76,11 @@ const narrationSchema = z.object({
   ).default([]),
   priorNarration: z.array(z.string().min(1).max(1200)).default([]),
   priorKeyPoints: z.array(z.string().min(1).max(240)).default([]),
+  obstacleHistory: z.array(z.object({
+    day: z.number().int().positive(),
+    description: z.string().min(1).max(260),
+    choices: z.array(z.string().min(1).max(80)).max(3)
+  })).max(8).default([]),
   strangenessLevel: z.number().int().min(0).max(10).default(0),
   distanceDescriptor: z.string().optional(),
   journeyCompleted: z.boolean().default(false),

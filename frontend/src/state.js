@@ -326,6 +326,7 @@ export function createAppState() {
     lastActionContext: null,
     actionHistory: [],
     narrationHistory: [],
+    recentObstacleHistory: [],
     storyKeyPoints: [],
     strangenessLevel: 0,
     lastRemoteNarrationTriggerKey: '',
@@ -368,6 +369,7 @@ export function resetExpedition(state = appState) {
   state.lastActionContext = null;
   state.actionHistory = [];
   state.narrationHistory = [];
+  state.recentObstacleHistory = [];
   state.storyKeyPoints = [];
   state.strangenessLevel = 0;
   state.lastRemoteNarrationTriggerKey = '';
@@ -453,6 +455,25 @@ export function rememberNarrationKeyPoints(state, keyPoints) {
 export function clampObstacleCostValue(value, max = 20) {
   if (typeof value !== 'number' || Number.isNaN(value)) return 0;
   return Math.max(0, Math.min(max, Math.round(value)));
+}
+
+function normalizeObstacleHistoryText(text) {
+  return text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+export function rememberObstacleHistory(state, obstacle) {
+  const description = obstacle.description.trim();
+  const history = state.recentObstacleHistory ?? [];
+  const normalizedDescription = normalizeObstacleHistoryText(description);
+  const matchingIndex = history.findIndex((entry) => normalizeObstacleHistoryText(entry.description) === normalizedDescription);
+  state.recentObstacleHistory = [
+    ...history.filter((_, index) => index !== matchingIndex),
+    {
+      day: state.day,
+      description,
+      choices: obstacle.choices.map((choice) => choice.label)
+    }
+  ].slice(-8);
 }
 
 export function normalizeObstacleCandidate(obstacle) {

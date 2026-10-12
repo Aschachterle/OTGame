@@ -89,6 +89,11 @@ export type NarrationContext = {
   } | null;
   priorNarration?: string[];
   priorKeyPoints?: string[];
+  obstacleHistory?: Array<{
+    day: number;
+    description: string;
+    choices: string[];
+  }>;
   strangenessLevel?: number;
   distanceDescriptor?: string;
   journeyCompleted?: boolean;
@@ -183,26 +188,96 @@ function describeActionLabel(actionType: string): string {
   return actionType.replace(/-/g, ' ');
 }
 
+function normalizeNarrationPhrase(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function chooseNarrationPhrase(context: NarrationContext, options: string[], salt: number): string {
+  const priorNarration = (context.priorNarration ?? []).slice(-8).map(normalizeNarrationPhrase);
+  const freshOptions = options.filter((option) => {
+    const normalizedOption = normalizeNarrationPhrase(option);
+    return priorNarration.every((prior) => !prior.includes(normalizedOption));
+  });
+  const alternatives = freshOptions.length
+    ? freshOptions
+    : options.filter((option) => !priorNarration.at(-1)?.includes(normalizeNarrationPhrase(option)));
+  const availableOptions = alternatives.length ? alternatives : options;
+  const seed = context.day + (context.milesTraveled ?? 0) + (context.strangenessLevel ?? 0) + (context.lastAction?.actionType.length ?? 0) + salt;
+  return availableOptions[seed % availableOptions.length];
+}
+
 export function composeNarration(context: NarrationContext) {
   const expeditionName = context.expeditionName?.trim() || 'The wagon party';
   const location = context.currentLandmark ?? context.locationName ?? 'the trail';
   const nextLandmark = context.nextLandmark ?? 'the next landmark';
   const weatherMood =
     context.weather.rain > 70
-      ? 'Rain needles the canvas and turns the ground greasy under the wheels.'
+      ? chooseNarrationPhrase(context, [
+          'Rain needles the canvas and turns the ground greasy under the wheels.',
+          'Downpour rattles the wagon cover and slicks the ruts into black mud.',
+          'Cold rain runs off the canvas in steady ropes and clings to every wheel.',
+          'The storm presses close, soaking the road and darkening the timber.'
+        ], 1)
       : context.weather.tempC < 0
-        ? 'The cold bites through wool and leaves each breath thin and sharp.'
+        ? chooseNarrationPhrase(context, [
+            'The cold bites through wool and leaves each breath thin and sharp.',
+            'Frost stiffens the harness while the party huddles close beneath blankets.',
+            'The air burns in the lungs, and ice gathers along the wagon fittings.',
+            'A hard freeze makes every buckle and handle cruel to the touch.'
+          ], 2)
         : context.weather.windKph > 35
-          ? 'A hard wind worries the canvas and keeps the oxen restless.'
-          : 'The weather holds steady, though the country never quite relaxes.';
+          ? chooseNarrationPhrase(context, [
+              'A hard wind worries the canvas and keeps the oxen restless.',
+              'Gusts shove at the wagon cover and scatter dust across the track.',
+              'The wind leans against the team, carrying grit into every seam.',
+              'Canvas snaps above the wagon as the oxen lower their heads into the gale.'
+            ], 3)
+          : chooseNarrationPhrase(context, [
+              'The weather holds steady, though the country never quite relaxes.',
+              'A mild sky gives no warning, and the open country keeps its silence.',
+              'The air is calm enough, but the empty miles offer little comfort.',
+              'No storm threatens the wagon today; the quiet itself feels watchful.',
+              'The clouds stay high while the trail stretches west without a friendly sign.',
+              'Clear weather follows the wagon, but the plain offers no promise of ease.',
+              'A pale sun rides above the prairie, indifferent to the slow procession below.',
+              'The sky remains open, leaving the party exposed beneath its vastness.',
+              'A quiet breeze crosses the grass, stirring nothing but dust and old unease.',
+              'The day is fair by frontier standards, though the road gives no comfort.'
+            ], 4);
   const strainMood =
     context.wagon.food < 10 || context.wagon.water < 10
-      ? 'Hunger and thirst have begun to narrow every conversation to necessity.'
+      ? chooseNarrationPhrase(context, [
+          'Hunger and thirst have begun to narrow every conversation to necessity.',
+          'The dwindling food and water leave the party counting each swallow and bite.',
+          'Empty measures and light ration bags make even small arguments feel urgent.',
+          'The crew speaks less of Oregon and more of what remains in the barrels and sacks.',
+          'The last provisions are watched closely, and every meal ends sooner than hoped.',
+          'Dry mouths and thin suppers have made the wagon quiet in the wrong way.',
+          'The party measures the road in mouthfuls and canteens rather than miles.',
+          'With the stores running low, even ordinary work begins to feel like a bargain.',
+          'Each ration is counted twice, and no one wastes water on idle talk.',
+          'The food sacks lie slack and the water casks light; the crew knows the numbers.'
+        ], 5)
       : context.wagon.health < 40
-        ? 'The weakest in the party move like people already paying tomorrow’s cost.'
+        ? chooseNarrationPhrase(context, [
+            'The weakest in the party move like people already paying tomorrow’s cost.',
+            'Each step comes harder to the sick and injured, who save their strength for the next mile.',
+            'Pain has slowed the party; even simple work now asks for a pause.',
+            'Those still standing watch the ailing closely, measuring every cough and stumble.'
+          ], 6)
         : context.wagon.morale < 40
-          ? 'The party keeps its shape, but only with bitterness showing through the seams.'
-          : 'The party still has enough strength to pretend the trail can be reasoned with.';
+          ? chooseNarrationPhrase(context, [
+              'The party keeps its shape, but only with bitterness showing through the seams.',
+              'Short answers pass around the camp, and no one volunteers for the hardest task.',
+              'The crew remains together, though patience has worn thinner than the canvas.',
+              'A few tired disputes linger after the work is done, unanswered by the fire.'
+            ], 7)
+          : chooseNarrationPhrase(context, [
+              'The party still has enough strength to pretend the trail can be reasoned with.',
+              'For now, the crew shoulders its work without complaint and saves its doubts for camp.',
+              'The party keeps a cautious rhythm, finding comfort in familiar chores.',
+              'No one mistakes the road for kindness, but the crew has not yet lost its resolve.'
+            ], 8);
   const supplies = context.supplyEstimates
     ? `${context.supplyEstimates.foodRations} rations, ${context.supplyEstimates.waterGallons} gal water, ${context.supplyEstimates.firewoodBundles} wood, ${context.supplyEstimates.medicineDoses} medicine`
     : 'their stores under close watch';

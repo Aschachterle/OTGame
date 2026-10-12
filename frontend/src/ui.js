@@ -128,69 +128,77 @@ function chronicleLinesForState(state, locationName, weather, supplies) {
   const milesToNext = getMilesToNextMilestone(state);
   const biome = (selectedTile.biome ?? 'frontier').toUpperCase();
 
-  // 1. Session & Landmark Header
   lines.push(`=== DAY ${state.day} // ${locationName.toUpperCase()} // ${biome} // MILE ${state.milesTraveled} OF ${TOTAL_TRAIL_MILES} ===`);
 
-  // 2. Action Summary & Mechanical Outcome
-  const summary = state.lastActionSummary;
-  if (summary) {
-    lines.push(`[ACTION REPORT: ${summary.title.toUpperCase()}]`);
-    if (summary.detail) {
-      lines.push(prefixTerminalLine(summary.detail));
-    }
-    const metricsText = (summary.metrics ?? [])
-      .filter((m) => m && m.label && m.delta && m.delta !== 'No immediate wagon change')
-      .map((m) => `${m.label}: ${m.delta}`)
-      .join(' • ');
-    if (metricsText) {
-      lines.push(prefixTerminalLine(`OUTCOME: ${metricsText}`));
-    }
-    lines.push('');
-  } else if (state.statusMessage && state.day > 1) {
-    lines.push(`[TRAIL REPORT]`);
-    lines.push(prefixTerminalLine(state.statusMessage));
-    lines.push('');
-  }
-
-  // 3. Expedition Dispatch (Serialized Story from Gemini)
+  lines.push('[STORY]');
   const narration = state.latestNarration;
-  const headline = normalizeLine(narration?.headline) || (state.day === 1 ? 'THE ROAD TO OREGON' : 'EXPEDITION CHRONICLE');
-  lines.push(`[EXPEDITION DISPATCH: ${headline.toUpperCase()}]`);
-
   const explicitLines = Array.isArray(narration?.lines)
     ? narration.lines.map(normalizeLine).filter(Boolean)
     : [];
-
-  if (explicitLines.length >= 2) {
-    explicitLines.forEach((line) => {
-      lines.push(prefixTerminalLine(line));
+  const storySentences = explicitLines.length >= 2
+    ? explicitLines
+    : splitSentences(state.narrationText).map(normalizeLine).filter(Boolean);
+  if (storySentences.length) {
+    const renderedStory = [...storySentences];
+    if (state.lastActionContext?.actionType === 'press-on' && typeof state.lastActionContext.milesGained === 'number') {
+      renderedStory[0] = state.statusMessage;
+    }
+    const waypointText = nextMilestone
+      ? `${nextMilestone.shortName} (${milesToNext} miles ahead)`
+      : 'Willamette Valley reached';
+    renderedStory.forEach((line) => {
+      const accurateLine = line.replace(/Next landmark:\s*the next landmark\.?/i, `Next landmark: ${waypointText}.`);
+      lines.push(prefixTerminalLine(accurateLine));
     });
   } else {
-    const bodySentences = splitSentences(state.narrationText).map(normalizeLine).filter(Boolean);
-    if (bodySentences.length > 0) {
-      bodySentences.forEach((sentence) => {
-        lines.push(prefixTerminalLine(sentence));
-      });
-    } else {
-      lines.push(prefixTerminalLine(`${locationName} on day ${state.day} waits for the party's command.`));
-      lines.push(prefixTerminalLine(atmosphericLine(locationName, weather, state)));
-    }
+    lines.push(prefixTerminalLine(atmosphericLine(locationName, weather, state)));
   }
-
   if (narration?.surrealMutation) {
     lines.push(prefixTerminalLine(`MUTATION DETECTED: ${narration.surrealMutation.description}`));
   }
 
   lines.push('');
+  lines.push('[MOVE RESULTS]');
+  const summary = state.lastActionSummary;
+  if (summary) {
+    lines.push(prefixTerminalLine(`${summary.title}${summary.location ? ` at ${summary.location}` : ''}`));
+    if (summary.detail && summary.actionType !== 'press-on') lines.push(prefixTerminalLine(summary.detail));
+    const metrics = (summary.metrics ?? []).filter((metric) => metric?.label && metric?.delta && metric.delta !== 'No immediate wagon change');
+    if (metrics.length) {
+      metrics.forEach((metric) => {
+        const sign = metric.tone === 'positive' ? '+' : metric.tone === 'negative' ? '-' : '=';
+        lines.push(`[STAT ${sign}] ${metric.label.toUpperCase()} ${metric.delta}`);
+      });
+    } else {
+      lines.push(prefixTerminalLine('No tracked wagon stats changed on this move.'));
+    }
+  } else if (state.statusMessage && state.day > 1) {
+    lines.push(prefixTerminalLine(state.statusMessage));
+  } else {
+    lines.push(prefixTerminalLine('No move recorded yet. The starting supply gauges are shown above.'));
+  }
 
-  // 4. Logistics & Stores Check
-  const nextClause = nextMilestone
-    ? `Next landmark: ${nextMilestone.shortName} (${milesToNext} miles ahead).`
-    : 'Willamette Valley reached.';
-  lines.push(prefixTerminalLine(`Stores: ${supplies.foodRations} rations, ${supplies.waterGallons} gal water, ${supplies.firewoodBundles} wood, ${supplies.medicineDoses} med, ${supplies.ammunitionBoxes} ammo.`));
-  lines.push(prefixTerminalLine(nextClause));
+  lines.push('');
+  lines.push('[NEXT STEPS]');
+  if (nextMilestone) {
+    lines.push(prefixTerminalLine(`Waypoint: ${nextMilestone.shortName} — ${milesToNext} miles ahead.`));
+  } else {
+    lines.push(prefixTerminalLine('Waypoint: Willamette Valley reached.'));
+  }
+  const nextAction = state.wagon.wagonParts.brokenPart
+    ? `Repair the ${state.wagon.wagonParts.brokenPart.toLowerCase()} before moving.`
+    : state.wagon.water < 10 || state.wagon.food < 10
+      ? 'Gather provisions now; food or water is critically low.'
+      : state.wagon.health < 45 && state.wagon.medicine > 0
+        ? 'Treat the most vulnerable party member before traveling.'
+        : state.wagon.morale < 35
+          ? 'Make camp to stabilize morale before the next hard push.'
+          : state.journeyCompleted
+            ? 'The trail is complete. Review the ledger and choose your next settlement action.'
+            : `Focus: Press On at ${paceLabel(state.wagon.pace).toLowerCase()} pace to reach the next waypoint.`;
+  lines.push(prefixTerminalLine(nextAction));
+  lines.push(prefixTerminalLine(`Stores: ${supplies.foodRations} rations • ${supplies.waterGallons} gal water • ${supplies.firewoodBundles} wood • ${supplies.medicineDoses} medicine • ${supplies.ammunitionBoxes} ammo.`));
 
-  // 5. Active Decision / Dilemma (if any)
   const decision = state.activeDecision;
   if (decision) {
     lines.push('');
@@ -247,6 +255,18 @@ function renderChronicleMarkup(lines, isStreaming) {
       classes.push('dispatch-header');
     } else if (line.startsWith('[TRAIL STATUS') || line.startsWith('[TRAIL REPORT') || line.startsWith('[STATUS NOTE')) {
       classes.push('status-header');
+    } else if (line === '[STORY]') {
+      classes.push('story-section-header');
+    } else if (line === '[MOVE RESULTS]') {
+      classes.push('results-section-header');
+    } else if (line === '[NEXT STEPS]') {
+      classes.push('next-steps-section-header');
+    } else if (line.startsWith('[STAT +]')) {
+      classes.push('status-change-positive');
+    } else if (line.startsWith('[STAT -]')) {
+      classes.push('status-change-negative');
+    } else if (line.startsWith('[STAT =]')) {
+      classes.push('status-change-neutral');
     } else if (line.startsWith('[') && !line.match(/^\[\d+\]/)) {
       classes.push('dilemma-header');
     } else if (line.startsWith('> OUTCOME:')) {
@@ -576,6 +596,13 @@ export function createUI() {
       statusMessage: state.statusMessage,
       actionType: state.lastActionContext?.actionType ?? '',
       actionOutcome: state.lastActionContext?.outcome ?? '',
+      actionSummary: state.lastActionSummary
+        ? {
+            title: state.lastActionSummary.title,
+            detail: state.lastActionSummary.detail,
+            metrics: state.lastActionSummary.metrics
+          }
+        : null,
       lastActionSummaryTitle: state.lastActionSummary?.title ?? '',
       lastActionSummaryDetail: state.lastActionSummary?.detail ?? '',
       decisionTitle: state.activeDecision?.title ?? '',

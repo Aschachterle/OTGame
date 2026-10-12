@@ -25,6 +25,7 @@ import {
   paceLabel,
   resourceUnitsLabel,
   rationsLabel,
+  rememberObstacleHistory,
   resetExpedition,
   saveBooleanPreference,
   saveCloudNarrationPreference,
@@ -335,6 +336,7 @@ export function createGameController({ state, ui, api, audio }) {
       ui.renderHazardBanner(state);
       return;
     }
+    rememberObstacleHistory(state, state.activeObstacle);
     setDecision(buildObstacleDecision(state.activeObstacle));
   }
 
@@ -520,8 +522,11 @@ export function createGameController({ state, ui, api, audio }) {
       })),
       lastAction: state.lastActionContext,
       historyLog: state.actionHistory,
-      priorNarration: state.narrationHistory.slice(-4),
+      priorNarration: state.narrationHistory.slice(-8),
       priorKeyPoints: state.storyKeyPoints.slice(-10),
+      obstacleHistory: state.recentObstacleHistory
+        .filter((entry) => state.day - entry.day <= 6)
+        .slice(-6),
       strangenessLevel: state.strangenessLevel,
       distanceDescriptor,
       journeyCompleted: state.journeyCompleted,
@@ -564,8 +569,9 @@ export function createGameController({ state, ui, api, audio }) {
       })),
       lastAction: context.lastAction,
       historyLog: (context.historyLog ?? []).slice(-8),
-      priorNarration: (context.priorNarration ?? []).slice(-3),
+      priorNarration: (context.priorNarration ?? []).slice(-8),
       priorKeyPoints: (context.priorKeyPoints ?? []).slice(-8),
+      obstacleHistory: context.obstacleHistory,
       strangenessLevel: context.strangenessLevel,
       distanceDescriptor: context.distanceDescriptor,
       activeObstacle: context.activeObstacle
@@ -659,9 +665,17 @@ export function createGameController({ state, ui, api, audio }) {
     return state.actionHistory.at(-2)?.strangenessLevel ?? 0;
   }
 
-  function getAiNarrationTrigger(context) {
+  function getAiNarrationTrigger(context, stateKey) {
     if (!state.llmNarrationPreferred || !state.llmNarrationAvailable) {
-      return null;
+      const latestActionType = context.lastAction?.actionType;
+      const fallbackReason = latestActionType === 'press-on'
+        ? 'routine-travel'
+        : latestActionType === 'camp'
+          ? 'routine-camp'
+          : latestActionType === 'gather'
+            ? 'routine-gather'
+            : 'routine';
+      return { key: `state:${stateKey}`, reason: fallbackReason };
     }
 
     const activeRiskKeys = Object.entries(context.riskState ?? {})
@@ -794,7 +808,7 @@ export function createGameController({ state, ui, api, audio }) {
   async function loadNarration(shouldAutoPlay = true) {
     const stateKey = getNarrationStateKey();
     const context = getNarrationContext();
-    const remoteTrigger = getAiNarrationTrigger(context);
+    const remoteTrigger = getAiNarrationTrigger(context, stateKey);
     debugNarration(state, 'loadNarration:called', { stateKey, narrationInFlightKey: state.narrationInFlightKey, narrationStateKey: state.narrationStateKey });
     if (state.narrationInFlightKey === stateKey) {
       debugNarration(state, 'loadNarration:skipped-inflight', { stateKey });
@@ -858,40 +872,40 @@ export function createGameController({ state, ui, api, audio }) {
   }
 
   async function appendEvent(eventType, payload) {
-    const latest = state.events[0];
     const ledgerTileId = getCurrentMilestone(state).id;
-    const response = await api.postEvent({
-      prevHash: latest?.eventHash ?? null,
-      tileId: ledgerTileId,
-      eventType,
-      payload
-    });
+    const maxAttempts = 5;
 
-    if (!response.ok) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      const latest = state.events[0];
+      const response = await api.postEvent({
+        prevHash: latest?.eventHash ?? null,
+        tileId: ledgerTileId,
+        eventType,
+        payload
+      });
+
       if (response.status === 409) {
-        await loadEvents();
-        const retryLatest = state.events[0];
-        const retryResponse = await api.postEvent({
-          prevHash: retryLatest?.eventHash ?? null,
-          tileId: ledgerTileId,
-          eventType,
-          payload
-        });
-        if (!retryResponse.ok) {
-          throw new Error(`Event failed after retry: ${retryResponse.status}`);
+        if (attempt === maxAttempts) {
+          throw new Error(`Event remained conflicted after ${maxAttempts} attempts`);
         }
-        const retryJson = await retryResponse.json();
-        state.events = [retryJson, ...state.events];
+        const refreshed = await api.getEvents(8);
+        state.events = refreshed.events ?? [];
         ui.renderEventLog(state.events);
-        return retryJson;
+        await new Promise((resolve) => setTimeout(resolve, attempt * 30));
+        continue;
       }
-      throw new Error(`Event failed: ${response.status}`);
+
+      if (!response.ok) {
+        throw new Error(`Event failed: ${response.status}`);
+      }
+
+      const json = await response.json();
+      state.events = [json, ...state.events.filter((event) => event.eventHash !== json.eventHash)].slice(0, 8);
+      ui.renderEventLog(state.events);
+      return json;
     }
 
-    const json = await response.json();
-    state.events = [json, ...state.events];
-    ui.renderEventLog(state.events);
-    return json;
+    throw new Error(`Event failed after ${maxAttempts} attempts`);
   }
 
   async function finalizeResourceClaim(actionType, inputs) {
@@ -1135,17 +1149,14 @@ export function createGameController({ state, ui, api, audio }) {
       water: supplies.waterGallons,
       wood: supplies.firewoodBundles,
       medicine: supplies.medicineDoses,
-      ammunition: supplies.ammunitionBoxes
+      ammunition: supplies.ammunitionBoxes,
+      axle: wagon.wagonParts.axle,
+      wheels: wagon.wagonParts.wheels,
+      milesTraveled: state.milesTraveled
     };
   }
 
   function setActionSummary(actionType, beforeSnapshot) {
-    if (actionType === 'press-on') {
-      state.lastActionSummary = null;
-      ui.renderActionSummary(state);
-      return;
-    }
-
     const afterSnapshot = createWagonSummarySnapshot(state.wagon);
     const metricConfig = [
       { key: 'health', label: 'Health', suffix: '' },
@@ -1154,7 +1165,10 @@ export function createGameController({ state, ui, api, audio }) {
       { key: 'water', label: 'Water', suffix: ' gal' },
       { key: 'wood', label: 'Wood', suffix: ' bundles' },
       { key: 'medicine', label: 'Medicine', suffix: ' doses' },
-      { key: 'ammunition', label: 'Ammo', suffix: ' boxes' }
+      { key: 'ammunition', label: 'Ammo', suffix: ' boxes' },
+      { key: 'axle', label: 'Axle integrity', suffix: '%' },
+      { key: 'wheels', label: 'Wheel integrity', suffix: '%' },
+      { key: 'milesTraveled', label: 'Distance', suffix: ' mi' }
     ];
     const metrics = metricConfig
       .map((metric) => {

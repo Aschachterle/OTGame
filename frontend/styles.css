@@ -482,6 +482,53 @@ button.menu-item:disabled {
   text-shadow: 0 0 8px rgba(255, 171, 145, 0.5);
 }
 
+.teletype-line.story-section-header,
+.teletype-line.results-section-header,
+.teletype-line.next-steps-section-header {
+  margin-top: 4px;
+  padding: 5px 8px;
+  border-left: 3px solid currentColor;
+  background: rgba(0, 255, 102, 0.06);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.teletype-line.story-section-header {
+  color: #8effad;
+}
+
+.teletype-line.results-section-header {
+  color: #ffe082;
+  border-left-color: #ffe082;
+  background: rgba(255, 224, 130, 0.06);
+}
+
+.teletype-line.next-steps-section-header {
+  color: #80deea;
+  border-left-color: #80deea;
+  background: rgba(128, 222, 234, 0.06);
+}
+
+.teletype-line.status-change-positive,
+.teletype-line.status-change-negative,
+.teletype-line.status-change-neutral {
+  padding: 3px 8px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.teletype-line.status-change-positive {
+  color: #8effad;
+}
+
+.teletype-line.status-change-negative {
+  color: #ff9385;
+}
+
+.teletype-line.status-change-neutral {
+  color: #b6c9b9;
+}
+
 .teletype-line.impact {
   color: #ffd54f;
   padding-left: 12px;
