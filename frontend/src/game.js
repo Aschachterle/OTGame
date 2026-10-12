@@ -216,6 +216,41 @@ export function createGameController({ state, ui, api, audio }) {
     };
   }
 
+  function buildGatherDecision(tile) {
+    const isForest = tile?.biome === 'forest';
+    const isRiver = tile?.biome === 'river';
+    return {
+      type: 'gather-resource',
+      eyebrow: 'Gathering party',
+      title: 'Choose what to gather at this stop',
+      body: 'Advance 1 day to search the surrounding wilderness for essential supplies.',
+      options: [
+        {
+          id: 'wood',
+          hotkey: '1',
+          label: 'Chop firewood',
+          detail: isForest
+            ? 'Abundant timber (+3 forest bonus). Essential for campfire warmth and wagon repairs.'
+            : 'Scavenge brush and fallen limbs. Essential for wagon repairs.'
+        },
+        {
+          id: 'water',
+          hotkey: '2',
+          label: 'Haul fresh water',
+          detail: isRiver
+            ? 'Fast refill from the river (+3 river bonus). Refills drinking barrels.'
+            : 'Dig seep holes and scout springs to refill drinking barrels.'
+        },
+        {
+          id: 'forage',
+          hotkey: '3',
+          label: 'Forage wild food',
+          detail: 'Comb the meadows and draws for edible roots, greens, and wild berries.'
+        }
+      ]
+    };
+  }
+
   function describeObstacleCost(cost = {}) {
     const parts = [];
     if (cost.health) parts.push(`-${cost.health} health`);
@@ -1328,8 +1363,12 @@ export function createGameController({ state, ui, api, audio }) {
       }
 
       if (actionType === 'gather') {
-        const gatherable = (selectedTile.resources ?? []).find((resource) => ['water', 'wood', 'forage'].includes(resource.resourceType));
-        const resourceType = gatherable?.resourceType ?? 'forage';
+        if (!context.resourceType) {
+          setDecision(buildGatherDecision(selectedTile));
+          return;
+        }
+
+        const resourceType = context.resourceType;
         const nodeId = `${getCurrentMilestone(state).id}:${resourceType}`;
         const biomeBonus = selectedTile.biome === 'forest' && resourceType === 'wood' ? 3 : selectedTile.biome === 'river' && resourceType === 'water' ? 3 : 0;
         const rainPenalty = (selectedTile.weather?.rain ?? 0) > 75 ? 2 : 0;
@@ -1344,13 +1383,14 @@ export function createGameController({ state, ui, api, audio }) {
         if (gain.blocked > 0) {
           wagon.morale = Math.max(0, wagon.morale - 1);
         }
-        wagon.status = 'Foraging supplies';
+        wagon.status = `Gathering ${resourceType === 'wood' ? 'firewood' : resourceType === 'forage' ? 'wild food' : 'water'}`;
         wagon.morale = Math.min(100, wagon.morale + 3);
-        state.statusMessage = `You gathered ${gain.applied} ${resourceUnitsLabel(resourceType)} of ${resourceType}.${gain.blocked ? ' The wagon could not carry the rest.' : ''}`;
+        const resourceName = resourceType === 'wood' ? 'bundles of firewood' : resourceType === 'forage' ? 'food rations' : 'gallons of water';
+        state.statusMessage = `You gathered ${gain.applied} ${resourceName}.${gain.blocked ? ' The wagon could not carry the rest.' : ''}`;
         await appendEvent('gather', {
           resourceType,
           amount: gain.applied,
-          note: `Gathered ${resourceType} from this stop.`
+          note: `Gathered ${gain.applied} ${resourceName} from this stop.`
         });
         applyTurnPressure('gather', selectedTile, repeatCount);
       }
@@ -1727,6 +1767,11 @@ export function createGameController({ state, ui, api, audio }) {
 
     if (decision.type === 'treat-member') {
       await handleAction('treat', { fromDecision: true, memberId: choiceId });
+      return;
+    }
+
+    if (decision.type === 'gather-resource') {
+      await handleAction('gather', { fromDecision: true, resourceType: choiceId });
       return;
     }
 
