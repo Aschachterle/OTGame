@@ -305,6 +305,34 @@ export function createUI() {
     }
   }
 
+  let narrationLoadingActive = false;
+
+  function renderLoaderMarkup() {
+    return `
+      <div class="teletype-loader" role="status" aria-live="polite">
+        <span class="loader-label">&gt; RECEIVING DISPATCH</span>
+        <span class="loader-dots" aria-hidden="true">
+          <span class="dot">●</span>
+          <span class="dot">●</span>
+          <span class="dot">●</span>
+        </span>
+      </div>
+    `;
+  }
+
+  function setNarrationLoading(isLoading) {
+    narrationLoadingActive = Boolean(isLoading);
+    const { screenEl } = chronicleElements();
+    const loaderEl = screenEl?.querySelector('.teletype-loader-shell');
+    if (loaderEl instanceof HTMLElement) {
+      loaderEl.hidden = !narrationLoadingActive;
+      loaderEl.innerHTML = narrationLoadingActive ? renderLoaderMarkup() : '';
+      if (narrationLoadingActive && screenEl instanceof HTMLElement) {
+        loaderEl.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+      }
+    }
+  }
+
   function chronicleElements() {
     const logEl = refs.mapEl?.querySelector('.teletype-log');
     const screenEl = refs.mapEl?.querySelector('.teletype-screen');
@@ -315,6 +343,11 @@ export function createUI() {
     const { logEl, screenEl } = chronicleElements();
     if (!(logEl instanceof HTMLElement)) return;
     logEl.innerHTML = renderChronicleMarkup(chroniclePlayback.renderedLines, chroniclePlayback.streaming);
+    const loaderEl = screenEl?.querySelector('.teletype-loader-shell');
+    if (loaderEl instanceof HTMLElement) {
+      loaderEl.hidden = !narrationLoadingActive;
+      loaderEl.innerHTML = narrationLoadingActive ? renderLoaderMarkup() : '';
+    }
     const promptShellEl = screenEl?.querySelector('.teletype-prompt-shell');
     if (promptShellEl instanceof HTMLElement) {
       promptShellEl.innerHTML = renderTerminalPromptMarkup();
@@ -976,6 +1009,7 @@ export function createUI() {
           <div class="teletype-screen" aria-label="Teletype chronicle">
             <div class="teletype-screen-glow"></div>
             <div class="teletype-log" aria-live="polite"></div>
+            <div class="teletype-loader-shell" ${narrationLoadingActive ? '' : 'hidden'}>${narrationLoadingActive ? renderLoaderMarkup() : ''}</div>
             <div class="teletype-prompt-shell"></div>
           </div>
           <div class="viewport-command-dock">
@@ -1131,6 +1165,7 @@ export function createUI() {
     setDecisionInputFeedback,
     setHandlers,
     setJourneyLoading,
+    setNarrationLoading,
     showJourneyModal,
     skipTeletype,
     syncJourneyControls,

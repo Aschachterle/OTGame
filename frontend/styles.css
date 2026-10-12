@@ -443,6 +443,71 @@ button.menu-item:disabled {
   text-shadow: 0 0 8px rgba(0, 255, 102, 0.8);
 }
 
+.teletype-loader-shell {
+  position: relative;
+  z-index: 2;
+  margin-top: 10px;
+  padding: 6px 0;
+}
+
+.teletype-loader-shell[hidden] {
+  display: none !important;
+}
+
+.teletype-loader {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #00ff66;
+  font-family: "Courier New", monospace;
+  font-size: 0.9rem;
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 6px rgba(0, 255, 102, 0.6);
+}
+
+.teletype-loader .loader-label {
+  color: #79ff9b;
+}
+
+.teletype-loader .loader-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.teletype-loader .dot {
+  display: inline-block;
+  font-size: 1.15rem;
+  line-height: 1;
+  color: #00ff66;
+  animation: retro-pulse 1.2s infinite ease-in-out both;
+}
+
+.teletype-loader .dot:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.teletype-loader .dot:nth-child(2) {
+  animation-delay: 0.25s;
+}
+
+.teletype-loader .dot:nth-child(3) {
+  animation-delay: 0.5s;
+}
+
+@keyframes retro-pulse {
+  0%, 80%, 100% {
+    opacity: 0.18;
+    transform: scale(0.85);
+    text-shadow: 0 0 2px rgba(0, 255, 102, 0.3);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1.25);
+    text-shadow: 0 0 10px #00ff66, 0 0 20px rgba(0, 255, 102, 0.9);
+  }
+}
+
 .teletype-prompt-shell {
   position: sticky;
   bottom: 0;

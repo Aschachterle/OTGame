@@ -699,6 +699,7 @@ export function createGameController({ state, ui, api, audio }) {
   }
 
   async function renderNarrationCandidate(candidate, shouldAutoPlay, stateKey) {
+    ui.setNarrationLoading(false);
     state.narrationStateKey = stateKey;
     state.narrationInFlightKey = '';
     applyNarrationBeat(state, candidate ?? null);
@@ -790,6 +791,7 @@ export function createGameController({ state, ui, api, audio }) {
 
     const requestId = ++state.narrationRequestId;
     state.narrationInFlightKey = stateKey;
+    ui.setNarrationLoading(true);
     try {
       const json = await api.getNarration(context);
       if (requestId !== state.narrationRequestId) {
@@ -819,6 +821,10 @@ export function createGameController({ state, ui, api, audio }) {
       state.narrationInFlightKey = '';
       debugNarration(state, 'loadNarration:error-fallback-local', { requestId, stateKey, error: String(error), trigger: remoteTrigger.reason });
       await renderNarrationCandidate(buildRoutineNarration(context, remoteTrigger.reason), shouldAutoPlay, stateKey);
+    } finally {
+      if (requestId === state.narrationRequestId) {
+        ui.setNarrationLoading(false);
+      }
     }
   }
 
