@@ -103,77 +103,22 @@
         </div>
       </nav>
 
-      <main class="desktop">
-        <section class="stage-column">
-          <div id="map" class="panel-card scene-card" aria-live="polite"></div>
-          <div id="selected-tile" class="panel-card terrain-card"></div>
-        </section>
-
-        <aside class="journal-column">
-          <div id="objective-card" class="panel-card objective-card"></div>
-          <div id="story-card" class="panel-card story-card"></div>
-          <div id="hazard-banner" class="hazard-banner" hidden></div>
-          <div id="status-banner" class="panel-card status-banner"></div>
-          <div id="action-summary" class="action-summary" hidden></div>
-          <div id="event-log" class="panel-card event-card"></div>
-        </aside>
+      <main class="desktop unified-cockpit">
+        <div id="map" class="panel-card cockpit-main" aria-live="polite"></div>
       </main>
 
-      <footer class="bottom-dock">
-        <section id="wagon-state" class="panel-card wagon-hud"></section>
-
-        <section id="action-panel" class="panel-card action-panel">
-          <div class="command-header">
-            <div>
-              <p class="eyebrow">Command deck</p>
-              <h2>Controls</h2>
-            </div>
-            <p class="command-copy">Hotkeys: Space / Enter to press on, 1-7 for trail actions.</p>
-          </div>
-
-          <div class="command-grid">
-            <div class="travel-panel" aria-label="Movement controls">
-              <button class="action-btn travel-btn" data-action="press-on" data-hotkey="Space / Enter" aria-label="Press on along the trail">
-                <span class="keycap keycap-wide">SPACE / ENTER</span>
-                <span class="action-icon">➔</span>
-                <span class="action-text">PRESS ON</span>
-                <small>Continue West</small>
-              </button>
-            </div>
-
-            <div class="utility-panel" aria-label="Trail actions">
-              <button class="action-btn utility-btn" data-action="camp" data-hotkey="1">
-                <span class="keycap">1</span>
-                <span class="action-label"><span class="action-icon">⌂</span><span>Camp</span></span>
-              </button>
-              <button class="action-btn utility-btn" data-action="hunt" data-hotkey="2">
-                <span class="keycap">2</span>
-                <span class="action-label"><span class="action-icon">✦</span><span>Hunt</span></span>
-              </button>
-              <button class="action-btn utility-btn" data-action="gather" data-hotkey="3">
-                <span class="keycap">3</span>
-                <span class="action-label"><span class="action-icon">⛏</span><span>Gather</span></span>
-              </button>
-              <button class="action-btn utility-btn" data-action="treat" data-hotkey="4">
-                <span class="keycap">4</span>
-                <span class="action-label"><span class="action-icon">+</span><span>Treat</span></span>
-              </button>
-              <button class="action-btn utility-btn" data-action="trade" data-hotkey="5">
-                <span class="keycap">5</span>
-                <span class="action-label"><span class="action-icon">$</span><span>Trade</span></span>
-              </button>
-              <button class="action-btn utility-btn" data-action="repair" data-hotkey="6">
-                <span class="keycap">6</span>
-                <span class="action-label"><span class="action-icon">⚙</span><span>Repair</span></span>
-              </button>
-              <button class="action-btn utility-btn" data-action="scout" data-hotkey="7">
-                <span class="keycap">7</span>
-                <span class="action-label"><span class="action-icon">👁</span><span>Scout</span></span>
-              </button>
-            </div>
-          </div>
-        </section>
-      </footer>
+      <!-- Legacy hook containers preserved hidden for backward compatibility -->
+      <div id="legacy-panels" hidden style="display: none !important;">
+        <div id="selected-tile"></div>
+        <div id="objective-card"></div>
+        <div id="story-card"></div>
+        <div id="hazard-banner"></div>
+        <div id="status-banner"></div>
+        <div id="action-summary"></div>
+        <div id="event-log"></div>
+        <div id="wagon-state"></div>
+        <div id="action-panel"></div>
+      </div>
     </div>
 
     <script type="module" src="./app.js"></script>

@@ -111,31 +111,6 @@ function supplyLine(supplies, state) {
   return `The day closes with ${supplies.foodRations} rations, ${supplies.waterGallons} gal water, ${supplies.firewoodBundles} wood, ${supplies.medicineDoses} medicine, and morale at ${state.wagon.morale}%.`;
 }
 
-function chronicleBeatsForState(state, locationName, weather, supplies) {
-  const explicitLines = Array.isArray(state.latestNarration?.lines)
-    ? state.latestNarration.lines.map(normalizeLine).filter(Boolean)
-    : [];
-  if (explicitLines.length >= 3) {
-    return explicitLines.slice(0, 3).map((line) => prefixTerminalLine(line));
-  }
-
-  const bodySentences = splitSentences(state.narrationText).map(normalizeLine).filter(Boolean);
-  const headline = normalizeLine(state.latestNarration?.headline);
-  const actionBeat = bodySentences[0]
-    || headline
-    || `${locationName} on day ${state.day} waits for the next hard choice.`;
-  const atmosphereBeat = bodySentences[1] || atmosphericLine(locationName, weather, state);
-  const outcomeBeat = bodySentences[2]
-    || state.statusMessage
-    || supplyLine(supplies, state);
-
-  return [
-    prefixTerminalLine(actionBeat),
-    prefixTerminalLine(atmosphereBeat),
-    prefixTerminalLine(`${outcomeBeat} ${supplyLine(supplies, state)}`.trim())
-  ];
-}
-
 function choiceRangeText(options = []) {
   const keys = options
     .map((option) => option?.hotkey)
@@ -146,26 +121,90 @@ function choiceRangeText(options = []) {
   return `${keys.slice(0, -1).join(', ')}, or ${keys.at(-1)}`;
 }
 
-function decisionLinesForState(state) {
-  const decision = state.activeDecision;
-  if (!decision) return [];
-  const lines = [
-    '',
-    `[${decision.eyebrow ?? 'Decision'}] ${decision.title}`,
-    decision.body
-  ];
-  for (const option of decision.options ?? []) {
-    lines.push(`[${option.hotkey ?? '?'}] ${option.label} — ${option.detail}`);
-  }
-  lines.push(`Type ${choiceRangeText(decision.options)} and press Enter.`);
-  return lines.map((line) => normalizeLine(line));
-}
-
 function chronicleLinesForState(state, locationName, weather, supplies) {
-  return [
-    ...chronicleBeatsForState(state, locationName, weather, supplies),
-    ...decisionLinesForState(state)
-  ];
+  const lines = [];
+  const selectedTile = state.currentTrailSnapshot ?? fallbackTile;
+  const nextMilestone = getNextMilestone(state);
+  const milesToNext = getMilesToNextMilestone(state);
+  const biome = (selectedTile.biome ?? 'frontier').toUpperCase();
+
+  // 1. Session & Landmark Header
+  lines.push(`=== DAY ${state.day} // ${locationName.toUpperCase()} // ${biome} // MILE ${state.milesTraveled} OF ${TOTAL_TRAIL_MILES} ===`);
+
+  // 2. Action Summary & Mechanical Outcome
+  const summary = state.lastActionSummary;
+  if (summary) {
+    lines.push(`[ACTION REPORT: ${summary.title.toUpperCase()}]`);
+    if (summary.detail) {
+      lines.push(prefixTerminalLine(summary.detail));
+    }
+    const metricsText = (summary.metrics ?? [])
+      .filter((m) => m && m.label && m.delta && m.delta !== 'No immediate wagon change')
+      .map((m) => `${m.label}: ${m.delta}`)
+      .join(' • ');
+    if (metricsText) {
+      lines.push(prefixTerminalLine(`OUTCOME: ${metricsText}`));
+    }
+    lines.push('');
+  } else if (state.statusMessage && state.day > 1) {
+    lines.push(`[TRAIL REPORT]`);
+    lines.push(prefixTerminalLine(state.statusMessage));
+    lines.push('');
+  }
+
+  // 3. Expedition Dispatch (Serialized Story from Gemini)
+  const narration = state.latestNarration;
+  const headline = normalizeLine(narration?.headline) || (state.day === 1 ? 'THE ROAD TO OREGON' : 'EXPEDITION CHRONICLE');
+  lines.push(`[EXPEDITION DISPATCH: ${headline.toUpperCase()}]`);
+
+  const explicitLines = Array.isArray(narration?.lines)
+    ? narration.lines.map(normalizeLine).filter(Boolean)
+    : [];
+
+  if (explicitLines.length >= 2) {
+    explicitLines.forEach((line) => {
+      lines.push(prefixTerminalLine(line));
+    });
+  } else {
+    const bodySentences = splitSentences(state.narrationText).map(normalizeLine).filter(Boolean);
+    if (bodySentences.length > 0) {
+      bodySentences.forEach((sentence) => {
+        lines.push(prefixTerminalLine(sentence));
+      });
+    } else {
+      lines.push(prefixTerminalLine(`${locationName} on day ${state.day} waits for the party's command.`));
+      lines.push(prefixTerminalLine(atmosphericLine(locationName, weather, state)));
+    }
+  }
+
+  if (narration?.surrealMutation) {
+    lines.push(prefixTerminalLine(`MUTATION DETECTED: ${narration.surrealMutation.description}`));
+  }
+
+  lines.push('');
+
+  // 4. Logistics & Stores Check
+  const nextClause = nextMilestone
+    ? `Next landmark: ${nextMilestone.shortName} (${milesToNext} miles ahead).`
+    : 'Willamette Valley reached.';
+  lines.push(prefixTerminalLine(`Stores: ${supplies.foodRations} rations, ${supplies.waterGallons} gal water, ${supplies.firewoodBundles} wood, ${supplies.medicineDoses} med, ${supplies.ammunitionBoxes} ammo.`));
+  lines.push(prefixTerminalLine(nextClause));
+
+  // 5. Active Decision / Dilemma (if any)
+  const decision = state.activeDecision;
+  if (decision) {
+    lines.push('');
+    lines.push(`[${(decision.eyebrow ?? 'TRAIL DILEMMA').toUpperCase()}: ${decision.title.toUpperCase()}]`);
+    if (decision.body) {
+      lines.push(prefixTerminalLine(decision.body));
+    }
+    for (const option of decision.options ?? []) {
+      lines.push(`[${option.hotkey ?? '?'}] ${option.label} — ${option.detail}`);
+    }
+    lines.push(`Type ${choiceRangeText(decision.options)} and press Enter.`);
+  }
+
+  return lines.map((l) => normalizeLine(l));
 }
 
 function trailRibbonMarkup(state) {
@@ -200,9 +239,22 @@ function renderChronicleMarkup(lines, isStreaming) {
     const suffix = isStreaming && index === lines.length - 1 ? '<span class="teletype-cursor" aria-hidden="true">█</span>' : '';
     const classes = ['teletype-line'];
     if (!line) classes.push('spacer');
-    if (line.startsWith('[') && !line.startsWith('[1') && !line.startsWith('[2') && !line.startsWith('[3') && !line.startsWith('[4') && !line.startsWith('[5') && !line.startsWith('[6') && !line.startsWith('[7') && !line.startsWith('[8') && !line.startsWith('[9')) {
-      classes.push('system');
+    if (line.startsWith('===')) {
+      classes.push('session-header');
+    } else if (line.startsWith('[ACTION REPORT')) {
+      classes.push('action-report-header');
+    } else if (line.startsWith('[EXPEDITION DISPATCH') || line.startsWith('[DISPATCH')) {
+      classes.push('dispatch-header');
+    } else if (line.startsWith('[TRAIL STATUS') || line.startsWith('[TRAIL REPORT') || line.startsWith('[STATUS NOTE')) {
+      classes.push('status-header');
+    } else if (line.startsWith('[') && !line.match(/^\[\d+\]/)) {
+      classes.push('dilemma-header');
+    } else if (line.startsWith('> OUTCOME:')) {
+      classes.push('impact');
+    } else if (line.startsWith('>')) {
+      classes.push('prose');
     }
+
     const choiceMatch = line.match(/^\[(\d+)\]/);
     if (choiceMatch) {
       classes.push('choice');
@@ -524,6 +576,8 @@ export function createUI() {
       statusMessage: state.statusMessage,
       actionType: state.lastActionContext?.actionType ?? '',
       actionOutcome: state.lastActionContext?.outcome ?? '',
+      lastActionSummaryTitle: state.lastActionSummary?.title ?? '',
+      lastActionSummaryDetail: state.lastActionSummary?.detail ?? '',
       decisionTitle: state.activeDecision?.title ?? '',
       decisionBody: state.activeDecision?.body ?? '',
       decisionOptions: (state.activeDecision?.options ?? []).map((option) => `${option.hotkey}:${option.label}:${option.detail}`)
@@ -584,6 +638,13 @@ export function createUI() {
       if (choiceEl instanceof HTMLElement && choiceEl.dataset.choiceKey) {
         invokeUiClick('choice');
         handlers.onDecisionChoice(choiceEl.dataset.choiceKey);
+        return;
+      }
+
+      const voiceBtn = target.closest('#terminal-voice-btn');
+      if (voiceBtn) {
+        invokeUiClick('play-voice');
+        handlers.onReadNarration();
         return;
       }
 
@@ -1004,6 +1065,7 @@ export function createUI() {
             <span class="hud-chip">WATER ${supplies.waterGallons}</span>
             <span class="hud-chip">WOOD ${supplies.firewoodBundles}</span>
             <span class="hud-chip">AMMO ${supplies.ammunitionBoxes}</span>
+            <button id="terminal-voice-btn" class="action-btn hud-btn voice-btn" type="button" title="Play Voice Audio">▶ PLAY VOICE</button>
           </div>
           ${trailRibbonMarkup(state)}
           <div class="teletype-screen" aria-label="Teletype chronicle">
@@ -1052,7 +1114,7 @@ export function createUI() {
         </div>
         <div class="map-board">
           <p class="eyebrow">Wagon gauges</p>
-          <h3>Supply monitor</h3>
+          <h3>Supply & System monitor</h3>
           <div class="monitor-screen">
             <div class="gauge-grid">
               ${metrics.map((metric) => `
@@ -1074,8 +1136,17 @@ export function createUI() {
               <div><strong>WHEELS:</strong> ${state.wagon.wagonParts.wheels}%</div>
             </div>
             <div class="party-manifest">
-              <p class="eyebrow">Party roster</p>
+              <p class="eyebrow">Party manifest</p>
               <ul>${partyMarkup}</ul>
+            </div>
+            <div class="survey-readout">
+              <p class="eyebrow">Waypoint survey</p>
+              <div class="survey-grid">
+                <div><strong>POSITION:</strong> ${currentMilestone.name}</div>
+                <div><strong>NEXT:</strong> ${getNextMilestone(state) ? `${getNextMilestone(state).name} (${getMilesToNextMilestone(state)} mi)` : 'Willamette Valley reached'}</div>
+                <div><strong>ELEVATION:</strong> ${selectedTile.elevation ?? 0} ft</div>
+                <div><strong>TERRAIN:</strong> ${selectedTile.biome ?? 'grassland'}</div>
+              </div>
             </div>
           </div>
         </div>
