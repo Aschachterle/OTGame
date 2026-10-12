@@ -56,6 +56,7 @@ function registerKeyboardControls() {
         event.preventDefault();
         if (ui.isTeletypeStreaming()) {
           ui.skipTeletype();
+          return;
         }
         void playRetroClick();
         ui.setDecisionInputBuffer(key);

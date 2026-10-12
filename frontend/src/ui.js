@@ -333,7 +333,7 @@ export function createUI() {
     chroniclePlayback.lineIndex = chroniclePlayback.fullLines.length;
     chroniclePlayback.charIndex = 0;
     chroniclePlayback.streaming = false;
-    paintChronicle(false);
+    paintChronicle(true);
   }
 
   function nextChronicleDelay(character) {
@@ -460,6 +460,7 @@ export function createUI() {
   }
 
   function renderTerminalPromptMarkup() {
+    if (chroniclePlayback.streaming) return '';
     if (!terminalDecisionInput.decisionKey) return '';
     const classes = ['teletype-prompt'];
     if (terminalDecisionInput.feedback.toLowerCase().startsWith('invalid')) {
