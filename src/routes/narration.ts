@@ -27,7 +27,17 @@ const narrationSchema = z.object({
     wood: z.number(),
     medicine: z.number(),
     status: z.string()
-  }),
+  }).passthrough(),
+  party: z.array(
+    z.object({
+      id: z.string().optional(),
+      name: z.string(),
+      role: z.string(),
+      health: z.number(),
+      status: z.string(),
+      deceasedLogged: z.boolean().optional()
+    })
+  ).default([]),
   supplyEstimates: z.object({
     foodRations: z.number().int().nonnegative(),
     waterGallons: z.number().int().nonnegative(),

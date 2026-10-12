@@ -471,6 +471,13 @@ export function createGameController({ state, ui, api, audio }) {
       useLlmNarration: state.llmNarrationPreferred,
       weather: selectedTile.weather ?? { rain: 0, tempC: 0, windKph: 0 },
       wagon: state.wagon,
+      party: (state.wagon.party ?? []).map((member) => ({
+        id: member.id,
+        name: member.name,
+        role: member.role,
+        health: member.health,
+        status: member.status
+      })),
       supplyEstimates: supplies,
       recentEvents: state.events.slice(0, 3).map((event) => ({
         eventType: event.eventType ?? 'world',
@@ -515,6 +522,7 @@ export function createGameController({ state, ui, api, audio }) {
       decisionOptions: context.decisionOptions,
       riskState: context.riskState,
       wagon: context.wagon,
+      party: context.party,
       recentEvents: context.recentEvents.slice(0, 2).map((event) => ({
         eventType: event.eventType,
         payload: event.payload
@@ -671,24 +679,10 @@ export function createGameController({ state, ui, api, audio }) {
         return { key: landmarkKey, reason: 'landmark' };
       }
     }
-    if (latestActionType === 'press-on') {
-      const milesTraveled = Math.round(state.milesTraveled ?? 0);
-      const progressBucket = Math.floor(milesTraveled / 35);
-      const trailKey = `trail-progress:${progressBucket}`;
-      if (state.lastRemoteNarrationTriggerKey !== trailKey && milesTraveled > 0) {
-        return { key: trailKey, reason: 'trail-progress' };
-      }
-    }
-    if (latestActionType === 'hunt') {
-      const huntKey = `hunt:${context.day}:${context.lastAction?.outcome ?? 'completed'}`;
-      if (state.lastRemoteNarrationTriggerKey !== huntKey) {
-        return { key: huntKey, reason: 'hunt-outcome' };
-      }
-    }
-    if (latestActionType === 'treat') {
-      const treatKey = `treat:${context.day}`;
-      if (state.lastRemoteNarrationTriggerKey !== treatKey) {
-        return { key: treatKey, reason: 'treat-outcome' };
+    if (latestActionType) {
+      const actionKey = `action:${context.day}:${latestActionType}:${context.lastAction?.outcome ?? 'completed'}`;
+      if (state.lastRemoteNarrationTriggerKey !== actionKey) {
+        return { key: actionKey, reason: `${latestActionType}-outcome` };
       }
     }
     if (context.activeObstacle && state.lastRemoteNarrationTriggerKey !== `obstacle:${context.day}`) {
@@ -1400,9 +1394,27 @@ export function createGameController({ state, ui, api, audio }) {
     const gain = applyResourceDelta(wagon, 'forage', foodGain);
     wagon.morale = Math.min(100, wagon.morale + Math.max(1, 5 - repeatCount));
     wagon.status = 'Hunting for provisions';
-    state.statusMessage = successRoll
-      ? `You brought down ${context.huntTarget} and returned with ${gain.applied} rations.`
-      : `The ${context.huntTarget} slipped away, wasting precious ammunition.`;
+    if (successRoll) {
+      const guide = getRoleHolder(state, 'Guide') ?? randomLivingMember();
+      const hunterName = guide ? guide.name : 'The hunting party';
+      state.statusMessage = `${hunterName} brought down ${context.huntTarget} with a clean shot and returned with ${gain.applied} rations.`;
+    } else {
+      const billy = (state.wagon.party ?? []).find((m) => m.name === 'Billy' && m.health > 0);
+      if (billy && Math.random() < 0.65) {
+        setPartyCondition(state, billy.id, 'Injured');
+        applyPartyHealthDelta(state, -10, { memberId: billy.id, status: 'Injured' });
+        state.statusMessage = `The ${context.huntTarget} slipped away after Billy tripped in the brush and hurt his ankle. He is now injured and needs medicine.`;
+      } else {
+        const member = randomLivingMember();
+        if (member && Math.random() < 0.4) {
+          setPartyCondition(state, member.id, 'Injured');
+          applyPartyHealthDelta(state, -8, { memberId: member.id, status: 'Injured' });
+          state.statusMessage = `The ${context.huntTarget} got away when ${member.name} stumbled over a limestone ledge. ${member.name} is injured and needs medicine.`;
+        } else {
+          state.statusMessage = `The ${context.huntTarget} caught wind of the party and slipped away into the scrub, wasting precious ammunition.`;
+        }
+      }
+    }
     await appendEvent('hunt', {
       foodGain: gain.applied,
       target: context.huntTarget,

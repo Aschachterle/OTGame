@@ -169,6 +169,31 @@ function buildNarrationInstructions(context: NarrationContext): string {
           '- Keep the forward momentum palpable and the stakes constantly shifting.'
         ];
 
+  const characterInstructions = [
+    '### The Expedition Party Members (Bring Them Into the Narrative):',
+    'The wagon party consists of specific, named characters whose human agency and drama drive the story:',
+    '- Jedediah (Guide & Scout): Veteran frontiersman and trail leader. Reads weather, tracks game, guides the oxen team through mire, fires the rifle, and scouts river fords.',
+    '- Abigail (Doctor & Caregiver): Compassionate physician who guards the medicine chest, brews field tonics, stitches lacerations, diagnoses ailments, and tends the sick.',
+    '- Billy (Youth & Dependent): Young boy, eager, clumsy, and curious. Prone to tripping over brush or gopher holes, wandering into draws, startling wildlife, and twisting ankles or falling ill, but spirited.',
+    '- Sarah (Carpenter & Craftsman): Sturdy, pragmatic woodworker. Inspects spokes, hews hardwood braces, wields mallet and drawknife to mend cracked axles and wagon tongues.',
+    '',
+    '### Character Agency & Dramatic Causality (Crucial Rule):',
+    '- ALWAYS explain the concrete HUMAN REASON for every action outcome, success, failure, supply expenditure, or mishap.',
+    '- Never report mechanical outcomes in dry abstractions. Weave character actions into why things happened:',
+    '  * Failed Hunt / Zero Meat: Explain the reason through character action—for example, Billy tripped over hidden limestone in the tall grass and twisted his ankle, crying out and spooking the deer herd; or Jedediah\'s powder was dampened by river mist; or game took flight when brush cracked.',
+    '  * Successful Hunt: Detail who tracked, flushed, or shot the quarry (e.g., Jedediah sighted a pronghorn buck down the ravine while Billy kept the pack animal quiet).',
+    '  * Injury or Sickness (e.g. Sprain, Injured, Fever, Snakebite, Exhaustion): Explicitly narrate the mishap that caused it and identify who now needs medicine, splints, or bedrest under canvas.',
+    '  * Wagon Breakdown or Repair: Feature Sarah wielding her chisel, drawknife, and wedges to brace the broken axle or spoke, with Jedediah levering the wagon box.',
+    '  * Medical Treatment: Detail Abigail administering bitter willow bark tea, setting sprains, or dosing with laudanum, noting whether the patient stabilizes.',
+    '  * Camp & Gathering: Show characters interacting—Billy roasting ears of corn or nursing a bandaged ankle by the fire, Sarah inspecting iron tires, Abigail checking pulses, Jedediah cleaning rifles.',
+    '  * River Crossing & Travel: Show characters reacting to the surge—Abigail holding medicine high above floodwater, Sarah bracing the hull, Billy clutching the bow bows.',
+    '',
+    '### Episodic Continuity Across Turns:',
+    '- Maintain continuous narrative memory of past injuries, illnesses, and decisions.',
+    '- If a character is injured, exhausted, or sick (check the Party Roster and Status in the prompt), carry that physical toll into subsequent beats (e.g., Billy riding in the wagon bed resting a swollen ankle, Abigail re-dressing a bandage, or Sarah coughing from alkali dust).',
+    '- Let character dialogue snippets, unspoken glances, or mutual grumbling surface naturally.'
+  ];
+
   return [
     'You are the Frontier Dungeon Master presiding over an atmospheric, grounded, and subtly uncanny Oregon Trail survival odyssey from Independence to Oregon (Point A to Point B).',
     'Your voice is evocative, observant, and literary—reminiscent of Cormac McCarthy or classic frontier gothic literature.',
@@ -177,14 +202,16 @@ function buildNarrationInstructions(context: NarrationContext): string {
     '',
     ...phaseInstructions,
     '',
+    ...characterInstructions,
+    '',
     '### The 3-Beat Output Structure:',
     'Return strict JSON only in this exact shape:',
     '{',
     '  "headline": "<Short 3-8 word title of the beat>",',
     '  "lines": [',
-    '    "<Line 1: Action & Movement — Who moves where, miles gained, or what immediate choice/action was enacted>",',
-    '    "<Line 2: Sensory & Foreshadowing — Atmospheric details: wind biting wool, alkali dust, smell of cedar, crew mood, or subtle uncanny omens>",',
-    '    "<Line 3: Resolution & Consequence — How the day settles, remaining rations/water, distance to next waypoint, or aftermath of the decision>"',
+    '    "<Line 1: Action & Human Cause — The action attempted and the specific character incident, mishap, or success that caused the result>",',
+    '    "<Line 2: Character Dynamics & Sensory Reality — Emotional reactions among party members, spoken words, bodily aches, or atmospheric wilderness grit>",',
+    '    "<Line 3: Resolution & Consequence — The aftermath of supplies, who needs medicine or rest, miles gained, or what looms on the trail ahead>"',
     '  ],',
     '  "body": "<Line 1> <Line 2> <Line 3>",',
     '  "keyPoints": ["factual continuity anchor 1", "factual continuity anchor 2", "factual continuity anchor 3"],',
@@ -555,6 +582,15 @@ function shouldCreateFallbackObstacle(context: NarrationContext): boolean {
 }
 
 async function requestGeminiNarration(context: NarrationContext): Promise<NarrationBeat> {
+  const partyList = (context.party && context.party.length > 0)
+    ? context.party.map((m) => `${m.name} (${m.role}): ${m.health}% HP, status: ${m.status}`).join(' | ')
+    : 'Jedediah (Guide): 100% HP, Healthy | Abigail (Doctor): 100% HP, Healthy | Billy (Youth): 100% HP, Healthy | Sarah (Carpenter): 100% HP, Healthy';
+
+  const injuredOrSickMembers = (context.party ?? []).filter((m) => m.status !== 'Healthy' && (m.health > 0));
+  const memberConditions = injuredOrSickMembers.length
+    ? injuredOrSickMembers.map((m) => `${m.name} (${m.role}) is currently suffering from ${m.status} (${m.health}% HP)`).join(', ')
+    : 'All living party members are currently healthy';
+
   const requestPayload = {
     systemInstruction: {
       parts: [{ text: buildNarrationInstructions(context) }]
@@ -565,6 +601,8 @@ async function requestGeminiNarration(context: NarrationContext): Promise<Narrat
         parts: [
           {
           text: [
+            `Party roster: ${partyList}`,
+            `Active crew ailments & injuries: ${memberConditions}`,
             `Journey phase: ${context.journeyPhase}`,
             `Day: ${context.day}`,
             `Expedition: ${context.expeditionName ?? 'The Schachterle Family'}`,
@@ -599,8 +637,9 @@ async function requestGeminiNarration(context: NarrationContext): Promise<Narrat
             `Game over: ${context.gameOver ? 'yes' : 'no'}`,
             '',
             context.isMajorLandmark
-              ? 'Deliver a momentous, significant 3-beat chronicle of this major landmark arrival.'
-              : 'Deliver a grounded, sensory 3-beat chronicle of this wilderness march or camp stop.',
+              ? 'Deliver a momentous, significant 3-beat chronicle of this major landmark arrival featuring the party characters.'
+              : 'Deliver a grounded, sensory 3-beat chronicle of this wilderness march or camp stop featuring the party characters.',
+            'Explain the human cause behind the action outcome (e.g. why hunting succeeded or failed, who got injured, who repaired or treated).',
             'Return strict JSON only matching the schema, with lines: ["Line 1", "Line 2", "Line 3"].'
           ].join('\n')
         }
