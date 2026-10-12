@@ -1,0 +1,167 @@
+import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+import { config } from '../config.js';
+import { elevenLabsConfigured, synthesizeNarrationAudio } from '../lib/elevenlabs.js';
+import { composeNarration } from '../lib/narration.js';
+import { generateNarrationBeat, isLlmNarrationEnabled } from '../lib/story-ai.js';
+
+const narrationSchema = z.object({
+  day: z.number().int().positive(),
+  tileId: z.string(),
+  locationName: z.string().optional(),
+  biome: z.string(),
+  journeyPhase: z.enum(['start', 'mid', 'finish']).default('mid'),
+  useLlmNarration: z.boolean().default(true),
+  journeyStartTile: z.string().optional(),
+  journeyEndTile: z.string().optional(),
+  weather: z.object({
+    rain: z.number(),
+    tempC: z.number(),
+    windKph: z.number()
+  }),
+  wagon: z.object({
+    health: z.number(),
+    morale: z.number(),
+    food: z.number(),
+    water: z.number(),
+    wood: z.number(),
+    medicine: z.number(),
+    status: z.string()
+  }),
+  supplyEstimates: z.object({
+    foodRations: z.number().int().nonnegative(),
+    waterGallons: z.number().int().nonnegative(),
+    firewoodBundles: z.number().int().nonnegative(),
+    medicineDoses: z.number().int().nonnegative()
+  }).optional(),
+  recentEvents: z.array(
+    z.object({
+      eventType: z.string(),
+      payload: z.record(z.unknown()).optional()
+    })
+  ).default([]),
+  lastAction: z.object({
+    day: z.number().int().positive(),
+    actionType: z.string(),
+    actionLabel: z.string(),
+    tileId: z.string(),
+    outcome: z.string(),
+    statusMessage: z.string(),
+    availableOptionsAtStop: z.array(z.string()).default([]),
+    skippedOptionsAtStop: z.array(z.string()).default([]),
+    strangenessLevel: z.number().int().min(0).max(10).optional()
+  }).nullable().optional(),
+  historyLog: z.array(
+    z.object({
+      day: z.number().int().positive(),
+      actionType: z.string(),
+      actionLabel: z.string(),
+      tileId: z.string(),
+      outcome: z.string(),
+      statusMessage: z.string(),
+      availableOptionsAtStop: z.array(z.string()).default([]),
+      skippedOptionsAtStop: z.array(z.string()).default([]),
+      strangenessLevel: z.number().int().min(0).max(10).optional()
+    })
+  ).default([]),
+  priorNarration: z.array(z.string().min(1).max(1200)).default([]),
+  priorKeyPoints: z.array(z.string().min(1).max(240)).default([]),
+  strangenessLevel: z.number().int().min(0).max(10).default(0),
+  distanceDescriptor: z.string().optional(),
+  journeyCompleted: z.boolean().default(false),
+  availableActionTypes: z.array(z.string()).default([]),
+  activeObstacle: z.object({
+    description: z.string().min(1),
+    choices: z.array(
+      z.object({
+        id: z.string().min(1),
+        label: z.string().min(1),
+        description: z.string().min(1),
+        cost: z.object({
+          health: z.number().int().nonnegative().optional(),
+          morale: z.number().int().nonnegative().optional(),
+          food: z.number().int().nonnegative().optional(),
+          water: z.number().int().nonnegative().optional(),
+          wood: z.number().int().nonnegative().optional(),
+          medicine: z.number().int().nonnegative().optional(),
+          ammunition: z.number().int().nonnegative().optional(),
+          days: z.number().int().nonnegative().optional()
+        }).optional()
+      })
+    ).min(2).max(3)
+  }).nullable().optional(),
+  decisionOptions: z.array(z.string()).default([]),
+  riskState: z.object({
+    foodCritical: z.boolean().optional(),
+    waterCritical: z.boolean().optional(),
+    moraleLow: z.boolean().optional(),
+    healthLow: z.boolean().optional()
+  }).default({}),
+  distanceToFrontier: z.number().int().nonnegative(),
+  gameOver: z.boolean().default(false),
+  expeditionName: z.string().optional(),
+  isMajorLandmark: z.boolean().default(false),
+  milesTraveled: z.number().optional(),
+  currentLandmark: z.string().optional(),
+  nextMilestone: z.string().nullable().optional(),
+  dmDossier: z.object({
+    temperament: z.string().optional(),
+    paceHabit: z.string().optional(),
+    crewCompassion: z.string().optional(),
+    riskHabit: z.string().optional(),
+    recentDecisions: z.array(z.string()).default([]),
+    crewSentiment: z.string().optional()
+  }).optional(),
+  justResolvedDecision: z.object({
+    decisionType: z.string(),
+    chosenOption: z.string(),
+    outcome: z.string().optional()
+  }).nullable().optional()
+});
+
+const narrationAudioSchema = z.union([
+  z.object({
+    text: z.string().min(1)
+  }),
+  narrationSchema
+]);
+
+export async function registerNarrationRoutes(app: FastifyInstance): Promise<void> {
+  app.get('/story/narration/config', async () => {
+    return {
+      cloudAvailable: elevenLabsConfigured(),
+      cloudDefaultEnabled: config.elevenLabsEnabled,
+      llmAvailable: isLlmNarrationEnabled(),
+      llmDefaultEnabled: config.llmNarrationEnabled
+    };
+  });
+
+  app.post('/story/narration', async (request, reply) => {
+    const parsed = narrationSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Invalid narration context', details: parsed.error.flatten() });
+    }
+
+    const narration = await generateNarrationBeat(parsed.data);
+    return { narration };
+  });
+
+  app.post('/story/narration/audio', async (request, reply) => {
+    const parsed = narrationAudioSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Invalid narration context', details: parsed.error.flatten() });
+    }
+
+    if (!elevenLabsConfigured()) {
+      return reply.code(503).send({ error: 'ElevenLabs is not configured' });
+    }
+
+    const narrationText = 'text' in parsed.data ? parsed.data.text : composeNarration(parsed.data).body;
+    const audio = await synthesizeNarrationAudio(narrationText);
+
+    return reply
+      .header('Content-Type', 'audio/mpeg')
+      .header('Cache-Control', 'no-store')
+      .send(audio);
+  });
+}

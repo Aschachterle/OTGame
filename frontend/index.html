@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Immutable Trail</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="journey-modal" class="journey-overlay" hidden>
+      <div class="journey-card">
+        <p class="eyebrow">Trail setup</p>
+        <h2>Begin your journey</h2>
+        <p class="journey-copy">The trail starts at Independence and ends in Willamette Valley. Configure story and audio in the menu bar, then start your expedition.</p>
+        <button id="begin-journey-btn" class="primary-btn journey-begin-btn" type="button">Begin your journey</button>
+      </div>
+    </div>
+
+    <div id="journey-loader" class="journey-overlay" hidden>
+      <div class="journey-loader-card" aria-live="polite">
+        <div class="journey-spinner" aria-hidden="true"></div>
+        <p class="eyebrow">Loading trail</p>
+        <h2>Preparing the wagon</h2>
+        <p>Reading the world, waking the narration, and laying out the frontier.</p>
+      </div>
+    </div>
+
+    <div class="shell retro-window">
+      <header class="window-titlebar">
+        <div class="window-titlegroup">
+          <span class="window-icon">≡</span>
+          <div>
+            <h1>IMMUTABLE TRAIL v1.0</h1>
+            <p>INDEPENDENCE TO OREGON</p>
+          </div>
+        </div>
+        <div id="world-meta" class="titlebar-meta" aria-live="polite"></div>
+        <div class="window-controls">
+          <button class="chrome-btn" type="button" aria-label="Minimize">−</button>
+          <button class="chrome-btn" type="button" aria-label="Maximize">□</button>
+          <button id="refresh-btn" class="chrome-btn danger" type="button" aria-label="Restart expedition">×</button>
+        </div>
+      </header>
+
+      <nav class="menu-bar" aria-label="Application menu">
+        <div class="menu-group">
+          <button class="menu-btn" type="button" data-menu-trigger="file" aria-expanded="false">File</button>
+          <div class="menu-dropdown" data-menu="file" hidden>
+            <button id="menu-new-game" class="menu-item" type="button">New game</button>
+          </div>
+        </div>
+
+        <div class="menu-group">
+          <button class="menu-btn" type="button" data-menu-trigger="expedition" aria-expanded="false">Expedition</button>
+          <div class="menu-dropdown" data-menu="expedition" hidden>
+            <button id="menu-begin-journey" class="menu-item" type="button">Begin journey</button>
+          </div>
+        </div>
+
+        <div class="menu-group">
+          <button class="menu-btn" type="button" data-menu-trigger="ledger" aria-expanded="false">Ledger</button>
+          <div class="menu-dropdown" data-menu="ledger" hidden>
+            <button id="menu-ledger-jump" class="menu-item" type="button">Focus recent chain entries</button>
+          </div>
+        </div>
+
+        <div class="menu-group">
+          <button class="menu-btn" type="button" data-menu-trigger="audio" aria-expanded="false">Audio</button>
+          <div class="menu-dropdown" data-menu="audio" hidden>
+            <label class="menu-item menu-item-toggle" for="menu-cloud-toggle">
+              <input id="menu-cloud-toggle" type="checkbox" />
+              <span>Cloud narration voice</span>
+            </label>
+            <label class="menu-item menu-item-toggle" for="menu-auto-read-toggle">
+              <input id="menu-auto-read-toggle" type="checkbox" />
+              <span>Auto voice playback</span>
+            </label>
+            <label class="menu-item menu-item-select" for="menu-voice-select">
+              <span>Browser voice</span>
+              <select id="menu-voice-select"></select>
+            </label>
+            <button id="menu-play-voice" class="menu-item" type="button">Play narration now</button>
+          </div>
+        </div>
+
+        <div class="menu-group">
+          <button class="menu-btn" type="button" data-menu-trigger="options" aria-expanded="false">Options</button>
+          <div class="menu-dropdown" data-menu="options" hidden>
+            <label class="menu-item menu-item-toggle" for="menu-story-source-toggle">
+              <input id="menu-story-source-toggle" type="checkbox" />
+              <span>Story source: Gemini</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="menu-group">
+          <button class="menu-btn" type="button" data-menu-trigger="help" aria-expanded="false">Help</button>
+          <div class="menu-dropdown" data-menu="help" hidden>
+            <div class="menu-item menu-item-copy">Space / Enter: Press On</div>
+            <div class="menu-item menu-item-copy">1-7: trail actions</div>
+            <div class="menu-item menu-item-copy">During dilemmas: type 1-4, then Enter</div>
+          </div>
+        </div>
+      </nav>
+
+      <main class="desktop">
+        <section class="stage-column">
+          <div id="map" class="panel-card scene-card" aria-live="polite"></div>
+          <div id="selected-tile" class="panel-card terrain-card"></div>
+        </section>
+
+        <aside class="journal-column">
+          <div id="objective-card" class="panel-card objective-card"></div>
+          <div id="story-card" class="panel-card story-card"></div>
+          <div id="hazard-banner" class="hazard-banner" hidden></div>
+          <div id="status-banner" class="panel-card status-banner"></div>
+          <div id="action-summary" class="action-summary" hidden></div>
+          <div id="event-log" class="panel-card event-card"></div>
+        </aside>
+      </main>
+
+      <footer class="bottom-dock">
+        <section id="wagon-state" class="panel-card wagon-hud"></section>
+
+        <section id="action-panel" class="panel-card action-panel">
+          <div class="command-header">
+            <div>
+              <p class="eyebrow">Command deck</p>
+              <h2>Controls</h2>
+            </div>
+            <p class="command-copy">Hotkeys: Space / Enter to press on, 1-7 for trail actions.</p>
+          </div>
+
+          <div class="command-grid">
+            <div class="travel-panel" aria-label="Movement controls">
+              <button class="action-btn travel-btn" data-action="press-on" data-hotkey="Space / Enter" aria-label="Press on along the trail">
+                <span class="keycap keycap-wide">SPACE / ENTER</span>
+                <span class="action-icon">➔</span>
+                <span class="action-text">PRESS ON</span>
+                <small>Continue West</small>
+              </button>
+            </div>
+
+            <div class="utility-panel" aria-label="Trail actions">
+              <button class="action-btn utility-btn" data-action="camp" data-hotkey="1">
+                <span class="keycap">1</span>
+                <span class="action-label"><span class="action-icon">⌂</span><span>Camp</span></span>
+              </button>
+              <button class="action-btn utility-btn" data-action="hunt" data-hotkey="2">
+                <span class="keycap">2</span>
+                <span class="action-label"><span class="action-icon">✦</span><span>Hunt</span></span>
+              </button>
+              <button class="action-btn utility-btn" data-action="gather" data-hotkey="3">
+                <span class="keycap">3</span>
+                <span class="action-label"><span class="action-icon">⛏</span><span>Gather</span></span>
+              </button>
+              <button class="action-btn utility-btn" data-action="treat" data-hotkey="4">
+                <span class="keycap">4</span>
+                <span class="action-label"><span class="action-icon">+</span><span>Treat</span></span>
+              </button>
+              <button class="action-btn utility-btn" data-action="trade" data-hotkey="5">
+                <span class="keycap">5</span>
+                <span class="action-label"><span class="action-icon">$</span><span>Trade</span></span>
+              </button>
+              <button class="action-btn utility-btn" data-action="repair" data-hotkey="6">
+                <span class="keycap">6</span>
+                <span class="action-label"><span class="action-icon">⚙</span><span>Repair</span></span>
+              </button>
+              <button class="action-btn utility-btn" data-action="scout" data-hotkey="7">
+                <span class="keycap">7</span>
+                <span class="action-label"><span class="action-icon">👁</span><span>Scout</span></span>
+              </button>
+            </div>
+          </div>
+        </section>
+      </footer>
+    </div>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

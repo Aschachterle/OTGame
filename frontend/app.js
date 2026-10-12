@@ -1,0 +1,212 @@
+import { appState } from './src/state.js';
+import { getOptionalPlayerIdentity } from './src/crypto.js';
+import { createApiClient } from './src/api.js';
+import { createAudioController } from './src/audio.js';
+import { playHazardAlert, playRetroClick, playWagonClatter } from './src/sfx.js';
+import { createUI } from './src/ui.js';
+import { createGameController } from './src/game.js';
+
+const ui = createUI();
+const playerIdentityPromise = getOptionalPlayerIdentity();
+void playerIdentityPromise;
+const api = createApiClient({
+  getPlayerIdentity: () => playerIdentityPromise
+});
+
+let game = null;
+
+function choiceRangeText(options = []) {
+  const keys = options
+    .map((option) => option?.hotkey)
+    .filter(Boolean);
+  if (!keys.length) return 'a valid number';
+  if (keys.length === 1) return keys[0];
+  if (keys.length === 2) return `${keys[0]} or ${keys[1]}`;
+  return `${keys.slice(0, -1).join(', ')}, or ${keys.at(-1)}`;
+}
+
+function triggerAction(actionType) {
+  if (!actionType) return;
+  if (actionType === 'press-on') {
+    void playWagonClatter();
+  }
+  void game.handleAction(actionType);
+}
+
+function registerKeyboardControls() {
+  const actionMap = {
+    1: 'camp',
+    2: 'hunt',
+    3: 'gather',
+    4: 'treat',
+    5: 'trade',
+    6: 'repair',
+    7: 'scout'
+  };
+
+  window.addEventListener('keydown', (event) => {
+    const tagName = event.target?.tagName;
+    if (tagName === 'INPUT' || tagName === 'SELECT' || tagName === 'TEXTAREA') {
+      return;
+    }
+    const key = event.key.toLowerCase();
+    const decisionOptions = appState.activeDecision?.options ?? [];
+    if (decisionOptions.length && !appState.actionInProgress) {
+      if (/^[1-9]$/.test(key)) {
+        event.preventDefault();
+        if (ui.isTeletypeStreaming()) {
+          ui.skipTeletype();
+        }
+        void playRetroClick();
+        ui.setDecisionInputBuffer(key);
+        return;
+      }
+      if (key === 'backspace' || key === 'delete' || key === 'escape') {
+        event.preventDefault();
+        ui.clearDecisionInputBuffer(appState);
+        return;
+      }
+      if (key === 'enter') {
+        event.preventDefault();
+        if (ui.isTeletypeStreaming()) {
+          ui.skipTeletype();
+          return;
+        }
+        const buffer = ui.getDecisionInputBuffer();
+        const selectedOption = decisionOptions.find((option) => String(option.hotkey ?? '') === buffer);
+        if (!selectedOption) {
+          ui.setDecisionInputFeedback(`Invalid selection. Type ${choiceRangeText(decisionOptions)} and press Enter.`);
+          return;
+        }
+        void playRetroClick();
+        ui.clearDecisionInputBuffer(appState);
+        void game.resolveDecisionChoice(selectedOption.id);
+        return;
+      }
+    }
+    if ((key === ' ' || key === 'enter') && ui.isTeletypeStreaming()) {
+      event.preventDefault();
+      ui.skipTeletype();
+      return;
+    }
+    if (key === ' ' || key === 'enter') {
+      event.preventDefault();
+      void playRetroClick();
+      const button = document.querySelector('[data-action="press-on"]');
+      if (button?.disabled) {
+        return;
+      }
+      triggerAction('press-on');
+      return;
+    }
+    const actionType = actionMap[key];
+    if (!actionType) {
+      return;
+    }
+    const button = document.querySelector(`[data-action="${actionType}"]`);
+    if (button?.disabled) {
+      return;
+    }
+    event.preventDefault();
+    void playRetroClick();
+    triggerAction(actionType);
+  });
+}
+
+const audio = createAudioController({
+  state: appState,
+  api,
+  onCloudAvailabilityChanged: () => {
+    game?.renderStoryPanel();
+  }
+});
+
+game = createGameController({
+  state: appState,
+  ui,
+  api,
+  audio
+});
+
+ui.setHandlers({
+  onAction: triggerAction,
+  onBeginJourney: () => {
+    void game.beginJourney();
+  },
+  onRefresh: () => {
+    game.resetToJourneySetup();
+  },
+  onNewGame: () => {
+    game.resetToJourneySetup();
+  },
+  onBeginJourneyFromMenu: () => {
+    if (!appState.journeyStarted) {
+      void game.beginJourney();
+    }
+  },
+  onLedgerJump: () => {
+    const ledgerPanel = document.querySelector('#event-log');
+    ledgerPanel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  },
+  onJourneyLlmToggle: (enabled) => {
+    game.setJourneyLlmPreference(enabled);
+  },
+  onJourneyCloudToggle: (enabled) => {
+    game.setJourneyCloudPreference(enabled);
+    game.renderStoryPanel();
+    if (appState.narrationAutoPlay && appState.narrationText) {
+      void audio.playNarration();
+    }
+  },
+  onJourneyAutoReadToggle: (enabled) => {
+    game.setJourneyAutoReadPreference(enabled);
+    game.renderStoryPanel();
+    if (!appState.narrationAutoPlay) {
+      audio.stopNarration();
+    } else if (appState.narrationText) {
+      void audio.playNarration();
+    }
+  },
+  onReadNarration: () => {
+    void audio.playNarration();
+  },
+  onStorySourceToggle: (enabled) => {
+    game.setJourneyLlmPreference(enabled);
+    game.renderStoryPanel();
+  },
+  onVoiceChange: (voiceName) => {
+    appState.selectedVoiceName = voiceName;
+    audio.populateVoiceSelect(ui.getStoryVoiceSelect());
+    if (appState.narrationText && appState.narrationAutoPlay) {
+      void audio.playNarration();
+    }
+  },
+  onPaceChange: (value) => {
+    game.setPace(value);
+  },
+  onRationsChange: (value) => {
+    game.setRations(value);
+  },
+  onDecisionChoice: (choiceId) => {
+    void game.resolveDecisionChoice(choiceId);
+  },
+  onTileSelect: (tileId) => {
+    void game.handleTileSelection(tileId);
+  },
+  onUiClick: () => {
+    void playRetroClick();
+  },
+  onHazardAlert: () => {
+    void playHazardAlert();
+  }
+});
+
+if (window.speechSynthesis) {
+  window.speechSynthesis.addEventListener('voiceschanged', () => {
+    audio.populateVoiceSelect(ui.getStoryVoiceSelect());
+  });
+  audio.populateVoiceSelect(ui.getStoryVoiceSelect());
+}
+
+registerKeyboardControls();
+void game.bootstrapApp();
