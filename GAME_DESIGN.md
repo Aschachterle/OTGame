@@ -9,7 +9,7 @@ This document defines the gameplay philosophy, narrative design, UI/UX specifica
 **Immutable Trail** is a streamlined, text-driven survival odyssey from **Independence to Oregon (Point A to Point B)**. It merges classic *Oregon Trail* resource survival with:
 
 1. **A Matrix / Phosphor CRT Terminal Aesthetic:** The center stage screen is a glowing green CRT monitor where text streams line-by-line and letter-by-letter with a pulsing cursor (`█`).
-2. **Prologue Setup & Outfitting Stage:** Before embarking, the player names their family/expedition and customizes each party member's first name, then visits the Independence General Store to pack their prairie schooner under strict cash budget and payload weight constraints.
+2. **Prologue Setup & Outfitting Stage:** Before embarking, the player names their family/expedition, customizes each of the 4 party members' first names, and freely assigns archetypes/specialties to each traveler (with free-form stacking support). They then visit the Independence General Store to pack their prairie schooner under strict cash budget and payload weight constraints.
 3. **Linear Point A to Point B Progression:** Eliminates the confusing 2D cardinal grid (North/South/East/West). The player moves forward along a single overland trail from **Independence (Mile 0)** to **Willamette Valley (Mile 2,000)**. The fundamental turn-by-turn choice is:
    - **Press On (Continue Trail):** Advance the wagon forward towards the next landmark.
    - **Halt & Act:** Stop to camp, hunt, gather firewood/water, treat illness, repair, trade, or scout ahead.
@@ -74,33 +74,45 @@ In place of the 2D tile map, the game displays a sleek, retro **Overland Trail R
 
 ---
 
-## 3. Expedition Setup: Party Naming & General Store Outfitting
+## 3. Expedition Setup: Party Naming, Archetype Customization & Outfitting
 
 Before setting wheel to the overland trail at Independence (Mile 0), the game begins with a two-stage interactive prologue:
 
-### Stage 1: Party Naming & Roster Configuration
+### Stage 1: Party Naming & Archetype Customization
 1. **Family / Expedition Surname:**
    - The player selects the expedition last name (Default: *"The Schachterle Family"*, with player prompt to customize).
    - Displayed across trail dispatches, ledger records, grave markers, and milestone chronicles (e.g., `> The Schachterle Family presses west along the North Platte...`).
-2. **Individual Party Member First Names & Archetypes:**
-   - The party comprises 4 distinct travelers, each mapped to a mechanical archetype and narrative role:
-     - **Guide / Scout** (Default: *Jedediah*): Trail veteran. Bonus to scouting upcoming weather, river depths, foraging, and hunting success.
-     - **Doctor / Healer** (Default: *Abigail*): Medical knowledge. Reduces medicine consumption; boosts recovery from illness, cholera, and fever during rest.
-     - **Youth / Dependent** (Default: *Billy*): High vulnerability, impulsive nature. Susceptible to snakebites, exhaustion, and narrative mishaps that test the party's compassion.
-     - **Carpenter / Wheelwright** (Default: *Sarah*): Craftsmanship. Halves wood requirements for wagon repairs; prevents catastrophic axle/wheel failures on rough terrain.
-   - The UI provides default historic names with instant inline editing on the CRT green screen.
+
+2. **Roster Composition & Free-Form Archetype Stacking:**
+   - The party consists of 4 traveler slots.
+   - For **each** traveler, the player customizes their **First Name** and selects their **Archetype / Specialty**.
+   - **Free-Form Stacking Permitted (Option B):** The player is not restricted to one of each role. Any combination is valid, allowing specialized builds (e.g., running 2 Doctors for unmatched medical resilience, or 2 Guides for supreme hunting self-sufficiency, at the trade-off of lacking wagon maintenance or financial buffers).
+
+3. **Archetype Catalog & Mechanical Benefits:**
+
+| Archetype | Default Name | Mechanical & Strategic Benefits | Stacking Synergy (x2) |
+| :--- | :--- | :--- | :--- |
+| **Guide / Scout** | *Jedediah* | **+10% hunting accuracy**, **+3 meat yield**, **+2 forage bonus**, and trail scouting reconnaissance (`[7] SCOUT`). Enables lean food outfitting. | **+20% hunting accuracy**, **+6 meat yield**, **+4 forage bonus**. Wagon rarely needs to buy food sacks. |
+| **Doctor / Healer** | *Abigail* | **+4 party HP recovery** on camp rest, **every 2nd medicine dose free**, **+5 HP per triage dose**. Survives epidemics and cuts medical costs. | **+8 party HP recovery** on rest; **all treatments consume 0 medicine**; **+10 HP per triage dose**. |
+| **Carpenter / Wheelwright** | *Sarah* | **-5% breakdown chance**, **halved wood repair costs** (1 bundle instead of 2), **+18% oxen fatigue cleared** on camp rest. Enables aggressive Strenuous pacing. | **-10% breakdown chance**; **repairs require 0 wood** (emergency field splints); **+24% oxen fatigue cleared**. |
+| **Farmer / Cook** | *Caleb* | **-20% daily food consumption** across the entire party; oxen lose fatigue 25% slower on trail. Excellent for long stretches between hunting grounds. | **-35% daily food consumption**; oxen endurance doubled across badlands and mountains. |
+| **Banker / Merchant** | *Martha* | **+$250 starting cash bonus** ($1,050–$1,250 total); **immune to fort store price markups** (buys at 1.0x base Independence price). | **+$500 starting cash bonus**; fort store prices discounted to 0.8x base catalog. |
+| **Youth / Dependent** | *Billy* | **Absorbs 65% of snakebites and random hazards** to protect specialists; **+10 baseline morale floor**; unlocks high-compassion AI Dungeon Master triggers. | **Absorbs 90% of sudden hazard damage**; **+20 baseline morale floor**. |
+
+4. **Living Requirement Rule:**
+   - Archetype bonuses are active only while that specific member is alive (`health > 0`). If a character dies, their passive bonus is permanently lost.
 
 ---
 
 ### Stage 2: Independence General Store & Wagon Outfitting
-Once the party is named, the player enters the **Independence General Store (May 1848)** run by the frontier merchant.
+Once the party and archetypes are registered, the player enters the **Independence General Store (May 1848)** run by the frontier merchant.
 
 #### 1. Starting Budget & Financial Economy
-- **Starting Cash:** **$800.00 – $1,000.00** in gold coin/banknotes.
+- **Base Starting Cash:** **$800.00 – $1,000.00** in gold coin/banknotes (modified upward by Banker archetypes).
 - **The Cash Conservation Dilemma:** Cash is not merely spent at Mile 0; unspent funds remain in `wagon.cash` for crucial expenses down the trail:
   - **River Ferries:** Kansas River ($5.00), Green River ($8.00), Snake River ($10.00) avoid dangerous capsizing risks.
   - **Toll Roads:** Barlow Road ($10.00) around Mt. Hood vs. perilous Columbia River rafting.
-  - **Fort Outposts:** Resupplying at Fort Kearny, Fort Laramie, or Fort Bridger (prices increase by 2x to 3x base store cost).
+  - **Fort Outposts:** Resupplying at Fort Kearny, Fort Laramie, or Fort Bridger (prices increase by 2x to 3x base store cost unless party has a Banker).
   - **Native Guides:** Paying local Shoshone or Pawnee guides to negotiate treacherous river crossings or locate potable desert water.
 
 #### 2. Store Catalog & Packing Specifications
@@ -128,20 +140,20 @@ The store provides essential provisions with distinct costs, unit weights, and m
 #### 4. Setup & Store CRT Terminal Interface (UI Flow)
 The setup and outfitting stages are rendered directly inside the retro CRT phosphor green terminal:
 
-1. **Screen 1 — Expedition Register:**
+1. **Screen 1 — Expedition Register & Archetype Selection:**
    ```text
    =============================================================================
    IMMUTABLE TRAIL // EXPEDITION REGISTRATION — INDEPENDENCE, MISSOURI (1848)
    =============================================================================
-   [ENTER SURNAME]: The Schachterle Family
+   [EXPEDITION SURNAME]: The Schachterle Family
    
-   PARTY ROSTER:
-     1. GUIDE / SCOUT   : [Jedediah  ] — Trail veteran & marksman
-     2. DOCTOR / HEALER : [Abigail   ] — Field physician & apothecary
-     3. YOUTH / SCOUT   : [Billy     ] — Young dependent; spirited & fragile
-     4. CARPENTER       : [Sarah     ] — Wheelwright & wagon engineer
+   PARTY ROSTER & ARCHETYPES (Free-form selection — Stacking permitted):
+     MEMBER 1: Name: [Jedediah  ]  Archetype: [< GUIDE / SCOUT       >]
+     MEMBER 2: Name: [Abigail   ]  Archetype: [< DOCTOR / HEALER     >]
+     MEMBER 3: Name: [Sarah     ]  Archetype: [< CARPENTER / CRAFT   >]
+     MEMBER 4: Name: [Billy     ]  Archetype: [< YOUTH / DEPENDENT   >]
    
-   [TAB] Cycle Fields  |  [ENTER] Confirm Roster & Enter Outfitting Store
+   [TAB] Cycle Fields  |  [←/→] Toggle Archetype  |  [ENTER] Confirm & Enter Store
    =============================================================================
    ```
 
@@ -168,8 +180,8 @@ The setup and outfitting stages are rendered directly inside the retro CRT phosp
    ```
 
 #### 5. Narrative & AI Dungeon Master Integration
-- The chosen party names, individual health baselines, and initial outfitting profile (e.g. *A lean, cash-heavy expedition* vs. *A heavily burdened, fully provisioned caravan*) are embedded into the initial game state and the opening prompt to Gemini.
-- The Day 1 opening chronicle personalizes the departure from Independence using the family name and initial supplies.
+- The chosen party names, individual archetypes, and initial outfitting profile (e.g. *A double-Doctor medical caravan* or *A heavily provisioned pioneer expedition*) are embedded into the initial game state and the opening prompt to Gemini.
+- The Day 1 opening chronicle personalizes the departure from Independence using the family name, archetype roster, and initial supplies.
 
 ---
 
@@ -182,13 +194,13 @@ The 4-way D-Pad (North, South, East, West) is retired. The control deck is strea
 
 ### Camp & Maintenance Actions (Halt Options)
 When the player decides *not* to continue moving forward on a given day:
-- **`[1] MAKE CAMP`**: Halt for the day. Heals crew health, restores morale, consumes rations without advancing distance.
-- **`[2] HUNT`**: Halt to hunt provisions (uses 1 ammo box). Yields meat rations based on terrain and marksman success.
-- **`[3] GATHER`**: Halt to forage for firewood, clean water, or wild food from local surroundings (sub-menu allows choosing *Chop Firewood*, *Haul Water*, or *Forage Food*).
-- **`[4] TREAT`**: Administer field medicine to an afflicted party member (guided by Doctor Abigail).
-- **`[5] REPAIR`**: Spend wood and time to reinforce or replace broken wagon parts (axles, wheels, tongues), with Carpenter Sarah reducing wood costs.
-- **`[6] TRADE`**: Barter supplies with passing emigrant wagons or at military forts.
-- **`[7] SCOUT`**: Send the guide (Jedediah) ahead to inspect the next 40 miles for weather, river depth, or trail hazards.
+- **`[1] MAKE CAMP`**: Halt for the day. Heals crew health (boosted by Doctor), restores morale, consumes rations without advancing distance.
+- **`[2] HUNT`**: Halt to hunt provisions (uses 1 ammo box). Yields meat rations based on terrain and marksman success (boosted by Guide).
+- **`[3] GATHER`**: Halt to forage for firewood, clean water, or wild food from local surroundings (sub-menu allows choosing *Chop Firewood*, *Haul Water*, or *Forage Food*, with Guide granting wild food bonuses).
+- **`[4] TREAT`**: Administer field medicine to an afflicted party member (guided by Doctor efficiency).
+- **`[5] REPAIR`**: Spend wood and time to reinforce or replace broken wagon parts (axles, wheels, tongues), with Carpenter reducing wood costs.
+- **`[6] TRADE`**: Barter supplies with passing emigrant wagons or at military forts (Banker improves terms and waives markups).
+- **`[7] SCOUT`**: Send a Guide ahead to inspect the next 40 miles for weather, river depth, or trail hazards.
 
 ---
 
@@ -221,11 +233,11 @@ When the player chooses **Press On** or takes any camp action, the terminal stre
    > `The day of travel was uneventful. Stores holding steady: 28 rations, 20 gal water, 8 wood. Next landmark: Chimney Rock in 42 miles.`
 
 ### Character Causality in Narrative
-Every party member's health and presence actively shapes trail events:
-- If **Jedediah** is exhausted or sick, scouting reports are vague and hunting yield drops.
-- If **Abigail** is incapacitated, fever treatments require double medicine doses and have higher failure rates.
-- If **Sarah** is injured, wagon repairs consume extra firewood and time.
-- If **Billy** falls ill, camp discussions reflect anxiety and moral friction.
+Every party member's health and chosen archetype actively shapes trail events:
+- If a **Guide** is exhausted or sick, scouting reports become vague and hunting yield drops.
+- If a **Doctor** is incapacitated, fever treatments require full medicine doses and have higher failure rates.
+- If a **Carpenter** is injured, wagon repairs consume extra firewood and time.
+- If a **Youth** falls ill, camp discussions reflect anxiety and moral friction.
 
 ---
 
@@ -237,6 +249,7 @@ The system maintains a compact behavioral dossier compiled from past actions and
 ```text
 DM Dossier:
 - Family / Expedition: The Schachterle Family
+- Party Roster: Jedediah (Guide), Abigail (Doctor), Sarah (Carpenter), Billy (Youth)
 - Outfitting Profile: Well-stocked with provisions; retained $160 reserve cash
 - Temperament: Pragmatic & High-Risk
 - Pace Habit: Grueling in rough terrain
@@ -336,8 +349,8 @@ Core Directives:
   "party": [
     { "name": "Jedediah", "role": "Guide", "health": 85, "status": "Healthy" },
     { "name": "Abigail", "role": "Doctor", "health": 90, "status": "Healthy" },
-    { "name": "Billy", "role": "Youth", "health": 60, "status": "Fever" },
-    { "name": "Sarah", "role": "Carpenter", "health": 92, "status": "Healthy" }
+    { "name": "Sarah", "role": "Carpenter", "health": 92, "status": "Healthy" },
+    { "name": "Billy", "role": "Youth", "health": 60, "status": "Fever" }
   ],
   "dmDossier": {
     "temperament": "Pragmatic & Cold",
@@ -375,11 +388,11 @@ Core Directives:
 
 ## 11. Implementation Roadmap
 
-- **Phase 1: Expedition Setup & General Store Outfitting (Mile 0)**
-  - Implement Stage 1: Expedition surname entry and 4-character first name customization on the phosphor CRT.
-  - Implement Stage 2: Independence General Store shopping cart interface with cash budget ($800–$1,000) and payload weight cap (2,400 lbs).
+- **Phase 1: Expedition Setup, Archetype Customization & Outfitting (Mile 0)**
+  - Implement Stage 1: Expedition surname entry, 4-traveler name customization, and free-form archetype selector (supporting Guide, Doctor, Carpenter, Farmer, Banker, Youth with stacking).
+  - Implement Stage 2: Independence General Store shopping cart interface with cash budget ($800–$1,000 modified by Banker) and payload weight cap (2,400 lbs).
   - Add standard outfit preset recommendations (`[R] Quick Outfit`) and interactive quantity adjustments for wood, food, water, ammo, oxen, medicine, and spare parts.
-  - Initialize the wagon and expedition state with purchased supplies and unspent cash.
+  - Initialize the wagon and expedition state with chosen archetypes, purchased supplies, and unspent cash.
 - **Phase 2: Linear Trail Model & Controls (Point A to Point B)**
   - Replace the 9x4 coordinate grid with a linear milestone route from Mile 0 (Independence) to Mile 2,000 (Willamette Valley).
   - Replace the 4-way N/S/E/W D-pad with a single primary **`PRESS ON`** travel button and clear halt/utility actions.
@@ -404,8 +417,8 @@ Core Directives:
 
 - `frontend/index.html`: Desktop retro window layout, HUD panels, and screen mount.
 - `frontend/styles.css`: Retro window styling, HUD panels, CRT screen styling, outfitting store styling, and linear trail ribbon.
-- `frontend/src/ui.js`: DOM references, linear trail tracker rendering, CRT green screen rendering, and typewriter streaming logic.
-- `frontend/src/game.js`: Game controller, turn loop, `handleAction`, setup/store prologue flow, linear mileage tracking, and decision resolution.
-- `frontend/src/state.js`: Expedition state, expedition surname, party member roster, cash balance, wagon cargo load, landmark distances, and supplies.
+- `frontend/src/ui.js`: DOM references, linear trail tracker rendering, CRT green screen rendering, archetype selector UI, and typewriter streaming logic.
+- `frontend/src/game.js`: Game controller, turn loop, `handleAction`, setup/store prologue flow, multi-archetype stacking logic, linear mileage tracking, and decision resolution.
+- `frontend/src/state.js`: Expedition state, expedition surname, party member roster with archetypes, cash balance, wagon cargo load, landmark distances, and supplies.
 - `src/lib/story-ai.ts`: Gemini prompt builder, schemas, linear milestone payload, and DM dossier logic.
 - `src/routes/narration.ts`: Fastify route handling narration requests and ElevenLabs TTS audio.
