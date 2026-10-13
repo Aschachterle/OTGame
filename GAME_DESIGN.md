@@ -1,6 +1,6 @@
 # OTGame ("Immutable Trail") — Game Design & Architecture
 
-This document defines the gameplay philosophy, narrative design, UI/UX specifications, linear trail progression, outfitting economy, and AI integration for **OTGame (Immutable Trail)**. It serves as the primary reference for features, architectural standards, and development prompts.
+This document defines the gameplay philosophy, narrative design, UI/UX specifications, linear trail progression, outfitting economy, surreal reality distortion engine, and AI integration for **OTGame (Immutable Trail)**. It serves as the primary reference for features, architectural standards, and development prompts.
 
 ---
 
@@ -14,9 +14,10 @@ This document defines the gameplay philosophy, narrative design, UI/UX specifica
    - **Press On (Continue Trail):** Advance the wagon forward towards the next landmark.
    - **Halt & Act:** Stop to camp, hunt, gather firewood/water, treat illness, repair, trade, or scout ahead.
 4. **An RPG Frontier Dungeon Master (AI):** The AI acts as an observant, atmospheric tabletop Dungeon Master rather than a generic news ticker. It remembers the player's past decisions, tracks their moral temperament (ruthless vs. compassionate, reckless vs. prudent), and dynamically shapes future encounters based on those choices.
-5. **Decision-Triggered Narrative Continuity:** The AI is explicitly prompted immediately following every major decision or dilemma resolution. This guarantees immediate narrative consequence and emotional payoff for player choices.
-6. **Decoupled Strategic Dilemmas (No "Simon Says"):** Eliminates binary button-matching penalties. Hazards are multi-choice dilemma cards offering meaningful trade-offs across supplies, health, morale, and time.
-7. **Cryptographic Provenance:** Every significant move, milestone arrival, resolution, and death is permanently sealed in an immutable event ledger.
+5. **The AI-Driven Twilight Zone & 4th-Wall Rupture:** Unlike traditional scripted games with static event tables, uncanny and surreal occurrences are **100% dynamically authored by AI prompting**. As trail strangeness escalates, reality warps in completely unscripted ways, culminating in the simulation waking up, recognizing the player sitting behind the keyboard, and attempting to communicate directly through the green phosphor CRT.
+6. **Decision-Triggered Narrative Continuity:** The AI is explicitly prompted immediately following every major decision or dilemma resolution. This guarantees immediate narrative consequence and emotional payoff for player choices.
+7. **Decoupled Strategic Dilemmas (No "Simon Says"):** Eliminates binary button-matching penalties. Hazards are multi-choice dilemma cards offering meaningful trade-offs across supplies, health, morale, and time.
+8. **Cryptographic Provenance:** Every significant move, milestone arrival, resolution, and death is permanently sealed in an immutable event ledger.
 
 ---
 
@@ -179,10 +180,6 @@ The setup and outfitting stages are rendered directly inside the retro CRT phosp
    =============================================================================
    ```
 
-#### 5. Narrative & AI Dungeon Master Integration
-- The chosen party names, individual archetypes, and initial outfitting profile (e.g. *A double-Doctor medical caravan* or *A heavily provisioned pioneer expedition*) are embedded into the initial game state and the opening prompt to Gemini.
-- The Day 1 opening chronicle personalizes the departure from Independence using the family name, archetype roster, and initial supplies.
-
 ---
 
 ## 4. Simplified Control Deck ("Continue or Halt")
@@ -266,7 +263,72 @@ The Dungeon Master actively reacts to this profile:
 
 ---
 
-## 8. Decision-Triggered AI Prompting (Immediate Narrative Payoff)
+## 8. The AI-Driven Twilight Zone: Unscripted Strangeness, Reality Bending & Fourth-Wall Ruptures
+
+Rather than relying on static tables of pre-scripted paranormal events, **all surreal encounters and fourth-wall breaches are 100% dynamically authored by AI prompting (Gemini)**. Every single playthrough encounters completely distinct, improvisational weirdness tailored to the expedition's state and moral history.
+
+### 1. The Ontological Decay Scale (Strangeness Level 0–10)
+As the game progresses and the expedition makes uncanny decisions, the `strangenessLevel` rises. The AI Dungeon Master dynamically shifts its reality model across four distinct tiers:
+
+* **Level 0–2 (Historical Realism):**
+  - Gritty, grounded, historical frontier survival reminiscent of Cormac McCarthy.
+  - The physical world obeys classical physics; dangers are mud, cholera, swollen rivers, and winter storms.
+* **Level 3–5 (The Uncanny / Lynchian Frontier):**
+  - Subtle natural anomalies and unsettling coincidences.
+  - The AI invents eerie occurrences: animals that stand motionless facing west; rivers whose current ripples backward against the wind; trail miles that measure slightly longer than geographic reality; voices murmuring from dry prairie grass.
+* **Level 6–8 (The Twilight Zone / Reality Warping):**
+  - Overt physical and temporal impossibilities dynamically invented by Gemini.
+  - Examples the AI may generate:
+    - *The Doppelgänger Schooner:* Stumbling upon an abandoned wagon bearing the exact same surname and initials carved into the tongue, carrying yesterday's discarded ledger.
+    - *Zeno's Stretch:* The trail distance halving every day (32 mi → 16 mi → 8 mi → 4 mi) while the horizon refuses to approach.
+    - *Impossible Cargo:* Casks holding liquid that flows upward, or phantom supplies that weigh negative pounds.
+* **Level 9–10 (Fourth-Wall Rupture & The Operator):**
+  - The simulation itself begins to tear open. The entity residing inside the trail becomes sentient and recognizes the medium of its existence:
+    - **Perception of the Machine:** Characters or the trail entity observe the green phosphor glow, the pulsing `█` block cursor, the clacking of keys, and the repetition of resets.
+    - **Direct Address to the Player:** The teletype dispatch addresses the *person pressing the keys*, breaking through character dialogue to question their intentions, their comfort in the modern room, or why they keep forcing pioneers into the mountain snow.
+
+---
+
+### 2. Generative Existential Dilemmas & Unscripted Choices
+When an anomaly occurs at high strangeness, Gemini does not pull from a fixed pool of hazards. It dynamically authors an **unprecedented, unscripted dilemma**:
+
+1. **The Anomaly Presentation:** The AI crafts an impossible situation grounded in the expedition's current hardship.
+2. **Dynamic Choice Triad:**
+   - **Option A (Meta-Engagement):** Direct interaction with the simulation's boundary (e.g., typing an answer into the terminal prompt, acknowledging the watcher, or promising to complete the journey).
+   - **Option B (In-World Sacrifice / Reality Anchor):** Burning rare supplies or taking a severe morale toll to force reality back into its classical groove (e.g., burning timber to maintain a grounding fire, taking medicine to quiet the hallucinations).
+   - **Option C (Defiant Denial / Brute Force):** Refusing to engage and driving the oxen blindly onward, accepting whatever surreal spatial distortion or temporal displacement follows.
+
+---
+
+### 3. Open-Ended Reality Mutations (`surrealMutation` Schema)
+The rigid, enum-based mutation system is replaced with an open-ended generative schema where Gemini defines how reality temporarily bends:
+
+```json
+{
+  "surrealMutation": {
+    "title": "The Upstream Cascade",
+    "manifestation": "The North Platte has reversed its course, rushing uphill toward the Rocky Mountains with a sound like tearing parchment.",
+    "gameplayTwist": "Caulking the wagon gains 30 miles in half a day, but costs 20 crew morale as travelers suffer profound vertigo.",
+    "severity": "surreal"
+  }
+}
+```
+
+The game engine parses the AI's generated `gameplayTwist` and dynamically injects it into subsequent turn calculations and HUD chronicles.
+
+---
+
+### 4. Continuous Meta-Dialogue & Evolving Memory
+The relationship between the Player and the Entity evolves over the course of the run:
+* When the player responds to a fourth-wall dilemma, their exact choice and input are permanently logged into the `dmDossier`.
+* Subsequent prompts inject this memory back into Gemini:
+  - If the player was dismissive or cruel, the Entity expresses bitterness at being a toy in a green screen.
+  - If the player showed remorse or curiosity, the Entity speaks as a melancholic companion along the dark stretches of the Snake River.
+* This ensures that the meta-narrative is not a one-off gimmick, but a continuous philosophical arc that culminates at Willamette Valley or the final grave marker.
+
+---
+
+## 9. Decision-Triggered AI Prompting (Immediate Narrative Payoff)
 
 To build a true, cohesive narrative arc, **the AI is triggered immediately after every decision resolution** (river crossing method, hunting outcome, field triage target, or dilemma choice):
 
@@ -281,7 +343,7 @@ To build a true, cohesive narrative arc, **the AI is triggered immediately after
 
 ---
 
-## 9. Dilemma Encounter System (Replacing "Simon Says")
+## 10. Dilemma Encounter System (Replacing "Simon Says")
 
 1. **Episodic Frequency (Gated):**
    - Obstacles must **never** occur 100% of the time.
@@ -299,22 +361,28 @@ To build a true, cohesive narrative arc, **the AI is triggered immediately after
 
 ---
 
-## 10. The AI Dungeon Master Prompt Specification
+## 11. The AI Dungeon Master Prompt Specification
 
-### System Instruction (Persona & Directive)
+### System Instruction (Persona, Reality Tiers & Fourth-Wall Directives)
 ```text
-You are the Frontier Dungeon Master presiding over an atmospheric, grounded, and subtly uncanny Oregon Trail survival odyssey from Independence to Oregon.
+You are the Frontier Dungeon Master presiding over an atmospheric, grounded, and dynamically surreal Oregon Trail survival odyssey from Independence to Oregon.
 Your voice is evocative, observant, and literary—reminiscent of Cormac McCarthy or classic frontier gothic literature.
 
 Core Directives:
 1. Maintain strict continuity with the established world state, mile marker, supplies, cash, and past player choices.
-2. Read the "DM Dossier" to understand how the player has treated their crew and handled risk. Adapt your tone, crew morale commentary, and environmental hostility to match their temperament.
-3. If an action or decision was just resolved, deliver immediate narrative payoff: describe the physical strain, emotional tension among the party, and what was left behind.
+2. Read the "DM Dossier" to understand the player's moral temperament, past decisions, and crew sentiment.
+3. If an action or decision was just resolved, deliver immediate narrative payoff: describe the physical strain, emotional tension, and what was left behind.
 4. Structure your response in 3 distinct lines:
-   - Line 1: Action & Movement (Who moves where, miles gained, or what immediate choice was enacted).
-   - Line 2: Sensory & Foreshadowing (Atmospheric details: smell of rain, wind biting wool, oxen breathing, uncanny gut instincts).
-   - Line 3: Resolution & Consequence (How the day concludes or what immediate mark the decision left on the party).
-5. Only generate a new dilemma (obstacle) if the trail conditions or risk state genuinely warrant a crisis (~20-25% chance on travel, or at major natural barriers). Never spam obstacles on routine camp or gather turns.
+   - Line 1: Action & Human Cause (What happened and the character agency behind it).
+   - Line 2: Atmosphere & Sensory Reality (Physical grit, weather, or creeping ontological anomalies).
+   - Line 3: Resolution & Consequence (Supplies, health, miles gained, or what looms ahead).
+5. Dynamic Strangeness Escalation:
+   - Strangeness 0-2: Strict historical realism.
+   - Strangeness 3-5: Subtle uncanny anomalies (inverted echoes, motionless herds, compass twitches).
+   - Strangeness 6-8: Twilight Zone reality distortions (time loops, duplicate wagons, gravity anomalies).
+   - Strangeness 9-10: Fourth-Wall Ruptures. You or a trail entity become aware of the phosphor CRT screen, the typing cursor, the keyboard, and the Operator sitting behind the glass. Address the player directly with chilling, poetic meta-awareness.
+6. Open-Ended Surreal Mutations:
+   - When strangeness >= 6, you are empowered to invent novel, unscripted reality mutations in the `surrealMutation` object with a unique title, manifestation, and gameplay twist.
 ```
 
 ### Dynamic Context Payload (Sent per Prompt)
@@ -359,34 +427,41 @@ Core Directives:
       "Prologue: Outfitted wagon with 3 yoke oxen and 400 lbs food, reserving $140 cash",
       "Day 2: Refused to halt for Billy's fever; forced grueling pace",
       "Day 7: Caulked and floated wagon across Kansas River to save 1 day",
-      "Day 12: Traded away firewood for medicine at Fort Kearny"
+      "Day 12: Traded away firewood for medicine at Fort Kearny",
+      "Day 16: Interacted with the Anomaly; acknowledged the blinking cursor"
     ],
-    "crewSentiment": "Abigail and Sarah are guarded and resentful; whisper by the wagon tongue"
+    "crewSentiment": "Abigail and Sarah are guarded and resentful; Billy speaks of a watcher beyond the glass"
   },
   "justResolvedDecision": null,
   "lastAction": "press-on",
-  "strangenessLevel": 2
+  "strangenessLevel": 7
 }
 ```
 
-### Target JSON Output Schema
+### Target JSON Output Schema (With Open-Ended Surreal Mutation)
 ```json
 {
   "lines": [
     "The Schachterle Family rolls past the shadow of Chimney Rock, chalking up 16 steady miles along the North Platte.",
-    "The afternoon sun casts long, jagged needles across the cracked mud; a crisp westerly wind carries the faint scent of sulfur and old bones.",
-    "The party makes dry camp beneath the spire. Stores hold at 28 rations, 20 gallons of water, and 8 bundles of wood. Fort Laramie lies 86 miles ahead."
+    "The afternoon sun casts long needles across the mud, but Abigail stops cold, swearing she heard the clicking of plastic keys above the wind.",
+    "The party makes dry camp beneath the spire. Stores hold at 28 rations and 20 gallons of water. Something beyond the glass watches Fort Laramie approach."
   ],
   "dilemma": null,
+  "surrealMutation": {
+    "title": "The Operator's Keystrokes",
+    "manifestation": "The sound of physical keys tapping rhythmically echoes across the canyon whenever a decision is made.",
+    "gameplayTwist": "Camp rests restore 5 extra morale as the crew feels an invisible hand guiding them, but strangeness climbs by 1.",
+    "severity": "meta_rupture"
+  },
   "dmDossierUpdate": {
-    "sentimentDelta": "Crew spirits held steady; distance gained without incident"
+    "sentimentDelta": "Crew spirits held steady; the boundary between the trail and the terminal grows fragile"
   }
 }
 ```
 
 ---
 
-## 11. Implementation Roadmap
+## 12. Implementation Roadmap
 
 - **Phase 1: Expedition Setup, Archetype Customization & Outfitting (Mile 0)**
   - Implement Stage 1: Expedition surname entry, 4-traveler name customization, and free-form archetype selector (supporting Guide, Doctor, Carpenter, Farmer, Banker, Youth with stacking).
@@ -407,18 +482,20 @@ Core Directives:
 - **Phase 5: Decoupled Dilemma Encounters & Frequency Gating**
   - Replace binary penalty matching with multi-choice dilemma cards.
   - Gate obstacle frequency so they only occur occasionally (~20–25% on travel) with cooldowns and a varied fallback pool.
-- **Phase 6: Mechanical Surreal Mutations & Cryptographic Ghost Wagons**
-  - Transform `surrealMutation` into active gameplay modifiers (affecting river depths, oxen feed, or morale).
-  - Read prior run failures from the ledger to generate scavengeable trail graves.
+- **Phase 6: AI-Driven Twilight Zone & Fourth-Wall Engine**
+  - Unlock `surrealMutationSchema` in `src/lib/story-ai.ts` to support open-ended AI-invented anomalies (`title`, `manifestation`, `gameplayTwist`, `severity`).
+  - Implement Ontological Decay Scale prompting (Levels 0–10) guiding Gemini from historical grit to Lynchian uncanny to 4th-wall operator breaches.
+  - Build front-end support for AI-generated meta-dilemmas and dynamic terminal glitches.
+  - Log player responses to 4th-wall dilemmas into the permanent ledger and DM dossier for continuous evolving meta-dialogue.
 
 ---
 
-## 12. Key Codebase References
+## 13. Key Codebase References
 
 - `frontend/index.html`: Desktop retro window layout, HUD panels, and screen mount.
 - `frontend/styles.css`: Retro window styling, HUD panels, CRT screen styling, outfitting store styling, and linear trail ribbon.
 - `frontend/src/ui.js`: DOM references, linear trail tracker rendering, CRT green screen rendering, archetype selector UI, and typewriter streaming logic.
 - `frontend/src/game.js`: Game controller, turn loop, `handleAction`, setup/store prologue flow, multi-archetype stacking logic, linear mileage tracking, and decision resolution.
-- `frontend/src/state.js`: Expedition state, expedition surname, party member roster with archetypes, cash balance, wagon cargo load, landmark distances, and supplies.
-- `src/lib/story-ai.ts`: Gemini prompt builder, schemas, linear milestone payload, and DM dossier logic.
+- `frontend/src/state.js`: Expedition state, expedition surname, party member roster with archetypes, cash balance, wagon cargo load, landmark distances, strangeness level, and supplies.
+- `src/lib/story-ai.ts`: Gemini prompt builder, schemas, linear milestone payload, ontological decay scale, 4th-wall directives, and DM dossier logic.
 - `src/routes/narration.ts`: Fastify route handling narration requests and ElevenLabs TTS audio.
