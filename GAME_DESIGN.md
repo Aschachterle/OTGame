@@ -1,6 +1,6 @@
 # OTGame ("Immutable Trail") — Game Design & Architecture
 
-This document defines the gameplay philosophy, narrative design, UI/UX specifications, linear trail progression, and AI integration for **OTGame (Immutable Trail)**. It serves as the primary reference for features, architectural standards, and development prompts.
+This document defines the gameplay philosophy, narrative design, UI/UX specifications, linear trail progression, outfitting economy, and AI integration for **OTGame (Immutable Trail)**. It serves as the primary reference for features, architectural standards, and development prompts.
 
 ---
 
@@ -9,13 +9,14 @@ This document defines the gameplay philosophy, narrative design, UI/UX specifica
 **Immutable Trail** is a streamlined, text-driven survival odyssey from **Independence to Oregon (Point A to Point B)**. It merges classic *Oregon Trail* resource survival with:
 
 1. **A Matrix / Phosphor CRT Terminal Aesthetic:** The center stage screen is a glowing green CRT monitor where text streams line-by-line and letter-by-letter with a pulsing cursor (`█`).
-2. **Linear Point A to Point B Progression:** Eliminates the confusing 2D cardinal grid (North/South/East/West). The player moves forward along a single overland trail from **Independence (Mile 0)** to **Willamette Valley (Mile 2,000)**. The fundamental turn-by-turn choice is:
+2. **Prologue Setup & Outfitting Stage:** Before embarking, the player names their family/expedition and customizes each party member's first name, then visits the Independence General Store to pack their prairie schooner under strict cash budget and payload weight constraints.
+3. **Linear Point A to Point B Progression:** Eliminates the confusing 2D cardinal grid (North/South/East/West). The player moves forward along a single overland trail from **Independence (Mile 0)** to **Willamette Valley (Mile 2,000)**. The fundamental turn-by-turn choice is:
    - **Press On (Continue Trail):** Advance the wagon forward towards the next landmark.
-   - **Halt & Act:** Stop to camp, hunt, treat illness, repair, trade, or scout ahead.
-3. **An RPG Frontier Dungeon Master (AI):** The AI acts as an observant, atmospheric tabletop Dungeon Master rather than a generic news ticker. It remembers the player's past decisions, tracks their moral temperament (ruthless vs. compassionate, reckless vs. prudent), and dynamically shapes future encounters based on those choices.
-4. **Decision-Triggered Narrative Continuity:** The AI is explicitly prompted immediately following every major decision or dilemma resolution. This guarantees immediate narrative consequence and emotional payoff for player choices.
-5. **Decoupled Strategic Dilemmas (No "Simon Says"):** Eliminates binary button-matching penalties. Hazards are multi-choice dilemma cards offering meaningful trade-offs across supplies, health, morale, and time.
-6. **Cryptographic Provenance:** Every significant move, milestone arrival, resolution, and death is permanently sealed in an immutable event ledger.
+   - **Halt & Act:** Stop to camp, hunt, gather firewood/water, treat illness, repair, trade, or scout ahead.
+4. **An RPG Frontier Dungeon Master (AI):** The AI acts as an observant, atmospheric tabletop Dungeon Master rather than a generic news ticker. It remembers the player's past decisions, tracks their moral temperament (ruthless vs. compassionate, reckless vs. prudent), and dynamically shapes future encounters based on those choices.
+5. **Decision-Triggered Narrative Continuity:** The AI is explicitly prompted immediately following every major decision or dilemma resolution. This guarantees immediate narrative consequence and emotional payoff for player choices.
+6. **Decoupled Strategic Dilemmas (No "Simon Says"):** Eliminates binary button-matching penalties. Hazards are multi-choice dilemma cards offering meaningful trade-offs across supplies, health, morale, and time.
+7. **Cryptographic Provenance:** Every significant move, milestone arrival, resolution, and death is permanently sealed in an immutable event ledger.
 
 ---
 
@@ -34,18 +35,18 @@ Independence === Fort Kearny === Chimney Rock ==== South Pass ==== Snake River =
 ```
 
 ### Milestone & Landmark Sequence
-1. **Independence, MO (Mile 0)** — Trailhead, initial outfitting.
-2. **Kansas River Crossing (Mile 102)** — First water hazard (ford vs. caulk vs. ferry).
-3. **Fort Kearny (Mile 319)** — Military outpost, trading, rest.
-4. **Chimney Rock (Mile 554)** — Iconic spire, snakebite country.
-5. **Fort Laramie (Mile 640)** — Major frontier supply hub, doctor support.
+1. **Independence, MO (Mile 0)** — Trailhead, party registration, and general store outfitting.
+2. **Kansas River Crossing (Mile 102)** — First water hazard (ford vs. caulk vs. paid ferry).
+3. **Fort Kearny (Mile 319)** — Military outpost, trading, rest, doctor assistance.
+4. **Chimney Rock (Mile 554)** — Iconic spire, badlands, snakebite country.
+5. **Fort Laramie (Mile 640)** — Major frontier supply hub, blacksmith, resupply.
 6. **Independence Rock (Mile 815)** — Pioneer landmark, Sweetwater river trail.
 7. **South Pass / Continental Divide (Mile 932)** — Extreme elevation, cold, blizzard risk, trail fork.
 8. **Fort Bridger (Mile 1,070)** — Mountain resupply and rest.
 9. **Soda Springs (Mile 1,220)** — Mineral springs, uncanny/surreal anomaly hotspot.
-10. **Snake River Crossing (Mile 1,390)** — Dangerous deep-water crossing.
+10. **Snake River Crossing (Mile 1,390)** — Dangerous deep-water crossing; Indian guide option.
 11. **Blue Mountains (Mile 1,600)** — Steep slopes, brake/axle strain, hypothermia risk.
-12. **The Dalles (Mile 1,800)** — Final fork: Barlow Road toll vs. Columbia River raft.
+12. **The Dalles (Mile 1,800)** — Final fork: Barlow Road toll ($10) vs. Columbia River raft.
 13. **Willamette Valley, OR (Mile 2,000)** — Journey complete; settlement achieved.
 
 ---
@@ -73,7 +74,106 @@ In place of the 2D tile map, the game displays a sleek, retro **Overland Trail R
 
 ---
 
-## 3. Simplified Control Deck ("Continue or Halt")
+## 3. Expedition Setup: Party Naming & General Store Outfitting
+
+Before setting wheel to the overland trail at Independence (Mile 0), the game begins with a two-stage interactive prologue:
+
+### Stage 1: Party Naming & Roster Configuration
+1. **Family / Expedition Surname:**
+   - The player selects the expedition last name (Default: *"The Schachterle Family"*, with player prompt to customize).
+   - Displayed across trail dispatches, ledger records, grave markers, and milestone chronicles (e.g., `> The Schachterle Family presses west along the North Platte...`).
+2. **Individual Party Member First Names & Archetypes:**
+   - The party comprises 4 distinct travelers, each mapped to a mechanical archetype and narrative role:
+     - **Guide / Scout** (Default: *Jedediah*): Trail veteran. Bonus to scouting upcoming weather, river depths, foraging, and hunting success.
+     - **Doctor / Healer** (Default: *Abigail*): Medical knowledge. Reduces medicine consumption; boosts recovery from illness, cholera, and fever during rest.
+     - **Youth / Dependent** (Default: *Billy*): High vulnerability, impulsive nature. Susceptible to snakebites, exhaustion, and narrative mishaps that test the party's compassion.
+     - **Carpenter / Wheelwright** (Default: *Sarah*): Craftsmanship. Halves wood requirements for wagon repairs; prevents catastrophic axle/wheel failures on rough terrain.
+   - The UI provides default historic names with instant inline editing on the CRT green screen.
+
+---
+
+### Stage 2: Independence General Store & Wagon Outfitting
+Once the party is named, the player enters the **Independence General Store (May 1848)** run by the frontier merchant.
+
+#### 1. Starting Budget & Financial Economy
+- **Starting Cash:** **$800.00 – $1,000.00** in gold coin/banknotes.
+- **The Cash Conservation Dilemma:** Cash is not merely spent at Mile 0; unspent funds remain in `wagon.cash` for crucial expenses down the trail:
+  - **River Ferries:** Kansas River ($5.00), Green River ($8.00), Snake River ($10.00) avoid dangerous capsizing risks.
+  - **Toll Roads:** Barlow Road ($10.00) around Mt. Hood vs. perilous Columbia River rafting.
+  - **Fort Outposts:** Resupplying at Fort Kearny, Fort Laramie, or Fort Bridger (prices increase by 2x to 3x base store cost).
+  - **Native Guides:** Paying local Shoshone or Pawnee guides to negotiate treacherous river crossings or locate potable desert water.
+
+#### 2. Store Catalog & Packing Specifications
+The store provides essential provisions with distinct costs, unit weights, and mechanical utilities:
+
+| Item | Unit Size / Bundle | Cost ($) | Weight (lbs) | Mechanical & Narrative Utility |
+| :--- | :--- | :--- | :--- | :--- |
+| **Draft Oxen** | 1 Yoke (2 Oxen) | $40.00 / yoke | 1,000 lbs (draft) | Minimum 2 yoke (4 oxen) required to pull a loaded prairie schooner; 3 yoke recommended for mountain grades. Loss of oxen slows pace or strands wagon. |
+| **Food Rations** | 25 lb Sack (Flour, Bacon, Beans) | $5.00 / sack ($0.20/ration) | 25 lbs | Sustains 4 travelers. Standard consumption: 8–12 lbs/day depending on rationing policy (Meager, Normal, Filling). Starvation drops health and morale rapidly. |
+| **Fresh Water** | 10 Gallon Cask | $2.00 / cask ($0.20/gal) | 80 lbs (full) | Essential across arid stretches (Platte Badlands, Great Basin). Dehydration inflicts heatstroke and fatal dysentery. |
+| **Firewood** | 1 Bundle (10 logs) | $2.00 / bundle ($0.20/log) | 30 lbs | Critical for campfires, boiling river water, keeping warm during freezing mountain nights (preventing hypothermia/pneumonia), and timber for Carpenter wagon repairs. |
+| **Ammunition** | 1 Box (20 paper cartridges) | $2.00 / box | 3 lbs | Required for hunting big game (bison, antelope, deer) and defense during rare hostile encounters. |
+| **Medical Supplies** | 1 Medical Kit (4 doses laudanum/quinine/carbolic) | $8.00 / kit ($2.00/dose) | 2 lbs | Required by the Doctor to treat cholera, typhoid, mountain fever, gangrene, and snakebites. |
+| **Spare Wagon Parts** | Axle ($10.00), Wheel ($12.00), Tongue ($8.00) | $8.00–$12.00 / part | 40–50 lbs each | Replaces broken structural running gear after boulder collisions, mountain descents, or axle snaps. Without spares or wood, the wagon is halted. |
+| **Warm Clothing / Bedding** | 1 Set (Wool blankets & coats) | $10.00 / set | 15 lbs | Protects against cold snaps, rainstorms, and blizzards in the Rocky and Blue Mountains. Reduces daily health decay. |
+
+#### 3. Wagon Payload Capacity & Weight Physics
+- **Maximum Wagon Capacity:** **2,400 lbs** gross cargo capacity (excluding draft oxen pulling weight).
+- **Weight Thresholds & Penalties:**
+  - **Light (< 1,400 lbs):** Faster travel speed (+2 mi/day), minimal breakdown risk, lower oxen exhaustion.
+  - **Nominal (1,400 – 2,100 lbs):** Standard travel pace (~15 mi/day) and standard oxen endurance.
+  - **Heavy / Overburdened (2,100 – 2,400 lbs):** -2 to -4 mi/day pace penalty, heightened axle wear, and rapid oxen fatigue.
+  - **Overloaded (> 2,400 lbs):** Storekeeper refuses departure until cargo is within safe limits; on the trail, forces dumping cargo or suffers catastrophic wagon breakdowns.
+
+#### 4. Setup & Store CRT Terminal Interface (UI Flow)
+The setup and outfitting stages are rendered directly inside the retro CRT phosphor green terminal:
+
+1. **Screen 1 — Expedition Register:**
+   ```text
+   =============================================================================
+   IMMUTABLE TRAIL // EXPEDITION REGISTRATION — INDEPENDENCE, MISSOURI (1848)
+   =============================================================================
+   [ENTER SURNAME]: The Schachterle Family
+   
+   PARTY ROSTER:
+     1. GUIDE / SCOUT   : [Jedediah  ] — Trail veteran & marksman
+     2. DOCTOR / HEALER : [Abigail   ] — Field physician & apothecary
+     3. YOUTH / SCOUT   : [Billy     ] — Young dependent; spirited & fragile
+     4. CARPENTER       : [Sarah     ] — Wheelwright & wagon engineer
+   
+   [TAB] Cycle Fields  |  [ENTER] Confirm Roster & Enter Outfitting Store
+   =============================================================================
+   ```
+
+2. **Screen 2 — General Store Outfitting & Cargo Manifest:**
+   ```text
+   =============================================================================
+   INDEPENDENCE GENERAL STORE // MATT'S OUTFITTING POST
+   =============================================================================
+   FUNDS AVAILABLE: $840.00 / $1,000.00         CARGO LOAD: 1,680 / 2,400 LBS
+   -----------------------------------------------------------------------------
+   ITEM                 UNIT PRICE   WEIGHT     QTY IN CART    TOTAL COST
+   [1] YOKE OF OXEN     $40.00/yoke  -- (draft)   3 yoke        $120.00
+   [2] FOOD SACKS (25#) $5.00/sack   25 lbs      16 sacks (400#)$80.00
+   [3] WATER CASKS      $2.00/cask   80 lbs       4 casks       $8.00
+   [4] FIREWOOD BUNDLES $2.00/bundle 30 lbs       6 bundles     $12.00
+   [5] AMMO BOXES (20)  $2.00/box    3 lbs        8 boxes       $16.00
+   [6] MEDICAL KITS     $8.00/kit    2 lbs        3 kits        $24.00
+   [7] SPARE AXLES      $10.00/each  45 lbs       1 axle        $10.00
+   [8] SPARE WHEELS     $12.00/each  50 lbs       2 wheels      $24.00
+   [9] SPARE TONGUES    $8.00/each   40 lbs       1 tongue      $8.00
+   -----------------------------------------------------------------------------
+   [+/-] Adjust Quantity | [R] Recommend Standard Outfit | [SPACE] Purchase & Embark
+   =============================================================================
+   ```
+
+#### 5. Narrative & AI Dungeon Master Integration
+- The chosen party names, individual health baselines, and initial outfitting profile (e.g. *A lean, cash-heavy expedition* vs. *A heavily burdened, fully provisioned caravan*) are embedded into the initial game state and the opening prompt to Gemini.
+- The Day 1 opening chronicle personalizes the departure from Independence using the family name and initial supplies.
+
+---
+
+## 4. Simplified Control Deck ("Continue or Halt")
 
 The 4-way D-Pad (North, South, East, West) is retired. The control deck is streamlined into two clear operational modes:
 
@@ -83,23 +183,23 @@ The 4-way D-Pad (North, South, East, West) is retired. The control deck is strea
 ### Camp & Maintenance Actions (Halt Options)
 When the player decides *not* to continue moving forward on a given day:
 - **`[1] MAKE CAMP`**: Halt for the day. Heals crew health, restores morale, consumes rations without advancing distance.
-- **`[2] HUNT`**: Halt to hunt provisions (uses 1 ammo box). Yields meat rations based on terrain and target.
-- **`[3] GATHER`**: Halt to forage for firewood, edible roots, or clean water from local sources.
-- **`[4] TREAT`**: Administer field medicine to an afflicted party member.
-- **`[5] REPAIR`**: Spend wood and time to reinforce or replace broken wagon parts (axles, wheels).
+- **`[2] HUNT`**: Halt to hunt provisions (uses 1 ammo box). Yields meat rations based on terrain and marksman success.
+- **`[3] GATHER`**: Halt to forage for firewood, clean water, or wild food from local surroundings (sub-menu allows choosing *Chop Firewood*, *Haul Water*, or *Forage Food*).
+- **`[4] TREAT`**: Administer field medicine to an afflicted party member (guided by Doctor Abigail).
+- **`[5] REPAIR`**: Spend wood and time to reinforce or replace broken wagon parts (axles, wheels, tongues), with Carpenter Sarah reducing wood costs.
 - **`[6] TRADE`**: Barter supplies with passing emigrant wagons or at military forts.
 - **`[7] SCOUT`**: Send the guide (Jedediah) ahead to inspect the next 40 miles for weather, river depth, or trail hazards.
 
 ---
 
-## 4. Visual & Screen Specifications (CRT Terminal)
+## 5. Visual & Screen Specifications (CRT Terminal & Unified Cockpit)
 
 ### The Overall Window Shell (Preserved)
-- The existing retro desktop window frame, title bar, dropdown menus, objective/journal cards, and bottom dock controls remain intact.
+- The retro desktop window frame, title bar, dropdown menus, objective/journal cards, and bottom dock controls remain intact.
 
-### The Screen Viewport (`.scene-viewport` inside `#map`)
+### The Unified Cockpit Display
+- **Consolidated Information Hub:** All essential game readouts—Dispatch Chronicle, Overland Trail Milestone Ribbon, Wagon & Supply Gauges, Party Vitals, and Contextual Action Prompts—are integrated directly into the phosphor green CRT screen.
 - **Aesthetic:** Green phosphor CRT terminal (`#020602` background, `#00ff66` text with text-shadow glow, subtle scanline overlay).
-- **Removal of Tile Canvas:** The 2D tile canvas is completely gone. The center stage is now dedicated to the **Teletype Chronicle** and the **Linear Trail Ribbon**.
 - **The Typing Cursor:** A pulsating green cursor (`█` or `_`) sits at the typing head and blinks continuously when awaiting player input.
 - **Teletype Engine:**
   - Characters stream in at ~15–20ms intervals.
@@ -109,7 +209,7 @@ When the player decides *not* to continue moving forward on a given day:
 
 ---
 
-## 5. Narrative Flow: The 3-Beat Action Chronicle
+## 6. Narrative Flow: The 3-Beat Action Chronicle & Character Causality
 
 When the player chooses **Press On** or takes any camp action, the terminal streams a 3-beat sequence:
 
@@ -118,17 +218,26 @@ When the player chooses **Press On** or takes any camp action, the terminal stre
 2. **Beat 2 — Senses & Atmospheric Foreshadowing:**
    > `Temperatures seem nice, the breeze feels good, but something in the air tells you to be cautious...`
 3. **Beat 3 — Outcome & Supply Snapshot:**
-   > `The day of travel was uneventful. Stores holding steady: 28 rations, 22 gal water. Next landmark: Chimney Rock in 42 miles.`
+   > `The day of travel was uneventful. Stores holding steady: 28 rations, 20 gal water, 8 wood. Next landmark: Chimney Rock in 42 miles.`
+
+### Character Causality in Narrative
+Every party member's health and presence actively shapes trail events:
+- If **Jedediah** is exhausted or sick, scouting reports are vague and hunting yield drops.
+- If **Abigail** is incapacitated, fever treatments require double medicine doses and have higher failure rates.
+- If **Sarah** is injured, wagon repairs consume extra firewood and time.
+- If **Billy** falls ill, camp discussions reflect anxiety and moral friction.
 
 ---
 
-## 6. AI Dungeon Master & Decision Memory
+## 7. AI Dungeon Master & Decision Memory
 
 ### The DM Dossier (Abbreviated Decision Ledger)
 The system maintains a compact behavioral dossier compiled from past actions and passes it to the AI prompt:
 
 ```text
 DM Dossier:
+- Family / Expedition: The Schachterle Family
+- Outfitting Profile: Well-stocked with provisions; retained $160 reserve cash
 - Temperament: Pragmatic & High-Risk
 - Pace Habit: Grueling in rough terrain
 - Crew Compassion: Low (refused medicine to Billy on Day 3; forced sick crew to travel)
@@ -144,7 +253,7 @@ The Dungeon Master actively reacts to this profile:
 
 ---
 
-## 7. Decision-Triggered AI Prompting (Immediate Narrative Payoff)
+## 8. Decision-Triggered AI Prompting (Immediate Narrative Payoff)
 
 To build a true, cohesive narrative arc, **the AI is triggered immediately after every decision resolution** (river crossing method, hunting outcome, field triage target, or dilemma choice):
 
@@ -159,7 +268,7 @@ To build a true, cohesive narrative arc, **the AI is triggered immediately after
 
 ---
 
-## 8. Dilemma Encounter System (Replacing "Simon Says")
+## 9. Dilemma Encounter System (Replacing "Simon Says")
 
 1. **Episodic Frequency (Gated):**
    - Obstacles must **never** occur 100% of the time.
@@ -173,11 +282,11 @@ To build a true, cohesive narrative arc, **the AI is triggered immediately after
      - *Option C (Physical Risk):* Force the crossing/route (risks crew health or wagon damage).
 
 3. **Fallback Variety:**
-   - Deterministic fallbacks must pull from a varied pool of dilemmas (e.g., *Mud Bog*, *Swollen Creek*, *Spoiled Rations*, *Spooked Oxen*, *Dense Fog*) rather than repeating a single static prompt.
+   - Deterministic fallbacks pull from a varied pool of dilemmas (*Mud Bog*, *Swollen Creek*, *Spoiled Rations*, *Spooked Oxen*, *Dense Fog*, *Broke Axle*) rather than repeating a single static prompt.
 
 ---
 
-## 9. The AI Dungeon Master Prompt Specification
+## 10. The AI Dungeon Master Prompt Specification
 
 ### System Instruction (Persona & Directive)
 ```text
@@ -185,14 +294,14 @@ You are the Frontier Dungeon Master presiding over an atmospheric, grounded, and
 Your voice is evocative, observant, and literary—reminiscent of Cormac McCarthy or classic frontier gothic literature.
 
 Core Directives:
-1. Maintain strict continuity with the established world state, mile marker, supplies, and past player choices.
+1. Maintain strict continuity with the established world state, mile marker, supplies, cash, and past player choices.
 2. Read the "DM Dossier" to understand how the player has treated their crew and handled risk. Adapt your tone, crew morale commentary, and environmental hostility to match their temperament.
 3. If an action or decision was just resolved, deliver immediate narrative payoff: describe the physical strain, emotional tension among the party, and what was left behind.
 4. Structure your response in 3 distinct lines:
    - Line 1: Action & Movement (Who moves where, miles gained, or what immediate choice was enacted).
    - Line 2: Sensory & Foreshadowing (Atmospheric details: smell of rain, wind biting wool, oxen breathing, uncanny gut instincts).
    - Line 3: Resolution & Consequence (How the day concludes or what immediate mark the decision left on the party).
-5. Only generate a new dilemma (obstacle) if the trail conditions or risk state genuinely warrant a crisis (~20-25% chance on travel, or at major natural barriers). Never spam obstacles on routine camp or treat turns.
+5. Only generate a new dilemma (obstacle) if the trail conditions or risk state genuinely warrant a crisis (~20-25% chance on travel, or at major natural barriers). Never spam obstacles on routine camp or gather turns.
 ```
 
 ### Dynamic Context Payload (Sent per Prompt)
@@ -209,11 +318,18 @@ Core Directives:
   "wagon": {
     "health": 82,
     "morale": 58,
+    "cash": 140,
+    "cargoWeightLbs": 1620,
+    "maxPayloadLbs": 2400,
+    "oxen": 6,
     "foodRations": 28,
     "waterGallons": 20,
     "firewoodBundles": 8,
     "medicineDoses": 2,
     "ammunitionBoxes": 5,
+    "spareAxles": 1,
+    "spareWheels": 2,
+    "spareTongues": 1,
     "brokenPart": null,
     "pace": "steady"
   },
@@ -227,6 +343,7 @@ Core Directives:
     "temperament": "Pragmatic & Cold",
     "riskHabit": "Aggressive pacing; pushes through illness",
     "keyHistoricalDecisions": [
+      "Prologue: Outfitted wagon with 3 yoke oxen and 400 lbs food, reserving $140 cash",
       "Day 2: Refused to halt for Billy's fever; forced grueling pace",
       "Day 7: Caulked and floated wagon across Kansas River to save 1 day",
       "Day 12: Traded away firewood for medicine at Fort Kearny"
@@ -245,7 +362,7 @@ Core Directives:
   "lines": [
     "The Schachterle Family rolls past the shadow of Chimney Rock, chalking up 16 steady miles along the North Platte.",
     "The afternoon sun casts long, jagged needles across the cracked mud; a crisp westerly wind carries the faint scent of sulfur and old bones.",
-    "The party makes dry camp beneath the spire. Stores hold at 28 rations and 20 gallons of water. Fort Laramie lies 86 miles ahead."
+    "The party makes dry camp beneath the spire. Stores hold at 28 rations, 20 gallons of water, and 8 bundles of wood. Fort Laramie lies 86 miles ahead."
   ],
   "dilemma": null,
   "dmDossierUpdate": {
@@ -256,34 +373,39 @@ Core Directives:
 
 ---
 
-## 10. Implementation Roadmap
+## 11. Implementation Roadmap
 
-- **Phase 1: Linear Trail Model & Controls (Point A to Point B)**
-  - Replace the 9x4 coordinate grid (`8:0` to `0:0`) with a linear milestone route from Mile 0 (Independence) to Mile 2,000 (Willamette Valley).
+- **Phase 1: Expedition Setup & General Store Outfitting (Mile 0)**
+  - Implement Stage 1: Expedition surname entry and 4-character first name customization on the phosphor CRT.
+  - Implement Stage 2: Independence General Store shopping cart interface with cash budget ($800–$1,000) and payload weight cap (2,400 lbs).
+  - Add standard outfit preset recommendations (`[R] Quick Outfit`) and interactive quantity adjustments for wood, food, water, ammo, oxen, medicine, and spare parts.
+  - Initialize the wagon and expedition state with purchased supplies and unspent cash.
+- **Phase 2: Linear Trail Model & Controls (Point A to Point B)**
+  - Replace the 9x4 coordinate grid with a linear milestone route from Mile 0 (Independence) to Mile 2,000 (Willamette Valley).
   - Replace the 4-way N/S/E/W D-pad with a single primary **`PRESS ON`** travel button and clear halt/utility actions.
   - Implement the linear milestone ribbon HUD tracker.
-- **Phase 2: Matrix Teletype Screen & Typewriter Engine**
+- **Phase 3: Matrix Teletype Screen & Typewriter Engine**
   - Implement CRT styling on `.scene-viewport`.
   - Build `streamTextLines` typewriter engine with punctuation pauses and skip-on-click/space.
-- **Phase 3: RPG Dungeon Master Prompting & Decision Dossier**
+- **Phase 4: RPG Dungeon Master Prompting & Decision Dossier**
   - Update `src/lib/story-ai.ts` to assemble the `dmDossier` and instruct Gemini as a tabletop DM.
   - Implement decision-triggered prompting to narrate aftermaths immediately after player choices.
   - Implement 3-beat RPG narrative outputs (Action, Atmosphere/Senses, Outcome).
-- **Phase 4: Decoupled Dilemma Encounters & Frequency Gating**
-  - Replace `applyObstaclePenaltyForWrongAction` with the multi-choice dilemma system.
+- **Phase 5: Decoupled Dilemma Encounters & Frequency Gating**
+  - Replace binary penalty matching with multi-choice dilemma cards.
   - Gate obstacle frequency so they only occur occasionally (~20–25% on travel) with cooldowns and a varied fallback pool.
-- **Phase 5: Mechanical Surreal Mutations & Cryptographic Ghost Wagons**
+- **Phase 6: Mechanical Surreal Mutations & Cryptographic Ghost Wagons**
   - Transform `surrealMutation` into active gameplay modifiers (affecting river depths, oxen feed, or morale).
   - Read prior run failures from the ledger to generate scavengeable trail graves.
 
 ---
 
-## 11. Key Codebase References
+## 12. Key Codebase References
 
-- `frontend/index.html`: Desktop retro window layout and screen mount.
-- `frontend/styles.css`: Retro window styling, HUD panels, CRT screen styling, and linear trail ribbon.
-- `frontend/src/ui.js`: DOM references, linear trail tracker rendering, and typewriter streaming logic.
-- `frontend/src/game.js`: Game controller, turn loop, `handleAction`, linear mileage tracking, and decision resolution.
-- `frontend/src/state.js`: Expedition state, landmark distances, total mileage, and party health.
+- `frontend/index.html`: Desktop retro window layout, HUD panels, and screen mount.
+- `frontend/styles.css`: Retro window styling, HUD panels, CRT screen styling, outfitting store styling, and linear trail ribbon.
+- `frontend/src/ui.js`: DOM references, linear trail tracker rendering, CRT green screen rendering, and typewriter streaming logic.
+- `frontend/src/game.js`: Game controller, turn loop, `handleAction`, setup/store prologue flow, linear mileage tracking, and decision resolution.
+- `frontend/src/state.js`: Expedition state, expedition surname, party member roster, cash balance, wagon cargo load, landmark distances, and supplies.
 - `src/lib/story-ai.ts`: Gemini prompt builder, schemas, linear milestone payload, and DM dossier logic.
 - `src/routes/narration.ts`: Fastify route handling narration requests and ElevenLabs TTS audio.
