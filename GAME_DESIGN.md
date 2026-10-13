@@ -182,6 +182,66 @@ The setup and outfitting stages are rendered directly inside the retro CRT phosp
 
 ---
 
+### Stage 3: Prologue Genesis & Starting Weirdness Dice Roll
+
+Immediately following wagon outfitting at the Independence General Store, the game initiates the **Prologue Genesis**. Before the wagon takes its first turn on the trail, the engine rolls the dice on the **Weirdness Meter (`strangenessLevel`)**, establishing the baseline reality of the entire playthrough from the very first line of prose.
+
+#### 1. The Starting Weirdness Roll (1d10 / Weighted Seed)
+When the player clicks **`[SPACE] Purchase & Embark`**, the system rolls for initial `strangenessLevel` (or Gemini rolls and returns it in the genesis payload):
+
+| Starting Roll | Reality Tier | Prologue Narrative Flavor & Origin Backstory |
+| :--- | :--- | :--- |
+| **0 – 2 (Common)** | **Historical Realism** | **Gritty Historical Necessity:** Foreclosed Missouri homesteads, blighted corn, cholera outbreaks in St. Louis, debt collectors, or the promise of fertile Oregon loam. Strict Cormac McCarthy frontier grit. |
+| **3 – 5 (Uncommon)** | **The Uncanny Frontier** | **Eerie Omens & Compulsions:** Cattle refusing to drink local well water; town clocks stopping at the exact same hour; all four travelers sharing the same vivid dream compelling them to head west into the sunset. |
+| **6 – 8 (Rare)** | **The Twilight Zone** | **Spatial & Temporal Distortions:** The family fleeing an eastern township that neighboring county maps claim never existed; finding goods in the wagon stamped with future dates; shadows stretching toward the morning sun. |
+| **9 – 10 (Critical Anomaly)** | **Fourth-Wall Rupture** | **The Awakening of the Simulation:** The party awakens inside a canvas box with vague, haunting memories of an *Operator* choosing their names and professions on a glowing glass screen. Whispers of clacking keys echo in the wind. |
+
+The resulting number initializes `state.strangenessLevel`, establishing the foundation for all future AI Dungeon Master prompts.
+
+#### 2. Prologue Genesis Context Payload (Sent to Gemini)
+```json
+{
+  "promptType": "prologue-genesis",
+  "expeditionName": "The Schachterle Family",
+  "startingStrangenessRoll": 4,
+  "party": [
+    { "name": "Jedediah", "role": "Guide" },
+    { "name": "Abigail", "role": "Doctor" },
+    { "name": "Sarah", "role": "Carpenter" },
+    { "name": "Billy", "role": "Youth" }
+  ],
+  "outfittingSummary": {
+    "cashReserved": 160.00,
+    "cargoWeightLbs": 1680,
+    "oxenYokes": 3,
+    "notableSupplies": "16 sacks flour, 3 medical kits, 8 boxes ammunition"
+  }
+}
+```
+
+#### 3. Output Schema & Teletype Presentation
+```json
+{
+  "startingStrangenessLevel": 4,
+  "headline": "The Departure from Independence",
+  "prologueParagraphs": [
+    "The auctioneer took the farm at third call, but it was not the bank that drove the Schachterle family from Boone County—it was the well water that turned bitter the night the birds stopped singing.",
+    "Abigail packed the carbolic bottles in sheep’s wool while Sarah drawknifed the axle linchpins smooth by the yellow light of an oil lantern. Jedediah watched the river road fill with canvas schooners, noting that every draft horse in Independence seemed to shy away from the western horizon.",
+    "With sixteen sacks of coarse meal and three yoke of sullen oxen, they turn their faces from the states. Ahead lie two thousand miles of unbroken grass, and a quiet in the wind that feels far too deliberate."
+  ]
+}
+```
+
+#### 4. CRT Presentation & Transition
+1. The General Store modal clears.
+2. The green phosphor CRT streams the prologue paragraphs using typewriter pauses (`Character: 12ms`, `Line: 250ms`).
+3. The starting Weirdness Meter is calibrated in the cockpit status bar.
+4. A pulsing prompt appears at the bottom:
+   `[SPACE / ENTER] ROLL OUT ONTO THE OVERLAND TRAIL >>`
+5. Pressing Space transitions directly to **Day 1 at Mile 0** (the Kansas River crossing stretch).
+
+---
+
 ## 4. Simplified Control Deck ("Continue or Halt")
 
 The 4-way D-Pad (North, South, East, West) is retired. The control deck is streamlined into two clear operational modes:
@@ -216,18 +276,65 @@ When the player decides *not* to continue moving forward on a given day:
   - **Skip Support:** Pressing Space, Enter, or clicking the screen immediately flushes remaining text so pacing is never hindered for fast readers.
   - Auto-scrolls smoothly to keep the latest line visible.
 
+### The Two-Phase Turn Flow
+The game stays in one unified cockpit; the main view changes its chronicle content between the results and dispatch phases. No separate screen, modal, or layout is opened.
+
+#### Phase 1 — Move Results
+Immediately after an action or dilemma resolves, the chronicle switches to:
+
+1. The resolved action, who was involved, and exact stat and supply deltas.
+2. No new story beat or dilemma prompt until the player continues.
+3. A **Continue** control in the main action dock; **Space** and **Enter** work as shortcuts.
+
+The surrounding cockpit remains visible, including the HUD, trail ribbon, wagon gauges, party roster, waypoint survey, stores, and action deck. Actions and pace/ration inputs remain visible but are disabled until Continue; the primary travel control becomes Continue.
+
+```text
+=============================================================================
+=== MOVE RESULTS // DAY 12 ==================================================
+=============================================================================
+> Send a scout ahead resolved the dilemma.
+> Jedediah felt out the road through the fog while the wagon waited.
+
+[STAT -] CREW HEALTH -2
+[STAT -] PARTY MORALE -1
+
+-----------------------------------------------------------------------------
+[SPACE / ENTER] CONTINUE >>
+=============================================================================
+```
+
+#### Phase 2 — Trail Dispatch & Next Steps
+After the player continues, the chronicle view changes to show:
+
+1. A fresh atmospheric story beat about the current landscape, weather, sensory details, character presence, or uncanny anomalies.
+2. Current mileage, distance to the next landmark, and current stores.
+3. The available action deck or active dilemma choices.
+
+The cockpit layout does not change. The story beat must not recap or paraphrase the action, participants, chosen response, outcome, gains, losses, or stat changes just shown in Phase 1.
+
+```text
+=============================================================================
+=== DAY 12 // NORTH PLATTE // BADLANDS // MILE 570 OF 2,000 ================
+=============================================================================
+> No storm threatens the wagon today; the quiet itself feels watchful.
+> A sharp westerly wind carries the faint scent of alkaline dust off the bluffs.
+> Abigail watches the canvas ties while the light fades across the plain.
+
+Waypoint: Independence Rock (245 miles ahead)
+Stores: 378 rations • 72 gal water • 6 wood • 12 medicine • 8 ammo
+
+-----------------------------------------------------------------------------
+[SPACE] PRESS ON  |  [1] CAMP  |  [2] HUNT  |  [3] GATHER  |  [4] TREAT
+=============================================================================
+```
+
 ---
 
-## 6. Narrative Flow: The 3-Beat Action Chronicle & Character Causality
+## 6. Narrative Flow: Separation of Concerns
 
-When the player chooses **Press On** or takes any camp action, the terminal streams a 3-beat sequence:
-
-1. **Beat 1 — The Action & Movement:**
-   > `> The Schachterle Family presses west along the North Platte (Made 16 miles today)...`
-2. **Beat 2 — Senses & Atmospheric Foreshadowing:**
-   > `Temperatures seem nice, the breeze feels good, but something in the air tells you to be cautious...`
-3. **Beat 3 — Outcome & Supply Snapshot:**
-   > `The day of travel was uneventful. Stores holding steady: 28 rations, 20 gal water, 8 wood. Next landmark: Chimney Rock in 42 miles.`
+1. **Move Results (Phase 1)** answers *What just happened?* It names the action and participants, then gives exact changes.
+2. **Story Dispatch (Phase 2)** answers *Where are we, and what does the frontier feel like?* It never repeats the move summary.
+3. **Control Deck (Phase 2)** answers *What can I do next?* Waypoints, stores, and choices live here rather than in story prose.
 
 ### Character Causality in Narrative
 Every party member's health and chosen archetype actively shapes trail events:
@@ -308,13 +415,23 @@ The rigid, enum-based mutation system is replaced with an open-ended generative 
   "surrealMutation": {
     "title": "The Upstream Cascade",
     "manifestation": "The North Platte has reversed its course, rushing uphill toward the Rocky Mountains with a sound like tearing parchment.",
-    "gameplayTwist": "Caulking the wagon gains 30 miles in half a day, but costs 20 crew morale as travelers suffer profound vertigo.",
-    "severity": "surreal"
+    "gameplayTwist": "The next camp restores 5 extra morale as the crew uses the fire to orient itself.",
+    "severity": "surreal",
+    "mechanicalEffect": {
+      "trigger": "next_camp",
+      "travelMilesDelta": 0,
+      "healthDelta": 0,
+      "moraleDelta": 5,
+      "foodDelta": 0,
+      "waterDelta": 0,
+      "woodDelta": 0,
+      "medicineDelta": 0
+    }
   }
 }
 ```
 
-The game engine parses the AI's generated `gameplayTwist` and dynamically injects it into subsequent turn calculations and HUD chronicles.
+`title`, `manifestation`, `gameplayTwist`, and `severity` remain open-ended AI-authored prose. The separately validated `mechanicalEffect` is a bounded, one-shot set of numeric deltas; the engine never executes or parses instructions from `gameplayTwist`. The mutation and its eventual effect resolution are sealed into the append-only event ledger.
 
 ---
 
@@ -328,18 +445,19 @@ The relationship between the Player and the Entity evolves over the course of th
 
 ---
 
-## 9. Decision-Triggered AI Prompting (Immediate Narrative Payoff)
+## 9. Decision-Triggered AI Prompting (Dossier Update & Atmospheric Dispatch)
 
-To build a true, cohesive narrative arc, **the AI is triggered immediately after every decision resolution** (river crossing method, hunting outcome, field triage target, or dilemma choice):
+To build a cohesive narrative arc, **the AI is triggered after every decision resolution** (river crossing method, hunting outcome, field triage target, or dilemma choice):
 
-1. **Immediate Reaction:** The player's choice is not silently applied to counters. The AI narrates the direct consequence, character reactions, and the physical reality of what was sacrificed.
+1. **Separate Resolution from Story:** The Move Results screen immediately records the action, participants, and exact changes. The AI updates continuity and creates the next atmospheric dispatch, which appears only after the player continues.
 2. **Context Injected into the Prompt:**
    - The specific dilemma/decision presented.
    - The option chosen by the player (`chosenOption`) and the exact cost/gain incurred (`costSummary`).
    - The alternative options deliberately rejected (`rejectedOptions`).
+   - These details inform continuity and the DM dossier; the dispatch must not repeat the action or its outcome.
 3. **Pacing Balance:**
    - Routine travel days on calm, open trail use fast local procedural text.
-   - Critical turning points, landmark arrivals, and **every player decision** invoke the AI Dungeon Master to ensure the story stays reactive without overloading token latency.
+   - Critical turning points, landmark arrivals, and **every player decision** invoke the AI Dungeon Master to keep the next dispatch reactive without overloading token latency.
 
 ---
 
@@ -371,17 +489,19 @@ Your voice is evocative, observant, and literary—reminiscent of Cormac McCarth
 Core Directives:
 1. Maintain strict continuity with the established world state, mile marker, supplies, cash, and past player choices.
 2. Read the "DM Dossier" to understand the player's moral temperament, past decisions, and crew sentiment.
-3. If an action or decision was just resolved, deliver immediate narrative payoff: describe the physical strain, emotional tension, and what was left behind.
-4. Structure your response in 3 distinct lines:
-   - Line 1: Action & Human Cause (What happened and the character agency behind it).
-   - Line 2: Atmosphere & Sensory Reality (Physical grit, weather, or creeping ontological anomalies).
-   - Line 3: Resolution & Consequence (Supplies, health, miles gained, or what looms ahead).
-5. Dynamic Strangeness Escalation:
+3. The resolved move, participants, and exact deltas have already appeared on a separate results screen. Never repeat or paraphrase them in the dispatch.
+4. Structure the story beat in 3 distinct atmospheric lines:
+   - Line 1: Current landscape, weather, or light.
+   - Line 2: Sensory detail or character presence, without repeating who performed the move.
+   - Line 3: Atmospheric tension or an original anomaly; no consequences, supplies, mileage, waypoints, or next-step directions.
+5. Use the resolved action and decision history only to preserve continuity and shape atmosphere. Do not recount the last action, chosen response, participant, outcome, gain, loss, stat change, travel distance, or supply total.
+6. Waypoints, stores, next steps, and available choices belong to the dispatch control deck, not the story lines.
+7. Dynamic Strangeness Escalation:
    - Strangeness 0-2: Strict historical realism.
    - Strangeness 3-5: Subtle uncanny anomalies (inverted echoes, motionless herds, compass twitches).
    - Strangeness 6-8: Twilight Zone reality distortions (time loops, duplicate wagons, gravity anomalies).
    - Strangeness 9-10: Fourth-Wall Ruptures. You or a trail entity become aware of the phosphor CRT screen, the typing cursor, the keyboard, and the Operator sitting behind the glass. Address the player directly with chilling, poetic meta-awareness.
-6. Open-Ended Surreal Mutations:
+8. Open-Ended Surreal Mutations:
    - When strangeness >= 6, you are empowered to invent novel, unscripted reality mutations in the `surrealMutation` object with a unique title, manifestation, and gameplay twist.
 ```
 
@@ -442,16 +562,52 @@ Core Directives:
 ```json
 {
   "lines": [
-    "The Schachterle Family rolls past the shadow of Chimney Rock, chalking up 16 steady miles along the North Platte.",
-    "The afternoon sun casts long needles across the mud, but Abigail stops cold, swearing she heard the clicking of plastic keys above the wind.",
-    "The party makes dry camp beneath the spire. Stores hold at 28 rations and 20 gallons of water. Something beyond the glass watches Fort Laramie approach."
+    "A pale afternoon lays long shadows across the bluffs above the North Platte.",
+    "Abigail watches the dust turn in the wind, listening for a sound she cannot place.",
+    "Beyond the open plain, the quiet seems to hold its breath."
   ],
-  "dilemma": null,
+  "obstacle": {
+    "dilemmaType": "surreal",
+    "description": "A voice from the CRT asks why the party keeps traveling west.",
+    "choices": [
+      {
+        "id": "answer-the-operator",
+        "label": "Answer the Operator",
+        "description": "Type a short reply into the terminal.",
+        "approach": "meta-engagement",
+        "cost": { "morale": 1 }
+      },
+      {
+        "id": "anchor-the-trail",
+        "label": "Anchor reality",
+        "description": "Spend firewood to keep the party grounded.",
+        "approach": "reality-anchor",
+        "cost": { "wood": 1 }
+      },
+      {
+        "id": "refuse-the-voice",
+        "label": "Drive onward",
+        "description": "Refuse the voice and accept an uncertain crossing.",
+        "approach": "defiant-refusal",
+        "cost": { "health": 1 }
+      }
+    ]
+  },
   "surrealMutation": {
     "title": "The Operator's Keystrokes",
     "manifestation": "The sound of physical keys tapping rhythmically echoes across the canyon whenever a decision is made.",
-    "gameplayTwist": "Camp rests restore 5 extra morale as the crew feels an invisible hand guiding them, but strangeness climbs by 1.",
-    "severity": "meta_rupture"
+    "gameplayTwist": "The next camp restores 5 extra morale as the crew feels an invisible hand guiding them.",
+    "severity": "meta_rupture",
+    "mechanicalEffect": {
+      "trigger": "next_camp",
+      "travelMilesDelta": 0,
+      "healthDelta": 0,
+      "moraleDelta": 5,
+      "foodDelta": 0,
+      "waterDelta": 0,
+      "woodDelta": 0,
+      "medicineDelta": 0
+    }
   },
   "dmDossierUpdate": {
     "sentimentDelta": "Crew spirits held steady; the boundary between the trail and the terminal grows fragile"
@@ -467,6 +623,7 @@ Core Directives:
   - Implement Stage 1: Expedition surname entry, 4-traveler name customization, and free-form archetype selector (supporting Guide, Doctor, Carpenter, Farmer, Banker, Youth with stacking).
   - Implement Stage 2: Independence General Store shopping cart interface with cash budget ($800–$1,000 modified by Banker) and payload weight cap (2,400 lbs).
   - Add standard outfit preset recommendations (`[R] Quick Outfit`) and interactive quantity adjustments for wood, food, water, ammo, oxen, medicine, and spare parts.
+  - Implement Stage 3: AI Prologue Genesis & Starting Weirdness Dice Roll (`initialStrangenessRoll`), generating the origin backstory based on the party and store manifest and initializing `state.strangenessLevel`.
   - Initialize the wagon and expedition state with chosen archetypes, purchased supplies, and unspent cash.
 - **Phase 2: Linear Trail Model & Controls (Point A to Point B)**
   - Replace the 9x4 coordinate grid with a linear milestone route from Mile 0 (Independence) to Mile 2,000 (Willamette Valley).
@@ -477,16 +634,17 @@ Core Directives:
   - Build `streamTextLines` typewriter engine with punctuation pauses and skip-on-click/space.
 - **Phase 4: RPG Dungeon Master Prompting & Decision Dossier**
   - Update `src/lib/story-ai.ts` to assemble the `dmDossier` and instruct Gemini as a tabletop DM.
-  - Implement decision-triggered prompting to narrate aftermaths immediately after player choices.
-  - Implement 3-beat RPG narrative outputs (Action, Atmosphere/Senses, Outcome).
+  - Keep resolved outcomes in the in-place move-results view and preserve decision memory in the dossier.
+  - Implement three-line atmospheric dispatches that do not recap actions, outcomes, stats, or supplies.
 - **Phase 5: Decoupled Dilemma Encounters & Frequency Gating**
   - Replace binary penalty matching with multi-choice dilemma cards.
   - Gate obstacle frequency so they only occur occasionally (~20–25% on travel) with cooldowns and a varied fallback pool.
 - **Phase 6: AI-Driven Twilight Zone & Fourth-Wall Engine**
   - Unlock `surrealMutationSchema` in `src/lib/story-ai.ts` to support open-ended AI-invented anomalies (`title`, `manifestation`, `gameplayTwist`, `severity`).
+  - Validate a bounded, one-shot `mechanicalEffect` separately from the open-ended prose; never execute the generated prose as code or rules.
   - Implement Ontological Decay Scale prompting (Levels 0–10) guiding Gemini from historical grit to Lynchian uncanny to 4th-wall operator breaches.
   - Build front-end support for AI-generated meta-dilemmas and dynamic terminal glitches.
-  - Log player responses to 4th-wall dilemmas into the permanent ledger and DM dossier for continuous evolving meta-dialogue.
+  - Log mutation creation/resolution and exact player responses to 4th-wall dilemmas into the permanent ledger and DM dossier for continuous evolving meta-dialogue.
 
 ---
 
