@@ -315,10 +315,10 @@ function landscapeStageMarkup(state) {
     <div class="landscape-stage-wrap" aria-label="8-bit landscape caravan stage">
       <div class="landscape-stage-header">
         <span data-landscape-caption>${escapeHtml(landscapeStageStatusLabel(state))}</span>
-        <span>160×64 PIXEL CARAVAN MONITOR</span>
+        <span>320×96 PIXEL CARAVAN MONITOR</span>
       </div>
       <div class="landscape-canvas-frame">
-        <canvas id="landscape-stage-canvas" width="160" height="64"></canvas>
+        <canvas id="landscape-stage-canvas" width="320" height="96"></canvas>
       </div>
     </div>
   `;
@@ -835,7 +835,7 @@ export function createUI() {
       const miniCanvas = refs.journeyModalCardEl.querySelector(`[data-member-mini-canvas="${idx}"]`);
       if (miniCanvas instanceof HTMLCanvasElement && member?.appearance) {
         const frameGrid = getCharacterFrameGrid(member.appearance, 'front', 'idle', (animTick + idx) % 2);
-        renderCharacterGridToCanvas(miniCanvas, frameGrid, '#030d05');
+        renderCharacterGridToCanvas(miniCanvas, frameGrid, { includeBackdrop: true, backdropId: 'prairie', scrollOffset: animTick });
       }
     });
 
@@ -843,12 +843,12 @@ export function createUI() {
       const frontCanvas = refs.journeyModalCardEl.querySelector('#creator-front-canvas');
       if (frontCanvas instanceof HTMLCanvasElement) {
         const frontGrid = getCharacterFrameGrid(activeMember.appearance, 'front', 'idle', animTick % 2);
-        renderCharacterGridToCanvas(frontCanvas, frontGrid, '#020904');
+        renderCharacterGridToCanvas(frontCanvas, frontGrid, { includeBackdrop: true, backdropId: 'prairie', scrollOffset: 0, drawGridLines: true });
       }
       const sideCanvas = refs.journeyModalCardEl.querySelector('#creator-side-canvas');
       if (sideCanvas instanceof HTMLCanvasElement) {
         const sideGrid = getCharacterFrameGrid(activeMember.appearance, 'side_right', 'walk', animTick % 4);
-        renderCharacterGridToCanvas(sideCanvas, sideGrid, '#020904');
+        renderCharacterGridToCanvas(sideCanvas, sideGrid, { includeBackdrop: true, backdropId: 'prairie', scrollOffset: animTick * 2, drawGridLines: true });
       }
     }
 
@@ -1359,10 +1359,10 @@ export function createUI() {
         <div class="creator-landscape-preview">
           <div class="landscape-stage-header">
             <span>ORIGIN HOME STAGE // ${escapeHtml(eraMeta.label.toUpperCase())} HOME (LEFT) TO INDEPENDENCE GENERAL STORE (RIGHT)</span>
-            <span>32×32 PARTY PREVIEW</span>
+            <span>320×96 PARTY PREVIEW</span>
           </div>
           <div class="landscape-canvas-frame">
-            <canvas id="creator-landscape-canvas" width="160" height="64"></canvas>
+            <canvas id="creator-landscape-canvas" width="320" height="96"></canvas>
           </div>
         </div>
 
@@ -1376,7 +1376,7 @@ export function createUI() {
               return `
                 <div class="creator-member-card ${isSelected ? 'is-selected' : ''}" data-select-creator-member="${idx}">
                   <div class="creator-member-card-top">
-                    <canvas class="creator-mini-canvas" data-member-mini-canvas="${idx}" width="32" height="32"></canvas>
+                    <canvas class="creator-mini-canvas" data-member-mini-canvas="${idx}" width="64" height="64"></canvas>
                     <div class="creator-member-card-meta">
                       <span class="creator-member-badge">TRAVELER ${idx + 1} ${isSelected ? '● EDITING' : ''}</span>
                       <strong data-member-tab-name="${idx}">${escapeHtml(member.name)}</strong>
@@ -1415,12 +1415,12 @@ export function createUI() {
             </div>
             <div class="creator-dual-canvases">
               <div class="creator-canvas-box">
-                <canvas id="creator-front-canvas" width="32" height="32"></canvas>
-                <span>FRONT IDLE</span>
+                <canvas id="creator-front-canvas" width="192" height="192"></canvas>
+                <span>FRONT IDLE (32×32)</span>
               </div>
               <div class="creator-canvas-box">
-                <canvas id="creator-side-canvas" width="32" height="32"></canvas>
-                <span>TRAIL WALK</span>
+                <canvas id="creator-side-canvas" width="192" height="192"></canvas>
+                <span>TRAIL WALK (32×32)</span>
               </div>
             </div>
 

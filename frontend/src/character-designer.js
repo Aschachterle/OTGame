@@ -814,7 +814,7 @@ export function drawPixelBackdropScene(ctx, W, H, backdropId, scrollOffset, char
 export function drawEraHomeBuilding(ctx, eraId, baseX, groundY) {
   const x = Math.round(baseX);
   const y = Math.round(groundY);
-  if (x + 36 < 0 || x > 180) return;
+  if (x + 48 < 0 || x > 640) return;
 
   if (eraId === '1500s' || eraId === '1600s') {
     // Tudor / Baroque Half-Timbered or Stone Manor
@@ -922,7 +922,7 @@ export function drawEraHomeBuilding(ctx, eraId, baseX, groundY) {
 export function drawGeneralStoreBuilding(ctx, baseX, groundY) {
   const x = Math.round(baseX);
   const y = Math.round(groundY);
-  if (x + 44 < 0 || x > 180) return;
+  if (x + 56 < 0 || x > 640) return;
 
   // False-front timber facade
   ctx.fillStyle = '#8f563b';
@@ -1066,15 +1066,15 @@ export function drawOxenAndWagonCart(ctx, baseX, groundY, frameIndex = 0, isMovi
 }
 
 /**
- * Draws the complete 160x64 Interactive Landscape & Caravan Stage for OTGame
+ * Draws the complete 320x96 Widescreen Interactive Landscape & Caravan Stage for OTGame
  */
 export function renderGameLandscapeStage(canvas, state, animTick = 0) {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
-  const W = canvas.width;  // 160
-  const H = canvas.height; // 64
-  const charFootY = 55;
+  const W = canvas.width;  // 320
+  const H = canvas.height; // 96
+  const charFootY = Math.max(55, H - 14); // 82 on 320x96
 
   const isPreTrail = !state.journeyStarted;
   const selectedTile = state.currentTrailSnapshot || {};
@@ -1091,27 +1091,28 @@ export function renderGameLandscapeStage(canvas, state, animTick = 0) {
 
   // 2. Draw Era Home & General Store when in Pre-Trail Setup or departing Independence (Mile 0)
   const eraId = state.selectedEra || DEFAULT_PARTY_ERA_ID;
+  const storeX = W - 54;
   if (isPreTrail) {
     // Era-appropriate home on the left, General Store on the right
-    drawEraHomeBuilding(ctx, eraId, 4, charFootY - 4);
-    drawGeneralStoreBuilding(ctx, 114, charFootY - 4);
+    drawEraHomeBuilding(ctx, eraId, 12, charFootY - 4);
+    drawGeneralStoreBuilding(ctx, storeX, charFootY - 4);
 
     // Subtle temporal shimmer portal when a non-Oregon-Trail era is selected
     if (eraId !== 'oregon_trail') {
-      const shimmerY = charFootY - 26;
+      const shimmerY = charFootY - 28;
       ctx.fillStyle = animTick % 2 === 0 ? 'rgba(0, 255, 102, 0.55)' : 'rgba(49, 162, 242, 0.55)';
-      ctx.fillRect(46, shimmerY, 2, 22);
+      ctx.fillRect(54, shimmerY, 2, 24);
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(46, shimmerY + ((animTick * 3) % 20), 2, 3);
+      ctx.fillRect(54, shimmerY + ((animTick * 3) % 21), 2, 3);
     }
-  } else if ((state.milesTraveled || 0) === 0 && scrollOffset < 130) {
+  } else if ((state.milesTraveled || 0) === 0 && scrollOffset < 180) {
     // General Store scrolling behind the party as they depart Independence with their oxen cart
-    drawGeneralStoreBuilding(ctx, 16 - Math.floor(scrollOffset * 0.8), charFootY - 4);
+    drawGeneralStoreBuilding(ctx, 24 - Math.floor(scrollOffset * 0.8), charFootY - 4);
   }
 
   // 3. Draw Campfire when halted at camp on the trail
   if (!isPreTrail && !isMoving && state.lastActionContext?.actionType === 'camp') {
-    const fireX = 132;
+    const fireX = W - 46;
     const fireY = charFootY - 2;
     ctx.fillStyle = '#663931';
     ctx.fillRect(fireX - 3, fireY, 7, 2);
@@ -1124,22 +1125,19 @@ export function renderGameLandscapeStage(canvas, state, animTick = 0) {
   // 4. Draw Oxen Cart (only once at or departing the General Store!)
   const hasOxenCart = state.journeyStarted || (state.setupStage === 'outfitting' && (state.outfittingCart?.oxenYokes ?? 0) > 0);
   if (hasOxenCart) {
-    const cartX = isPreTrail ? 70 : 88;
+    const cartX = isPreTrail ? storeX - 64 : Math.floor(W * 0.58);
     const yokes = state.journeyStarted ? (state.wagon?.oxenYokes || 2) : (state.outfittingCart?.oxenYokes || 2);
     drawOxenAndWagonCart(ctx, cartX, charFootY - 1, frameIndex, isMoving && state.journeyStarted, yokes);
   }
 
-  // 5. Draw the 4 Custom 32x32 Party Members
+  // 5. Draw the 4 Custom 32x32 Party Members with generous 20px spacing
   const party = (state.wagon?.party || []).filter((member) => (member.health ?? 100) > 0);
   syncAllPartyAppearancesToEra(party, eraId);
 
-  // Compute leader X position based on stage:
-  // - 'register' / 'prologue' start: near Era Home (x ~ 24..48), walking toward General Store (x ~ 82)
-  // - 'outfitting': standing at General Store (x ~ 82)
-  // - 'journeyStarted': marching alongside their Oxen Cart (x ~ 48..76)
+  const memberSpacing = 20;
   const baseLeaderX = isPreTrail
-    ? (state.landscapeCharX ?? (state.setupStage === 'outfitting' ? 86 : 38))
-    : 58;
+    ? (state.landscapeCharX ?? (state.setupStage === 'outfitting' ? storeX - 78 : 116))
+    : Math.floor(W * 0.46);
 
   const effectiveAnimMode = isMoving ? 'walk' : 'idle';
   party.forEach((member, idx) => {
@@ -1149,7 +1147,7 @@ export function renderGameLandscapeStage(canvas, state, animTick = 0) {
       effectiveAnimMode,
       (frameIndex + idx) % 4
     );
-    const drawX = Math.round(baseLeaderX - idx * 11);
+    const drawX = Math.round(baseLeaderX - idx * memberSpacing);
     const drawY = charFootY - 30 + (idx % 2 === 0 ? 0 : -1);
 
     ctx.fillStyle = 'rgba(0, 0, 0, 0.30)';

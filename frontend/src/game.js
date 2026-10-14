@@ -140,9 +140,9 @@ export function createGameController({ state, ui, api, audio }) {
   async function animateWalkToGeneralStore() {
     stopWagonAnimation();
     state.landscapeMoving = true;
-    const startX = state.landscapeCharX ?? 34;
-    const targetX = 86;
-    const steps = 14;
+    const startX = state.landscapeCharX ?? 116;
+    const targetX = 188;
+    const steps = 16;
     for (let i = 1; i <= steps; i += 1) {
       state.landscapeCharX = startX + ((targetX - startX) * i) / steps;
       state.wagonAnimationFrame = (state.wagonAnimationFrame + 1) % 4;
@@ -2443,7 +2443,7 @@ export function createGameController({ state, ui, api, audio }) {
 
     state.expeditionName = expeditionName.slice(0, 48);
     state.wagon.cash = getStartingCashForState(state);
-    state.landscapeCharX = 34;
+    state.landscapeCharX = 116;
     state.landscapeScrollX = 0;
     state.landscapeMoving = false;
     state.setupError = '';

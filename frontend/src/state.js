@@ -429,7 +429,7 @@ export function createAppState() {
     activeCreatorMemberIndex: 0,
     creatorCategory: 'hats',
     creatorHeadwearSubFilter: 'all',
-    landscapeCharX: 34,
+    landscapeCharX: 116,
     landscapeScrollX: 0,
     landscapeMoving: false,
     setupStage: 'register',
@@ -507,7 +507,7 @@ export function resetExpedition(state = appState) {
   state.activeCreatorMemberIndex = 0;
   state.creatorCategory = 'hats';
   state.creatorHeadwearSubFilter = 'all';
-  state.landscapeCharX = 34;
+  state.landscapeCharX = 116;
   state.landscapeScrollX = 0;
   state.landscapeMoving = false;
   state.setupStage = 'register';

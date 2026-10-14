@@ -55,7 +55,8 @@ select {
   box-shadow: 10px 10px 0 rgba(0, 0, 0, 0.35);
   display: grid;
   grid-template-rows: auto auto 1fr auto;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .window-titlebar {
@@ -364,10 +365,9 @@ button.menu-item:disabled {
   position: relative;
   display: flex;
   flex-direction: column;
-  min-height: 520px;
-  padding: 18px;
-  gap: 12px;
-  overflow: hidden;
+  min-height: calc(100vh - 110px);
+  padding: 20px;
+  gap: 14px;
   background:
     radial-gradient(circle at top center, rgba(0, 255, 102, 0.08), transparent 42%),
     linear-gradient(180deg, #061008, #020602 60%, #010401 100%);
@@ -422,11 +422,12 @@ button.menu-item:disabled {
 .teletype-screen {
   position: relative;
   z-index: 1;
-  flex: 1 1 0;
-  min-height: 280px;
+  flex: 1 1 auto;
+  min-height: 360px;
   margin-top: 0;
   margin-bottom: 0;
-  padding: 14px 18px;
+  padding: 20px 24px;
+  font-size: 1rem;
   overflow-y: auto;
   background: rgba(1, 9, 3, 0.88);
   border: 1px solid rgba(0, 255, 102, 0.22);
@@ -1954,6 +1955,7 @@ body.journey-loading .shell {
   border: 1px solid #2b6838;
   background: #020804;
   overflow: hidden;
+  line-height: 0;
 }
 
 #landscape-stage-canvas,
@@ -1961,14 +1963,9 @@ body.journey-loading .shell {
   display: block;
   width: 100%;
   height: auto;
-  max-height: 230px;
-  aspect-ratio: 160 / 64;
+  aspect-ratio: 320 / 96;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
-}
-
-.creator-landscape-preview #creator-landscape-canvas {
-  max-height: 210px;
 }
 
 .party-manifest-row {
@@ -2195,8 +2192,9 @@ body.journey-loading .shell {
 
 #creator-front-canvas,
 #creator-side-canvas {
-  width: 128px;
-  height: 128px;
+  width: min(100%, 224px);
+  height: auto;
+  aspect-ratio: 1 / 1;
 }
 
 .creator-quick-actions {
