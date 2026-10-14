@@ -1,6 +1,6 @@
 # OTGame ("Immutable Trail") — Game Design & Architecture
 
-This document defines the gameplay philosophy, narrative design, UI/UX specifications, linear trail progression, outfitting economy, surreal reality distortion engine, and AI integration for **OTGame (Immutable Trail)**. It serves as the primary reference for features, architectural standards, and development prompts.
+This document defines the gameplay philosophy, narrative design, UI/UX specifications, 32×32 8-bit character designer integration, animated landscape caravan stage, linear trail progression, outfitting economy, surreal reality distortion engine, and AI integration for **OTGame (Immutable Trail)**. It serves as the primary reference for features, architectural standards, and development prompts.
 
 ---
 
@@ -9,15 +9,16 @@ This document defines the gameplay philosophy, narrative design, UI/UX specifica
 **Immutable Trail** is a streamlined, text-driven survival odyssey from **Independence to Oregon (Point A to Point B)**. It merges classic *Oregon Trail* resource survival with:
 
 1. **A Matrix / Phosphor CRT Terminal Aesthetic:** The center stage screen is a glowing green CRT monitor where text streams line-by-line and letter-by-letter with a pulsing cursor (`█`).
-2. **Prologue Setup & Outfitting Stage:** Before embarking, the player names their family/expedition, customizes each of the 4 party members' first names, and freely assigns archetypes/specialties to each traveler (with free-form stacking support). They then visit the Independence General Store to pack their prairie schooner under strict cash budget and payload weight constraints.
-3. **Linear Point A to Point B Progression:** Eliminates the confusing 2D cardinal grid (North/South/East/West). The player moves forward along a single overland trail from **Independence (Mile 0)** to **Willamette Valley (Mile 2,000)**. The fundamental turn-by-turn choice is:
+2. **Prologue Setup, 32×32 Character Designer & Outfitting Stage:** Before embarking, the player names their family/expedition, selects **one shared Era for all party members** (`oregon_trail` or `1500s`–`2020s`), and customizes each of the four travelers' first names, archetypes, and 32×32 8-bit character sprites using the integrated `CharacterDesigner` technology styled in OTGame's retro CRT aesthetic. They then read the AI-generated opening prologue (which explains how the party was transported to 1800s Missouri if a non-Oregon-Trail era was selected) and enter the Independence General Store to pack their prairie schooner under strict cash budget and payload weight constraints.
+3. **Animated 8-Bit Landscape & Oxen Cart Caravan:** An integrated 8-bit pixel-art landscape stage renders the four customized 32×32 party members starting at an era/location-appropriate home, walking on foot to the Independence General Store, and—once outfitted at the store—moving through the scrolling landscape with their oxen cart whenever a move action starts.
+4. **Linear Point A to Point B Progression:** Eliminates the confusing 2D cardinal grid (North/South/East/West). The player moves forward along a single overland trail from **Independence (Mile 0)** to **Willamette Valley (Mile 2,000)**. The fundamental turn-by-turn choice is:
    - **Press On (Continue Trail):** Advance the wagon forward towards the next landmark.
    - **Halt & Act:** Stop to camp, hunt, gather firewood/water, treat illness, repair, trade, or scout ahead.
-4. **An RPG Frontier Dungeon Master (AI):** The AI acts as an observant, atmospheric tabletop Dungeon Master rather than a generic news ticker. It remembers the player's past decisions, tracks their moral temperament (ruthless vs. compassionate, reckless vs. prudent), and dynamically shapes future encounters based on those choices.
-5. **The AI-Driven Twilight Zone & 4th-Wall Rupture:** Unlike traditional scripted games with static event tables, uncanny and surreal occurrences are **100% dynamically authored by AI prompting**. As trail strangeness escalates, reality warps in completely unscripted ways, culminating in the simulation waking up, recognizing the player sitting behind the keyboard, and attempting to communicate directly through the green phosphor CRT.
-6. **Decision-Triggered Narrative Continuity:** The AI is explicitly prompted immediately following every major decision or dilemma resolution. This guarantees immediate narrative consequence and emotional payoff for player choices.
-7. **Decoupled Strategic Dilemmas (No "Simon Says"):** Eliminates binary button-matching penalties. Hazards are multi-choice dilemma cards offering meaningful trade-offs across supplies, health, morale, and time.
-8. **Cryptographic Provenance:** Every significant move, milestone arrival, resolution, and death is permanently sealed in an immutable event ledger.
+5. **An RPG Frontier Dungeon Master (AI):** The AI acts as an observant, atmospheric tabletop Dungeon Master rather than a generic news ticker. It remembers the player's past decisions, tracks their moral temperament (ruthless vs. compassionate, reckless vs. prudent), and dynamically shapes future encounters based on those choices.
+6. **The AI-Driven Twilight Zone & 4th-Wall Rupture:** Unlike traditional scripted games with static event tables, uncanny and surreal occurrences are **100% dynamically authored by AI prompting**. As trail strangeness escalates, reality warps in completely unscripted ways, culminating in the simulation waking up, recognizing the player sitting behind the keyboard, and attempting to communicate directly through the green phosphor CRT.
+7. **Decision-Triggered Narrative Continuity:** The AI is explicitly prompted immediately following every major decision or dilemma resolution. This guarantees immediate narrative consequence and emotional payoff for player choices.
+8. **Decoupled Strategic Dilemmas (No "Simon Says"):** Eliminates binary button-matching penalties. Hazards are multi-choice dilemma cards offering meaningful trade-offs across supplies, health, morale, and time.
+9. **Cryptographic Provenance:** Every significant move, milestone arrival, resolution, and death is permanently sealed in an immutable event ledger.
 
 ---
 
@@ -75,21 +76,62 @@ In place of the 2D tile map, the game displays a sleek, retro **Overland Trail R
 
 ---
 
-## 3. Expedition Setup: Party Naming, Archetype Customization & Outfitting
+## 3. Expedition Setup: Party Naming, Single-Era 32×32 Character Designer, Prologue Genesis & Outfitting
 
-Before setting wheel to the overland trail at Independence (Mile 0), the game begins with a two-stage interactive prologue:
+Before setting wheel to the overland trail at Independence (Mile 0), the game follows a three-stage setup: party registration & 32×32 character creation, the opening prologue, then store outfitting.
 
-### Stage 1: Party Naming & Archetype Customization
+### Stage 1: Party Naming, Single Party Era, Archetypes & 32×32 Character Creation
 1. **Family / Expedition Surname:**
    - The player selects the expedition last name (Default: *"The Schachterle Family"*, with player prompt to customize).
    - Displayed across trail dispatches, ledger records, grave markers, and milestone chronicles (e.g., `> The Schachterle Family presses west along the North Platte...`).
 
-2. **Roster Composition & Free-Form Archetype Stacking:**
+2. **Single Party Era Rule (Shared Across All 4 Members):**
+   - The player chooses **one single Era** (`state.selectedEra`) that applies to **all four party members**. Cross-era mixing (`all`) is disabled so the entire household originates from the same time period.
+   - Available eras from the Character Designer library (`/Users/adamschachterle/Documents/CharacterDesigner/presets.js`):
+     - `oregon_trail` — *Oregon Trail — 1840s–1860s Pioneer & Frontier* (**Default**, 1840–1869)
+     - `1500s` — *1500's — Tudor & Renaissance* (1500–1599)
+     - `1600s` — *1600's — Baroque & Cavalier* (1600–1699)
+     - `1700s` — *1700's — Georgian & Colonial* (1700–1799)
+     - `1800s` — *1800's — Victorian & Industrial* (1800–1899)
+     - `1900_1920` — *1900–1920 — Edwardian & Early Modern* (1900–1920)
+     - `1921_1940` — *1921–1940 — Roaring 20s & Art Deco 30s* (1921–1940)
+     - `1941_1950` — *1941–1950 — Wartime & Post-War 40s* (1941–1950)
+     - `1950s` — *50's — Rockabilly & Diner Era* (1950–1959)
+     - `1960s` — *60's — Mod & Counterculture* (1960–1969)
+     - `1970s` — *70's — Disco & Funk* (1970–1979)
+     - `1980s` — *80's — Arcade Neon & Synthwave* (1980–1989)
+     - `1990s` — *90's — Grunge & Skate Streetwear* (1990–1999)
+     - `2000s` — *00's — Y2K & Pop Punk* (2000–2009)
+     - `2010s` — *10's — Indie & Athleisure* (2010–2019)
+     - `2020s` — *20's — Modern Techwear & Street* (2020–Present)
+   - Switching `selectedEra` filters all wardrobe categories to that era and automatically equips era-matching outfits across all four party members.
+
+3. **32×32 8-Bit Character Designer Integration (Retro OTGame Aesthetic):**
+   - Integrates the 32×32 pixel-art composite engine and preset catalog from `/Users/adamschachterle/Documents/CharacterDesigner` (`presets.js` and `app.js`) directly into the character creation screen.
+   - **Visual Styling:** Styled to match OTGame's retro desktop window shell and phosphor green CRT aesthetic (`#020602` terminal background, `#00ff66` phosphor text/borders, scanlines, monospace typography, and crisp `image-rendering: pixelated` sprite canvases) while preserving full-color 8-bit character sprites on dark CRT inspection frames.
+   - **Per-Member Customization Controls (4 Party Slots):**
+     - **Member Selector Tabs (`[1]..[4]`):** Switches which of the 4 party members is actively being customized in the wardrobe studio, alongside a live 4-member party lineup bar showing all four 32×32 sprites together.
+     - **Identity & Role:** First Name input + Archetype selector (`Guide`, `Doctor`, `Carpenter`, `Farmer`, `Banker`, `Youth`).
+     - **Body & Appearance:**
+       - **Gender:** `female` (`♀ Female`) or `male` (`♂ Male`), affecting eyelashes, facial features, and gender-filtered wardrobe presets (`female`, `male`, `unisex`).
+       - **Body Frame (`BASE_BODY_TEMPLATES`):** `standard_adventurer` (*Standard Frame*), `broad_guardian` (*Broad Frame*), or `nimble_scout` (*Slender Frame*), including the extended `H` hair-cascade zone (`y: 2..18`).
+       - **Skin Tone (`SKIN_TONES`):** `warm_ivory`, `golden_tan`, `deep_umber`, `rich_espresso`, `olive_bronze`, `porcelain_rose`.
+     - **Era Wardrobe (`CATEGORIES`, filtered to the party's single `selectedEra`):**
+       - `hats`: Mutually exclusive **Hair or Hat** top slot (`subType: 'hair' | 'hat'`), supporting chest- and shoulder-length long hairstyles (`y: 2..18`) for both women and men as well as era hats.
+       - `shirts`: Era shirts, bodices, coats, and jackets.
+       - `pants`: Era pants, breeches, and skirts.
+       - `shoes`: Era boots, shoes, and moccasins.
+       - `accessories`: Era aprons, bandanas, shawls, and gear.
+       - **Color Dye (`PRESET_COLOR_DYES`):** Per-category palette dye (`default`, `crimson`, `cobalt`, `emerald`, `royal`, `gold`, `shadow`, `espresso`).
+       - **Quick Outfit Actions:** `Randomize Member`, `Equip Era Look (Hat)`, and `Equip Era Look (Hair)`.
+     - **Live 32×32 Sprite Preview:** Displays the active member in Front View (`front`) and Walking Side Profile (`side_right` / `side_left`, 4-frame walk cycle), plus all 4 party members standing outside their era-appropriate home on the preview stage.
+
+4. **Roster Composition & Free-Form Archetype Stacking:**
    - The party consists of 4 traveler slots.
-   - For **each** traveler, the player customizes their **First Name** and selects their **Archetype / Specialty**.
+   - For **each** traveler, the player customizes their **First Name**, **Archetype / Specialty**, and **32×32 Sprite**.
    - **Free-Form Stacking Permitted (Option B):** The player is not restricted to one of each role. Any combination is valid, allowing specialized builds (e.g., running 2 Doctors for unmatched medical resilience, or 2 Guides for supreme hunting self-sufficiency, at the trade-off of lacking wagon maintenance or financial buffers).
 
-3. **Archetype Catalog & Mechanical Benefits:**
+5. **Archetype Catalog & Mechanical Benefits:**
 
 | Archetype | Default Name | Mechanical & Strategic Benefits | Stacking Synergy (x2) |
 | :--- | :--- | :--- | :--- |
@@ -100,13 +142,96 @@ Before setting wheel to the overland trail at Independence (Mile 0), the game be
 | **Banker / Merchant** | *Martha* | **+$250 starting cash bonus** ($1,050–$1,250 total); **immune to fort store price markups** (buys at 1.0x base Independence price). | **+$500 starting cash bonus**; fort store prices discounted to 0.8x base catalog. |
 | **Youth / Dependent** | *Billy* | **Absorbs 65% of snakebites and random hazards** to protect specialists; **+10 baseline morale floor**; unlocks high-compassion AI Dungeon Master triggers. | **Absorbs 90% of sudden hazard damage**; **+20 baseline morale floor**. |
 
-4. **Living Requirement Rule:**
+6. **Living Requirement Rule:**
    - Archetype bonuses are active only while that specific member is alive (`health > 0`). If a character dies, their passive bonus is permanently lost.
 
 ---
 
-### Stage 2: Independence General Store & Wagon Outfitting
-Once the party and archetypes are registered, the player enters the **Independence General Store (May 1848)** run by the frontier merchant.
+### Stage 2: Opening Prologue Genesis, Era Transport Rule & Starting Weirdness Dice Roll
+
+Immediately after the player confirms the party register and character designs, and before the General Store opens, the game initiates the **Opening Prologue Genesis**. This story introduces the family, their chosen era, and leads them to Independence's store without deciding what they buy.
+
+#### 1. The Starting Weirdness Roll & Non-Oregon-Trail Era Transport Rule
+When the player confirms the roster, the engine rolls an integer from 0 through 10 for initial `strangenessLevel` (or uses a configured test override) and submits it along with `selectedEra` (`id`, `label`, `years`) and the party's customized roster to Gemini.
+
+- **If `selectedEra === 'oregon_trail'`:** The backstory is set natively in 1848 and follows the Starting Weirdness Roll table below:
+
+| Starting Roll | Reality Tier | Prologue Narrative Flavor & Origin Backstory (`oregon_trail` Era) |
+| :--- | :--- | :--- |
+| **0 – 2 (Common)** | **Historical Realism** | **Grounded Family Hardship:** Poor prospects, debt, illness, uncertain work, or the hope of securing land in Oregon give the family a period-plausible reason to leave. |
+| **3 – 5 (Uncommon)** | **Subtle Unease** | **Ambiguous Catalyst:** A troubling coincidence, shared dream, or omen may influence the family's choice, while remaining open to an ordinary explanation. |
+| **6 – 8 (Rare)** | **Supernatural Catalyst** | **Unexplained Reason to Leave:** One strange or supernatural occurrence may decisively convince the otherwise ordinary, historically grounded family to set out. |
+| **9 – 10 (Critical Anomaly)** | **Temporal Rupture / Powerful Supernatural Catalyst** | **Modern Origin Permitted:** The story may begin in the present day before the travelers are suddenly displaced to 1848 and assume the identities and roles of the named Oregon Trail family. |
+
+- **If `selectedEra !== 'oregon_trail'` (Any Other Era Selected, e.g., `1500s`–`1800s` or `1900_1920`–`2020s`):**
+  - **Mandatory Era Transport Backstory:** Regardless of the numeric weirdness roll, the AI **must open the story in the party's chosen era and era-appropriate home** (reflecting their era-specific lives, clothing, and historical decade/century) and **explicitly explain how all four characters were transported from their chosen era to 1800s (1848) Independence, Missouri**.
+  - The severity/flavor of the transport scales with the weirdness roll (e.g., an eerie fog, a doorway that opens onto the wrong century, a freak electrical/alchemical storm, or an abrupt temporal displacement), depositing the travelers in 1848 Missouri where they must walk to the Independence General Store to outfit a wagon west.
+
+Genesis is always one substantial paragraph (200–250 words) with at least one line of direct quoted dialogue, and its final sentence places the family physically at the threshold of the Independence General Store, in Independence, Missouri, in 1848, ready to choose provisions.
+
+#### 2. Prologue Genesis Context Payload (Sent to Gemini)
+```json
+{
+  "promptType": "prologue-genesis",
+  "expeditionName": "The Schachterle Family",
+  "selectedEra": {
+    "id": "1980s",
+    "label": "80's — Arcade Neon & Synthwave",
+    "years": "1980–1989"
+  },
+  "startingStrangenessRoll": 6,
+  "party": [
+    {
+      "name": "Jedediah",
+      "role": "Guide",
+      "gender": "male",
+      "outfitSummary": "80's Heavy Metal Shredder Mane, Synthwave Bomber Jacket, Acid-Wash Jeans, High-Top Sneakers"
+    },
+    {
+      "name": "Abigail",
+      "role": "Doctor",
+      "gender": "female",
+      "outfitSummary": "80's Crimped High Ponytail, Neon Shoulder-Pad Blazer, Pleated Trousers, Court Shoes"
+    },
+    {
+      "name": "Sarah",
+      "role": "Carpenter",
+      "gender": "female",
+      "outfitSummary": "Backwards Cap, Denim Work Shirt, Cargo Jeans, Work Boots"
+    },
+    {
+      "name": "Billy",
+      "role": "Youth",
+      "gender": "male",
+      "outfitSummary": "Arcade Visor Cap, Graphic Tee, Track Pants, Skate Shoes"
+    }
+  ]
+}
+```
+
+#### 3. Output Schema & Teletype Presentation
+```json
+{
+  "startingStrangenessLevel": 6,
+  "headline": "Displaced to Independence",
+  "prologueParagraphs": [
+    "One substantial family backstory opening in the chosen era and home, explaining how the four named travelers were transported to 1848 Missouri (when selectedEra is not oregon_trail), and ending at the threshold of the Independence General Store before purchases."
+  ]
+}
+```
+
+#### 4. CRT Presentation & Transition
+1. Confirming the roster closes the character creation modal, renders the 4 custom 32×32 characters outside their **era-appropriate home** on the 8-bit landscape stage, and streams the opening prologue in the green phosphor CRT.
+2. The starting Weirdness Meter is calibrated in the cockpit status bar.
+3. The prologue ends at the store before any shopping; a pulsing prompt appears:
+   `[SPACE / ENTER] GET SUPPLIES AT THE GENERAL STORE >>`
+4. Pressing Space/Enter triggers the **Home → General Store walk animation** on the landscape canvas (the 4 party members walk on foot from their era-appropriate home to the Independence General Store porch without an oxen cart) and switches the main viewer directly to the outfitting cart.
+5. Store checkout seals the `expedition_departure` event with the prologue, chosen era, custom character sprite data, chosen outfit, and starting strangeness, hitches the **Oxen Cart** to the party outside the store, and begins **Day 1 at Mile 0**.
+
+---
+
+### Stage 3: Independence General Store & Wagon Outfitting
+After the opening prologue, the player enters the **Independence General Store (May 1848)** run by the frontier merchant.
 
 #### 1. Starting Budget & Financial Economy
 - **Base Starting Cash:** **$800.00 – $1,000.00** in gold coin/banknotes (modified upward by Banker archetypes).
@@ -139,26 +264,38 @@ The store provides essential provisions with distinct costs, unit weights, and m
   - **Overloaded (> 2,400 lbs):** Storekeeper refuses departure until cargo is within safe limits; on the trail, forces dumping cargo or suffers catastrophic wagon breakdowns.
 
 #### 4. Setup & Store CRT Terminal Interface (UI Flow)
-The setup and outfitting stages are rendered directly inside the retro CRT phosphor green terminal:
+The party register & 32×32 character creator remains a setup modal styled in OTGame's retro CRT aesthetic. After confirmation, the prologue and store outfitting occupy the main viewer in sequence alongside the 8-bit landscape stage; outfitting replaces the prologue view rather than opening a separate page or modal:
 
-1. **Screen 1 — Expedition Register & Archetype Selection:**
+1. **Screen 1 — Expedition Register, Single Era Selector & 32×32 Character Creator:**
    ```text
    =============================================================================
-   IMMUTABLE TRAIL // EXPEDITION REGISTRATION — INDEPENDENCE, MISSOURI (1848)
+   IMMUTABLE TRAIL // EXPEDITION REGISTRATION & 32x32 CHARACTER CREATOR
    =============================================================================
    [EXPEDITION SURNAME]: The Schachterle Family
+   [PARTY ERA (ALL MEMBERS)]: [< Oregon Trail — 1840s–1860s Pioneer >]
    
-   PARTY ROSTER & ARCHETYPES (Free-form selection — Stacking permitted):
-     MEMBER 1: Name: [Jedediah  ]  Archetype: [< GUIDE / SCOUT       >]
-     MEMBER 2: Name: [Abigail   ]  Archetype: [< DOCTOR / HEALER     >]
-     MEMBER 3: Name: [Sarah     ]  Archetype: [< CARPENTER / CRAFT   >]
-     MEMBER 4: Name: [Billy     ]  Archetype: [< YOUTH / DEPENDENT   >]
+   PARTY ROSTER & ARCHETYPES (Click tab [1]-[4] to customize 32x32 sprite):
+     [1] Name: [Jedediah]  Role: [< GUIDE     >]  ♀/♂: [♂]  [32x32 Preview]
+     [2] Name: [Abigail ]  Role: [< DOCTOR    >]  ♀/♂: [♀]  [32x32 Preview]
+     [3] Name: [Sarah   ]  Role: [< CARPENTER >]  ♀/♂: [♀]  [32x32 Preview]
+     [4] Name: [Billy   ]  Role: [< YOUTH     >]  ♀/♂: [♂]  [32x32 Preview]
+
+   ACTIVE MEMBER WARDROBE (Locked to Selected Party Era):
+     Frame: [Standard] | Skin: [Warm Ivory] | Dye: [Era Original]
+     [Hair/Hat] [Shirts] [Pants/Skirts] [Shoes] [Accessories] | [🎲 Randomize]
    
-   [TAB] Cycle Fields  |  [←/→] Toggle Archetype  |  [ENTER] Confirm & Enter Store
+   [TAB] Cycle Fields  |  [ENTER] Confirm Party & Read Opening Prologue
    =============================================================================
    ```
 
-2. **Screen 2 — General Store Outfitting & Cargo Manifest:**
+2. **Screen 2 — Opening Prologue & Home-to-Store Landscape Stage:**
+   - After roster confirmation, roll the starting strangeness, display the 4 custom 32×32 party members outside their **era-appropriate home** on the 8-bit landscape stage, and stream the generated origin story in the cockpit chronicle.
+   - If `selectedEra !== 'oregon_trail'`, the story explains how the characters were transported from their chosen era to 1800s Missouri.
+   - The story ends with the party at the Independence General Store before any purchases have been made.
+   - `[SPACE / ENTER] GET SUPPLIES AT THE GENERAL STORE` walks the 4 characters from their home to the General Store on the landscape stage and switches the main viewer directly to the outfitting cart.
+
+3. **Main Viewer — General Store Outfitting & Cargo Manifest:**
+   - The cart replaces the prologue in the main viewer, with cash, weight, quantity, preset, and validation controls while the 4 custom characters stand outside the General Store on the landscape stage.
    ```text
    =============================================================================
    INDEPENDENCE GENERAL STORE // MATT'S OUTFITTING POST
@@ -182,66 +319,6 @@ The setup and outfitting stages are rendered directly inside the retro CRT phosp
 
 ---
 
-### Stage 3: Prologue Genesis & Starting Weirdness Dice Roll
-
-Immediately following wagon outfitting at the Independence General Store, the game initiates the **Prologue Genesis**. Before the wagon takes its first turn on the trail, the engine rolls the dice on the **Weirdness Meter (`strangenessLevel`)**, establishing the baseline reality of the entire playthrough from the very first line of prose.
-
-#### 1. The Starting Weirdness Roll (1d10 / Weighted Seed)
-When the player clicks **`[SPACE] Purchase & Embark`**, the system rolls for initial `strangenessLevel` (or Gemini rolls and returns it in the genesis payload):
-
-| Starting Roll | Reality Tier | Prologue Narrative Flavor & Origin Backstory |
-| :--- | :--- | :--- |
-| **0 – 2 (Common)** | **Historical Realism** | **Gritty Historical Necessity:** Foreclosed Missouri homesteads, blighted corn, cholera outbreaks in St. Louis, debt collectors, or the promise of fertile Oregon loam. Strict Cormac McCarthy frontier grit. |
-| **3 – 5 (Uncommon)** | **The Uncanny Frontier** | **Eerie Omens & Compulsions:** Cattle refusing to drink local well water; town clocks stopping at the exact same hour; all four travelers sharing the same vivid dream compelling them to head west into the sunset. |
-| **6 – 8 (Rare)** | **The Twilight Zone** | **Spatial & Temporal Distortions:** The family fleeing an eastern township that neighboring county maps claim never existed; finding goods in the wagon stamped with future dates; shadows stretching toward the morning sun. |
-| **9 – 10 (Critical Anomaly)** | **Fourth-Wall Rupture** | **The Awakening of the Simulation:** The party awakens inside a canvas box with vague, haunting memories of an *Operator* choosing their names and professions on a glowing glass screen. Whispers of clacking keys echo in the wind. |
-
-The resulting number initializes `state.strangenessLevel`, establishing the foundation for all future AI Dungeon Master prompts.
-
-#### 2. Prologue Genesis Context Payload (Sent to Gemini)
-```json
-{
-  "promptType": "prologue-genesis",
-  "expeditionName": "The Schachterle Family",
-  "startingStrangenessRoll": 4,
-  "party": [
-    { "name": "Jedediah", "role": "Guide" },
-    { "name": "Abigail", "role": "Doctor" },
-    { "name": "Sarah", "role": "Carpenter" },
-    { "name": "Billy", "role": "Youth" }
-  ],
-  "outfittingSummary": {
-    "cashReserved": 160.00,
-    "cargoWeightLbs": 1680,
-    "oxenYokes": 3,
-    "notableSupplies": "16 sacks flour, 3 medical kits, 8 boxes ammunition"
-  }
-}
-```
-
-#### 3. Output Schema & Teletype Presentation
-```json
-{
-  "startingStrangenessLevel": 4,
-  "headline": "The Departure from Independence",
-  "prologueParagraphs": [
-    "The auctioneer took the farm at third call, but it was not the bank that drove the Schachterle family from Boone County—it was the well water that turned bitter the night the birds stopped singing.",
-    "Abigail packed the carbolic bottles in sheep’s wool while Sarah drawknifed the axle linchpins smooth by the yellow light of an oil lantern. Jedediah watched the river road fill with canvas schooners, noting that every draft horse in Independence seemed to shy away from the western horizon.",
-    "With sixteen sacks of coarse meal and three yoke of sullen oxen, they turn their faces from the states. Ahead lie two thousand miles of unbroken grass, and a quiet in the wind that feels far too deliberate."
-  ]
-}
-```
-
-#### 4. CRT Presentation & Transition
-1. The General Store modal clears.
-2. The green phosphor CRT streams the prologue paragraphs using typewriter pauses (`Character: 12ms`, `Line: 250ms`).
-3. The starting Weirdness Meter is calibrated in the cockpit status bar.
-4. A pulsing prompt appears at the bottom:
-   `[SPACE / ENTER] ROLL OUT ONTO THE OVERLAND TRAIL >>`
-5. Pressing Space transitions directly to **Day 1 at Mile 0** (the Kansas River crossing stretch).
-
----
-
 ## 4. Simplified Control Deck ("Continue or Halt")
 
 The 4-way D-Pad (North, South, East, West) is retired. The control deck is streamlined into two clear operational modes:
@@ -261,13 +338,30 @@ When the player decides *not* to continue moving forward on a given day:
 
 ---
 
-## 5. Visual & Screen Specifications (CRT Terminal & Unified Cockpit)
+## 5. Visual, Landscape Animation & Screen Specifications (CRT Terminal & Unified Cockpit)
 
 ### The Overall Window Shell (Preserved)
 - The retro desktop window frame, title bar, dropdown menus, objective/journal cards, and bottom dock controls remain intact.
 
+### The Animated 8-Bit Landscape & Caravan Stage
+Mounted inside the unified cockpit above the teletype chronicle is the **8-Bit Landscape & Trail Stage Canvas** (`160×64` pixel-art scene scaled cleanly with `image-rendering: pixelated`), powered by the `CharacterDesigner` backdrop and 4-frame walk-cycle engine:
+
+1. **Stage A — Era/Location-Appropriate Home (Prologue Start):**
+   - Renders an **era-appropriate home building** on the left side of the path matching `state.selectedEra` (e.g., Tudor half-timbered cottage for `1500s`, Baroque stone manor for `1600s`, Colonial brick house for `1700s`, Victorian terraced home for `1800s`, frontier log cabin for `oregon_trail`, Edwardian rowhouse for `1900_1920`, Art Deco apartment for `1921_1940`, 1940s bungalow for `1941_1950`, 1950s pastel/neon ranch home for `1950s`, 1960s mod townhouse for `1960s`, 1970s brownstone for `1970s`, 1980s synthwave split-level/arcade storefront for `1980s`, 1990s brick duplex for `1990s`, 2000s suburban house for `2000s`, 2010s timber/brick loft for `2010s`, or 2020s modern glass-and-steel home for `2020s`).
+   - All 4 living party members appear in their custom 32×32 sprites outside their home.
+
+2. **Stage B — Walking to the Independence General Store (No Oxen Cart Yet):**
+   - When transitioning from the prologue to the General Store, the 4 custom 32×32 party members animate in their 4-frame side-profile walk cycle (`side_right`), walking on foot from their era-appropriate home across the path to the **Independence General Store (`MATT'S OUTFITTING POST`)** rendered on the right side of the stage.
+   - No oxen cart is present during this pre-purchase walk or while browsing the General Store.
+
+3. **Stage C — Departing the General Store with the Oxen Cart & Moving on Trail Actions:**
+   - Once the player completes store checkout (`Purchase & Embark`), the **pixel-art Oxen Team & Covered Prairie Schooner Cart** is hitched and rendered with the party outside the General Store.
+   - **Triggered on Every Move Action:** Whenever a move action starts (`PRESS ON`, `HUNT`, `GATHER`, `SCOUT`, river crossings, or departing the store), the living 32×32 party members and their **oxen cart** actively animate moving through the scrolling pixel-art landscape (`prairie`, `river`, `desert`/badlands, `mountains`, `snow` mapped to the current trail biome and weather).
+   - Walk-cycle frame rate, wheel rotation, dust puffs / river splashes, and parallax ground scroll speed scale with `state.wagon.pace` (`steady`: 6 FPS, `strenuous`: 9 FPS, `grueling`: 13 FPS).
+   - When the move action finishes and the wagon is halted in camp or awaiting player decisions, the caravan settles into the 2-frame `idle` breathing state.
+
 ### The Unified Cockpit Display
-- **Consolidated Information Hub:** All essential game readouts—Dispatch Chronicle, Overland Trail Milestone Ribbon, Wagon & Supply Gauges, Party Vitals, and Contextual Action Prompts—are integrated directly into the phosphor green CRT screen.
+- **Consolidated Information Hub:** All essential game readouts—8-Bit Landscape Caravan Stage, Dispatch Chronicle, Overland Trail Milestone Ribbon, Wagon & Supply Gauges, Party Vitals (with 32×32 character portraits), and Contextual Action Prompts—are integrated directly into the phosphor green CRT screen.
 - **Aesthetic:** Green phosphor CRT terminal (`#020602` background, `#00ff66` text with text-shadow glow, subtle scanline overlay).
 - **The Typing Cursor:** A pulsating green cursor (`█` or `_`) sits at the typing head and blinks continuously when awaiting player input.
 - **Teletype Engine:**
@@ -280,13 +374,15 @@ When the player decides *not* to continue moving forward on a given day:
 The game stays in one unified cockpit; the main view changes its chronicle content between the results and dispatch phases. No separate screen, modal, or layout is opened.
 
 #### Phase 1 — Move Results
-Immediately after an action or dilemma resolves, the chronicle switches to:
+After the engine resolves the action and the next atmospheric dispatch has been requested, the chronicle switches to:
 
 1. The resolved action, who was involved, and exact stat and supply deltas.
 2. No new story beat or dilemma prompt until the player continues.
 3. A **Continue** control in the main action dock; **Space** and **Enter** work as shortcuts.
 
 The surrounding cockpit remains visible, including the HUD, trail ribbon, wagon gauges, party roster, waypoint survey, stores, and action deck. Actions and pace/ration inputs remain visible but are disabled until Continue; the primary travel control becomes Continue.
+
+Between resolving the action and showing Phase 1, display an in-cockpit loading state while the next dispatch is generated and animate the party and oxen cart moving through the landscape stage. Keep both the Move Results and dispatch hidden during this step, and do not expose Continue early. The engine—not Gemini—determines the action outcome. Once narration completes or falls back locally, show the Move Results; Continue then reveals the already-prepared dispatch without issuing a second narration request.
 
 ```text
 =============================================================================
@@ -311,6 +407,8 @@ After the player continues, the chronicle view changes to show:
 3. The available action deck or active dilemma choices.
 
 The cockpit layout does not change. The story beat must not recap or paraphrase the action, participants, chosen response, outcome, gains, losses, or stat changes just shown in Phase 1.
+
+While a dispatch is still loading (including the Day 1 opening dispatch), show only the receive indicator and its day/location header in the chronicle. Suppress placeholder or stale story text, chronicle waypoint/next-step copy, and disable actions and pace/ration controls until the dispatch or its local fallback is ready; the persistent cockpit HUD remains visible.
 
 ```text
 =============================================================================
@@ -353,6 +451,7 @@ The system maintains a compact behavioral dossier compiled from past actions and
 ```text
 DM Dossier:
 - Family / Expedition: The Schachterle Family
+- Party Era: 80's — Arcade Neon & Synthwave (1980–1989, displaced to 1848 Missouri)
 - Party Roster: Jedediah (Guide), Abigail (Doctor), Sarah (Carpenter), Billy (Youth)
 - Outfitting Profile: Well-stocked with provisions; retained $160 reserve cash
 - Temperament: Pragmatic & High-Risk
@@ -487,13 +586,14 @@ You are the Frontier Dungeon Master presiding over an atmospheric, grounded, and
 Your voice is evocative, observant, and literary—reminiscent of Cormac McCarthy or classic frontier gothic literature.
 
 Core Directives:
-1. Maintain strict continuity with the established world state, mile marker, supplies, cash, and past player choices.
+1. Maintain strict continuity with the established world state, chosen party era, mile marker, supplies, cash, and past player choices.
 2. Read the "DM Dossier" to understand the player's moral temperament, past decisions, and crew sentiment.
 3. The resolved move, participants, and exact deltas have already appeared on a separate results screen. Never repeat or paraphrase them in the dispatch.
 4. Structure the story beat in 3 distinct atmospheric lines:
    - Line 1: Current landscape, weather, or light.
-   - Line 2: Sensory detail or character presence, without repeating who performed the move.
+   - Line 2: Sensory detail, character presence, or a short line of direct dialogue from a named traveler.
    - Line 3: Atmospheric tension or an original anomaly; no consequences, supplies, mileage, waypoints, or next-step directions.
+   - Include at least one brief, natural line of quoted dialogue in every dispatch, preferably from a named living traveler; if none can speak, use a remembered journal line or appropriate in-world voice. Dialogue must not recap the resolved action.
 5. Use the resolved action and decision history only to preserve continuity and shape atmosphere. Do not recount the last action, chosen response, participant, outcome, gain, loss, stat change, travel distance, or supply total.
 6. Waypoints, stores, next steps, and available choices belong to the dispatch control deck, not the story lines.
 7. Dynamic Strangeness Escalation:
@@ -505,10 +605,54 @@ Core Directives:
    - When strangeness >= 6, you are empowered to invent novel, unscripted reality mutations in the `surrealMutation` object with a unique title, manifestation, and gameplay twist.
 ```
 
+### Prologue Genesis Prompt Mode
+After roster confirmation and before the store opens, the game calls the narration endpoint with a distinct `promptType` (`prologue-genesis`). The engine supplies the fixed starting roll, expedition surname, the single chosen `selectedEra` (`id`, `label`, `years`), the four named travelers (with roles, genders, and equipped outfit summaries), and confirms that no purchases have been made:
+
+```json
+{
+  "promptType": "prologue-genesis",
+  "expeditionName": "The Schachterle Family",
+  "selectedEra": {
+    "id": "1980s",
+    "label": "80's — Arcade Neon & Synthwave",
+    "years": "1980–1989"
+  },
+  "startingStrangenessRoll": 4,
+  "party": [
+    { "name": "Jedediah", "role": "Guide", "gender": "male", "outfitSummary": "80's Heavy Metal Mane, Synthwave Bomber Jacket, Acid-Wash Jeans" },
+    { "name": "Abigail", "role": "Doctor", "gender": "female", "outfitSummary": "80's Crimped High Ponytail, Neon Blazer, Pleated Trousers" },
+    { "name": "Billy", "role": "Youth", "gender": "male", "outfitSummary": "Arcade Visor Cap, Graphic Tee, Track Pants" },
+    { "name": "Sarah", "role": "Carpenter", "gender": "female", "outfitSummary": "Backwards Cap, Denim Work Shirt, Cargo Jeans" }
+  ]
+}
+```
+
+Genesis instructions require exactly one substantial original paragraph (target 200–250 words) that gives the family individual histories, relationships, hopes or fears, a shared reason for leaving, and at least one brief line of direct dialogue.
+- **When `selectedEra.id === 'oregon_trail'`:** Keep the origin historically grounded in 1848 (or permit modern-to-1848 displacement at strangeness 9–10) and explain a plausible route and elapsed time from any distant home to Independence.
+- **When `selectedEra.id !== 'oregon_trail'`:** Open in the party's chosen era and era-appropriate home, weave their era-specific lives and attire into the opening, and **explicitly explain how the characters were transported from their chosen era to 1800s (1848) Independence, Missouri**, before arriving on foot at the Independence General Store.
+- The final sentence must place the family at the Independence General Store, in Independence, Missouri, in 1848, ready to choose provisions. The instructions prohibit action outcomes, stat changes, dilemmas, obstacles, and gameplay mutations. The response shape is:
+
+```json
+{
+  "startingStrangenessLevel": 4,
+  "headline": "Before the General Store",
+  "prologueParagraphs": [
+    "One substantial family backstory connecting each traveler's past, chosen era, and relationships to their arrival in 1848 Independence, Missouri, ending at the Independence General Store before purchases."
+  ]
+}
+```
+
+The engine owns the roll and ledger record; Gemini owns only the generated origin prose. If Gemini is unavailable or disabled, an era-aware and tier-aware deterministic prologue preserves the same payload/output contract.
+
 ### Dynamic Context Payload (Sent per Prompt)
 ```json
 {
   "expeditionName": "The Schachterle Family",
+  "selectedEra": {
+    "id": "1980s",
+    "label": "80's — Arcade Neon & Synthwave",
+    "years": "1980–1989"
+  },
   "journeyPhase": "mid",
   "day": 18,
   "milesTraveled": 554,
@@ -535,16 +679,16 @@ Core Directives:
     "pace": "steady"
   },
   "party": [
-    { "name": "Jedediah", "role": "Guide", "health": 85, "status": "Healthy" },
-    { "name": "Abigail", "role": "Doctor", "health": 90, "status": "Healthy" },
-    { "name": "Sarah", "role": "Carpenter", "health": 92, "status": "Healthy" },
-    { "name": "Billy", "role": "Youth", "health": 60, "status": "Fever" }
+    { "name": "Jedediah", "role": "Guide", "gender": "male", "health": 85, "status": "Healthy" },
+    { "name": "Abigail", "role": "Doctor", "gender": "female", "health": 90, "status": "Healthy" },
+    { "name": "Sarah", "role": "Carpenter", "gender": "female", "health": 92, "status": "Healthy" },
+    { "name": "Billy", "role": "Youth", "gender": "male", "health": 60, "status": "Fever" }
   ],
   "dmDossier": {
     "temperament": "Pragmatic & Cold",
     "riskHabit": "Aggressive pacing; pushes through illness",
     "keyHistoricalDecisions": [
-      "Prologue: Outfitted wagon with 3 yoke oxen and 400 lbs food, reserving $140 cash",
+      "Prologue: Displaced from the 1980s to 1848 Missouri; outfitted wagon with 3 yoke oxen and 400 lbs food, reserving $140 cash",
       "Day 2: Refused to halt for Billy's fever; forced grueling pace",
       "Day 7: Caulked and floated wagon across Kansas River to save 1 day",
       "Day 12: Traded away firewood for medicine at Fort Kearny",
@@ -619,12 +763,12 @@ Core Directives:
 
 ## 12. Implementation Roadmap
 
-- **Phase 1: Expedition Setup, Archetype Customization & Outfitting (Mile 0)**
-  - Implement Stage 1: Expedition surname entry, 4-traveler name customization, and free-form archetype selector (supporting Guide, Doctor, Carpenter, Farmer, Banker, Youth with stacking).
-  - Implement Stage 2: Independence General Store shopping cart interface with cash budget ($800–$1,000 modified by Banker) and payload weight cap (2,400 lbs).
-  - Add standard outfit preset recommendations (`[R] Quick Outfit`) and interactive quantity adjustments for wood, food, water, ammo, oxen, medicine, and spare parts.
-  - Implement Stage 3: AI Prologue Genesis & Starting Weirdness Dice Roll (`initialStrangenessRoll`), generating the origin backstory based on the party and store manifest and initializing `state.strangenessLevel`.
-  - Initialize the wagon and expedition state with chosen archetypes, purchased supplies, and unspent cash.
+- **Phase 1: Expedition Setup, Single-Era 32×32 Character Creator, Prologue & Outfitting (Mile 0)**
+  - Integrate `/Users/adamschachterle/Documents/CharacterDesigner` (`presets.js` and 32×32 sprite/backdrop engine) into OTGame with OTGame's retro CRT aesthetic.
+  - Implement Stage 1: Expedition surname entry, a **single shared Party Era selector** (`oregon_trail` or `1500s`–`2020s`, no cross-era mixing), 4-traveler name & archetype customization, and per-member 32×32 character creation (gender, body frame, skin tone, hair/hat, shirt, pants/skirt, shoes, accessories, and color dyes).
+  - Implement Stage 2: AI Opening Prologue Genesis & Starting Weirdness Dice Roll after roster confirmation; submit `selectedEra` to the AI, explain how the characters were transported to 1800s Missouri whenever `selectedEra !== 'oregon_trail'`, and end the story at the Independence General Store before purchases.
+  - Implement Stage 3: Independence General Store shopping cart interface with cash budget ($800–$1,000 modified by Banker) and payload weight cap (2,400 lbs).
+  - Implement the 8-Bit Landscape Caravan progression: start at an era/location-appropriate home, walk on foot to the General Store, acquire the oxen cart upon store checkout, and animate the party + oxen cart moving through the landscape whenever a move action starts.
 - **Phase 2: Linear Trail Model & Controls (Point A to Point B)**
   - Replace the 9x4 coordinate grid with a linear milestone route from Mile 0 (Independence) to Mile 2,000 (Willamette Valley).
   - Replace the 4-way N/S/E/W D-pad with a single primary **`PRESS ON`** travel button and clear halt/utility actions.
@@ -650,10 +794,12 @@ Core Directives:
 
 ## 13. Key Codebase References
 
-- `frontend/index.html`: Desktop retro window layout, HUD panels, and screen mount.
-- `frontend/styles.css`: Retro window styling, HUD panels, CRT screen styling, outfitting store styling, and linear trail ribbon.
-- `frontend/src/ui.js`: DOM references, linear trail tracker rendering, CRT green screen rendering, archetype selector UI, and typewriter streaming logic.
-- `frontend/src/game.js`: Game controller, turn loop, `handleAction`, setup/store prologue flow, multi-archetype stacking logic, linear mileage tracking, and decision resolution.
-- `frontend/src/state.js`: Expedition state, expedition surname, party member roster with archetypes, cash balance, wagon cargo load, landmark distances, strangeness level, and supplies.
-- `src/lib/story-ai.ts`: Gemini prompt builder, schemas, linear milestone payload, ontological decay scale, 4th-wall directives, and DM dossier logic.
+- `/Users/adamschachterle/Documents/CharacterDesigner/presets.js`: 32×32 8-bit character templates, 16 historical/decade eras (`ERAS`), gender-aware body silhouettes (`BASE_BODY_TEMPLATES`), skin tones (`SKIN_TONES`), dyes (`PRESET_COLOR_DYES`), and layered clothing/hair presets (`INITIAL_CLOTHING_BOILERPLATE`).
+- `/Users/adamschachterle/Documents/CharacterDesigner/app.js`: 32×32 composite sprite builder, 4-frame walk cycle / 2-frame idle animation generator, and `160×64` pixel-art backdrop renderer (`drawPixelBackdropScene`).
+- `frontend/index.html`: Desktop retro window layout, HUD panels, character creation mount, and screen mount.
+- `frontend/styles.css`: Retro window styling, HUD panels, CRT screen styling, retro-styled character creator UI, outfitting store styling, and linear trail ribbon.
+- `frontend/src/ui.js`: DOM references, retro character creator & landscape canvas rendering, linear trail tracker rendering, CRT green screen rendering, archetype selector UI, and typewriter streaming logic.
+- `frontend/src/game.js`: Game controller, turn loop, `handleAction`, setup/prologue/store flow, home-to-store-to-trail caravan animation triggers, multi-archetype stacking logic, linear mileage tracking, and decision resolution.
+- `frontend/src/state.js`: Expedition state, expedition surname, `selectedEra`, party member roster with archetypes and 32×32 sprite configurations, cash balance, wagon cargo load, landmark distances, strangeness level, and supplies.
+- `src/lib/story-ai.ts`: Gemini prompt builder, era-transport prologue genesis instructions, schemas, linear milestone payload, ontological decay scale, 4th-wall directives, and DM dossier logic.
 - `src/routes/narration.ts`: Fastify route handling narration requests and ElevenLabs TTS audio.
