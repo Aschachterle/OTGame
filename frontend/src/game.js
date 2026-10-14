@@ -2,23 +2,32 @@ import {
   applyPartyHealthDelta,
   FINISH_TILE_ID,
   MAX_STRANGENESS_LEVEL,
+  OUTFITTING_CATALOG,
+  RECOMMENDED_OUTFIT,
+  STARTING_CASH,
   START_TILE_ID,
   TOTAL_TRAIL_MILES,
   WAGON_CAPACITY,
   applyNarrationBeat,
+  getCargoWeightTier,
   getCurrentMilestone,
   getCurrentMilestoneIndexForMiles,
   getLivingPartyMembers,
   getMilesToNextMilestone,
   getNextMilestone,
+  getOutfittingTotals,
+  getRoleCount,
   getRoleHolder,
+  getStartingCashForState,
   debugNarration,
   describeAction,
   fallbackTile,
   fallbackWorld,
+  getEffectiveStrangenessLevel,
   getJourneyPhase,
   getTrailSnapshot,
   isNarrationDuplicate,
+  normalizeSurrealMutation,
   loadBooleanPreference,
   locationDescriptor,
   locationNameForTile,
@@ -39,9 +48,18 @@ import {
   CLOUD_NARRATION_STORAGE_KEY,
   LLM_NARRATION_STORAGE_KEY
 } from './state.js';
+import {
+  ARCHETYPE_OPTIONS,
+  PACE_PRESETS,
+  equipMemberEraOutfit,
+  getEraById,
+  randomizeMemberInEra,
+  summarizeMemberOutfit,
+  syncAllPartyAppearancesToEra
+} from './character-designer.js';
 import { getFrameCount } from './wagon-animator.js';
 
-const TRAVEL_ANIMATION_MS = 2400;
+const TRAVEL_ANIMATION_MS = 1200;
 
 export function createGameController({ state, ui, api, audio }) {
   let wagonAnimationTimer = null;
@@ -76,6 +94,13 @@ export function createGameController({ state, ui, api, audio }) {
     if (biome === 'badlands') miles -= 2;
     if (elevation > 5000) miles -= 3;
     if ((tile?.weather?.tempC ?? 10) < 0) miles -= 2;
+    const load = wagonLoadWeight(state.wagon);
+    const loadTier = getCargoWeightTier(load);
+    if (loadTier === 'light') miles += 2;
+    if (loadTier === 'overburdened') miles -= load > 2300 ? 4 : 2;
+    if (state.wagon.oxenFatigue >= 80) miles -= 4;
+    else if (state.wagon.oxenFatigue >= 50) miles -= 2;
+    if (biome === 'mountain' && state.wagon.oxenYokes < 3) miles -= 2;
     return Math.max(8, miles);
   }
 
@@ -91,11 +116,42 @@ export function createGameController({ state, ui, api, audio }) {
       wagonAnimationTimer = null;
     }
     state.travelAnimationActive = false;
+    state.landscapeMoving = false;
     state.wagonAnimationFrame = 0;
+    ui.refreshLandscapeCanvas?.(state);
   }
 
-  async function playWagonAnimation() {
+  async function playWagonAnimation(durationMs = TRAVEL_ANIMATION_MS) {
     stopWagonAnimation();
+    state.travelAnimationActive = true;
+    state.landscapeMoving = true;
+    const paceCfg = PACE_PRESETS[state.wagon?.pace] || PACE_PRESETS.steady;
+    const stepSpeed = Math.max(0.8, (paceCfg?.speed || 1.0) * 1.8);
+    ui.refreshLandscapeCanvas?.(state);
+    wagonAnimationTimer = window.setInterval(() => {
+      state.wagonAnimationFrame = (state.wagonAnimationFrame + 1) % Math.max(4, getFrameCount());
+      state.landscapeScrollX = (state.landscapeScrollX || 0) + stepSpeed;
+      ui.refreshLandscapeCanvas?.(state);
+    }, 90);
+    await delay(durationMs);
+    stopWagonAnimation();
+  }
+
+  async function animateWalkToGeneralStore() {
+    stopWagonAnimation();
+    state.landscapeMoving = true;
+    const startX = state.landscapeCharX ?? 34;
+    const targetX = 86;
+    const steps = 14;
+    for (let i = 1; i <= steps; i += 1) {
+      state.landscapeCharX = startX + ((targetX - startX) * i) / steps;
+      state.wagonAnimationFrame = (state.wagonAnimationFrame + 1) % 4;
+      ui.refreshLandscapeCanvas?.(state);
+      await delay(55);
+    }
+    state.landscapeCharX = targetX;
+    state.landscapeMoving = false;
+    ui.refreshLandscapeCanvas?.(state);
   }
 
   function setDecision(decision) {
@@ -107,6 +163,7 @@ export function createGameController({ state, ui, api, audio }) {
   function clearDecision(options = {}) {
     const { render = true } = options;
     state.activeDecision = null;
+    state.pendingMetaDialogue = null;
     if (!render) {
       return;
     }
@@ -120,9 +177,6 @@ export function createGameController({ state, ui, api, audio }) {
       options.push('press-on');
     }
     options.push('camp', 'hunt', 'gather', 'treat', 'trade', 'repair', 'scout');
-    if (state.strangenessLevel >= 8 && !state.journeyCompleted) {
-      options.push('warp-west');
-    }
     return options;
   }
 
@@ -133,11 +187,33 @@ export function createGameController({ state, ui, api, audio }) {
   }
 
   function breakdownRepairCost() {
-    return Math.max(1, 2 - (getRoleHolder(state, 'Carpenter') ? 1 : 0));
+    const carpenterCount = getRoleCount(state, 'Carpenter');
+    if (carpenterCount >= 2) return 0;
+    return Math.max(1, 2 - (carpenterCount >= 1 ? 1 : 0));
+  }
+
+  function riverFerryFare(tileId) {
+    return { 'kansas-river': 5, 'green-river': 8, 'snake-river': 10 }[tileId] ?? 8;
+  }
+
+  function storeMarkup(tileId) {
+    const bankerCount = getRoleCount(state, 'Banker');
+    if (bankerCount >= 2) return 0.8;
+    if (bankerCount === 1) return 1.0;
+    return { 'fort-kearny': 2, 'fort-laramie': 2.5, 'fort-bridger': 3 }[tileId] ?? 1;
+  }
+
+  function outfitProfile(weight, cash, yokes) {
+    const tier = getCargoWeightTier(weight);
+    const era = getEraById(state.selectedEra);
+    const eraNote = era.id !== 'oregon_trail' ? ` (${era.shortLabel || era.label} travelers)` : '';
+    if (tier === 'light' && cash >= 500) return `a lean ${tier} load (${Math.round(weight)} lb), a cash-rich reserve ($${cash.toFixed(2)}), and ${yokes} yokes${eraNote}`;
+    if (tier === 'overburdened') return `a heavily provisioned ${tier} load (${Math.round(weight)} lb), a $${cash.toFixed(2)} cash reserve, and ${yokes} yokes${eraNote}`;
+    return `a ${tier} load (${Math.round(weight)} lb), a $${cash.toFixed(2)} cash reserve, and ${yokes} yokes${eraNote}`;
   }
 
   function doctorHealBonus() {
-    return getRoleHolder(state, 'Doctor') ? 5 : 0;
+    return getRoleCount(state, 'Doctor') * 5;
   }
 
   function maybeAfflictParty(tile) {
@@ -146,9 +222,10 @@ export function createGameController({ state, ui, api, audio }) {
     if ((tile?.weather?.rain ?? 0) > 70 || (tile?.weather?.tempC ?? 8) < 0) risks.push('Cholera', 'Fever');
     if (tile?.biome === 'badlands' || tile?.biome === 'plains') risks.push('Snakebite');
     if (!risks.length || Math.random() > 0.28) return '';
-    const member = randomLivingMember();
-    if (!member || member.status !== 'Healthy') return '';
     const condition = risks[Math.floor(Math.random() * risks.length)];
+    const youth = condition === 'Snakebite' ? getRoleHolder(state, 'Youth') : null;
+    const member = youth && Math.random() < 0.65 ? youth : randomLivingMember();
+    if (!member || member.status !== 'Healthy') return '';
     setPartyCondition(state, member.id, condition);
     applyPartyHealthDelta(state, -8, { memberId: member.id, status: condition });
     return `${member.name} is suffering from ${condition.toLowerCase()}.`;
@@ -162,7 +239,8 @@ export function createGameController({ state, ui, api, audio }) {
       await appendEvent('funeral', {
         memberId: member.id,
         memberName: member.name,
-        note: `A funeral was recorded for ${member.name}, ${member.role.toLowerCase()} of the wagon party.`
+        graveMarker: `${state.expeditionName}: ${member.name} (${member.role})`,
+        note: `${state.expeditionName} marked the grave of ${member.name}, ${member.role.toLowerCase()} of the wagon party.`
       });
     }
     if (!getLivingPartyMembers(state).length) {
@@ -171,19 +249,86 @@ export function createGameController({ state, ui, api, audio }) {
   }
 
   function buildRiverDecision(travelAction, nextTileId, directionText, destinationName, river) {
-    const flowLabel = state.strangenessLevel >= 3 && state.day % 2 === 0 ? -river.flowRate : river.flowRate;
+    const flowLabel = river.flowRate;
+    const ferryFare = riverFerryFare(nextTileId);
+    const options = [
+      { id: 'ford', hotkey: '1', label: 'Ford the river', detail: 'Fast, but dangerous above 3.0 ft.' },
+      { id: 'caulk', hotkey: '2', label: 'Caulk and float', detail: 'Costs 2 wood and 1 day. Risky in hard current.' }
+    ];
+    if (state.wagon.cash >= ferryFare) {
+      options.push({ id: 'ferry', hotkey: '3', label: `Pay the ferry ($${ferryFare}.00)`, detail: 'A paid crossing avoids capsizing risk and preserves provisions.' });
+      if (nextTileId === 'snake-river') {
+        options.push({ id: 'guide', hotkey: '4', label: `Hire a local river guide ($${ferryFare}.00)`, detail: 'Pay for local knowledge of the safer channel through the crossing.' });
+      }
+    }
+    options.push({ id: 'wait', hotkey: String(options.length + 1), label: 'Wait for lower water', detail: 'Lose a day of supplies and try again tomorrow.' });
     return {
       type: 'river-crossing',
       eyebrow: 'River crossing',
       title: `River crossing ahead: ${destinationName}`,
-      body: `Depth ${river.depthFt} ft. Flow ${flowLabel} cfs. Choose how to cross before the wagon commits to the ford.`,
-      context: { travelAction, nextTileId, directionText, destinationName, river },
-      options: [
-        { id: 'ford', hotkey: '1', label: 'Ford the river', detail: 'Fast, but dangerous above 3.0 ft.' },
-        { id: 'caulk', hotkey: '2', label: 'Caulk and float', detail: 'Costs 2 wood and 1 day. Risky in hard current.' },
-        { id: 'ferry', hotkey: '3', label: 'Hire ferry or guide', detail: 'Costs 2 medicine or 4 rations. Safe crossing.' },
-        { id: 'wait', hotkey: '4', label: 'Wait for lower water', detail: 'Lose a day of supplies and try again tomorrow.' }
-      ]
+      body: `Depth ${river.depthFt} ft. Flow ${flowLabel} cfs. ${state.wagon.cash < ferryFare ? `The ferry requires $${ferryFare}.00; the wagon holds $${state.wagon.cash.toFixed(2)}.` : `The ferry fare is $${ferryFare}.00.`} Choose how to cross before the wagon commits to the ford.`,
+      context: { travelAction, nextTileId, directionText, destinationName, river, ferryFare },
+      options
+    };
+  }
+
+  function buildDallesRouteDecision() {
+    const options = [];
+    if (state.wagon.cash >= 10) {
+      options.push({ id: 'barlow-road', hotkey: '1', label: 'Take the Barlow Road ($10.00)', detail: 'Pay the toll for the overland route around Mount Hood.' });
+    }
+    options.push({
+      id: 'columbia-raft',
+      hotkey: String(options.length + 1),
+      label: 'Take a Columbia River raft',
+      detail: 'No toll, but fast water risks supplies, health, and wagon parts.'
+    });
+    return {
+      type: 'dalles-route',
+      eyebrow: 'Final trail fork',
+      title: 'Choose the last road to Oregon',
+      body: state.wagon.cash >= 10
+        ? 'At The Dalles, choose the $10 Barlow Road toll or risk the Columbia River raft.'
+        : `The Barlow Road toll is $10.00, but the wagon has only $${state.wagon.cash.toFixed(2)}. The Columbia raft remains open.`,
+      options
+    };
+  }
+
+  function buildFortResupplyDecision(tileId) {
+    const markup = storeMarkup(tileId);
+    const cargoBindings = {
+      foodSacks: { wagonKey: 'food', quantity: 25, cargoWeight: 25, noun: '25 food rations' },
+      waterCasks: { wagonKey: 'water', quantity: 10, cargoWeight: 80, noun: '10 gallons of water' },
+      firewoodBundles: { wagonKey: 'wood', quantity: 1, cargoWeight: 30, noun: '1 firewood bundle' },
+      ammunitionBoxes: { wagonKey: 'ammunition', quantity: 1, cargoWeight: 3, noun: '1 ammunition box' },
+      medicalKits: { wagonKey: 'medicine', quantity: 4, cargoWeight: 2, noun: '4 medicine doses' },
+      spareAxles: { wagonKey: 'spareAxles', quantity: 1, cargoWeight: 45, noun: '1 spare axle' },
+      spareWheels: { wagonKey: 'spareWheels', quantity: 1, cargoWeight: 50, noun: '1 spare wheel' },
+      spareTongues: { wagonKey: 'spareTongues', quantity: 1, cargoWeight: 40, noun: '1 spare tongue' }
+    };
+    const freeCapacity = WAGON_CAPACITY - wagonLoadWeight(state.wagon);
+    const options = OUTFITTING_CATALOG
+      .filter((item) => cargoBindings[item.key])
+      .filter((item) => item.price * markup <= state.wagon.cash && cargoBindings[item.key].cargoWeight <= freeCapacity)
+      .map((item, index) => {
+        const boundItem = cargoBindings[item.key];
+        const price = item.price * markup;
+        return {
+          id: item.key,
+          hotkey: String(index + 1),
+          label: `Buy ${boundItem.noun} ($${price.toFixed(2)})`,
+          detail: `Fort price is ${markup}x Independence; adds ${boundItem.cargoWeight} lbs.`
+        };
+      });
+    return {
+      type: 'fort-resupply',
+      eyebrow: 'Fort store',
+      title: `${getCurrentMilestone(state).shortName} supply counter`,
+      body: options.length
+        ? `Prices are ${markup}x the Independence catalog. Cash on hand: $${state.wagon.cash.toFixed(2)}.`
+        : `Prices are ${markup}x the Independence catalog; no listed item fits the available cash and cargo room ($${state.wagon.cash.toFixed(2)} cash, ${Math.max(0, freeCapacity)} lbs free).`,
+      context: { tileId, markup },
+      options
     };
   }
 
@@ -269,49 +414,67 @@ export function createGameController({ state, ui, api, audio }) {
     const repairCost = breakdownRepairCost();
     const hasWood = (state.wagon.wood ?? 0) >= repairCost;
     const carpenter = getRoleHolder(state, 'Carpenter');
-    const carpenterBonus = carpenter ? " (Sarah's carpentry saves 1 wood)" : '';
+    const spareKey = brokenPart.toLowerCase().includes('axle')
+      ? 'spareAxles'
+      : brokenPart.toLowerCase().includes('wheel')
+        ? 'spareWheels'
+        : 'spareTongues';
+    const hasSpare = (state.wagon[spareKey] ?? 0) > 0;
+    const carpenterBonus = carpenter ? ` (${carpenter.name}'s carpentry reduces lumber use)` : '';
+    const options = [];
+    if (hasSpare) {
+      options.push({
+        id: 'replace-spare',
+        hotkey: String(options.length + 1),
+        label: `Replace with spare ${spareKey.replace('spare', '').replace(/s$/, '').toLowerCase()}`,
+        detail: `Use one spare part to replace the ${brokenPart.toLowerCase()} without spending wood.`
+      });
+    }
+    options.push({
+      id: 'repair-wood',
+      hotkey: String(options.length + 1),
+      label: hasWood ? `Repair with lumber (${repairCost} wood)` : `Cannot repair (need ${repairCost} wood)`,
+      detail: hasWood
+        ? `Costs ${repairCost} wood bundle${repairCost === 1 ? '' : 's'}${carpenterBonus}. Restores wagon to rolling condition.`
+        : `You need ${repairCost} wood. Forage or barter before repairing.`
+    });
+    options.push({
+      id: 'forage-wood',
+      hotkey: String(options.length + 1),
+      label: 'Forage for timber',
+      detail: 'Halt and search the brush for salvageable wood (+1-2 wood, advances 1 day).'
+    });
+    options.push({
+      id: 'trade-spare',
+      hotkey: String(options.length + 1),
+      label: 'Barter for replacement parts',
+      detail: 'Trade 2 food rations with passing emigrants for emergency wood.'
+    });
     return {
       type: 'wagon-breakdown',
       eyebrow: 'Wagon breakdown',
       title: `${brokenPart} on the trail!`,
       body: `The wagon cannot roll forward until the ${brokenPart.toLowerCase()} is repaired. Choose how to handle the breakdown:`,
-      context: { brokenPart, repairCost },
-      options: [
-        {
-          id: 'repair-wood',
-          hotkey: '1',
-          label: hasWood ? `Repair with lumber (${repairCost} wood)` : `Cannot repair (need ${repairCost} wood)`,
-          detail: hasWood
-            ? `Costs ${repairCost} wood bundle${repairCost === 1 ? '' : 's'}${carpenterBonus}. Restores wagon to rolling condition.`
-            : `You need ${repairCost} wood. Forage or barter before repairing.`
-        },
-        {
-          id: 'forage-wood',
-          hotkey: '2',
-          label: 'Forage for timber',
-          detail: 'Halt and search the brush for salvageable wood (+1-2 wood, advances 1 day).'
-        },
-        {
-          id: 'trade-spare',
-          hotkey: '3',
-          label: 'Barter for replacement parts',
-          detail: 'Trade 2 food rations with passing emigrants for emergency wood.'
-        }
-      ]
+      context: { brokenPart, repairCost, spareKey },
+      options
     };
   }
 
   function buildObstacleDecision(obstacle) {
+    const surreal = obstacle.dilemmaType === 'surreal';
     return {
       type: 'obstacle-dilemma',
-      eyebrow: 'Trail dilemma',
+      eyebrow: surreal ? 'Reality rupture' : 'Trail dilemma',
       title: obstacle.description,
-      body: 'Choose how the party responds. Each option solves the problem by spending a different resource.',
+      body: surreal
+        ? 'Choose how the party answers the impossible. Meta-engagement opens a text line in the terminal.'
+        : 'Choose how the party responds. Each option solves the problem by spending a different resource.',
       context: { obstacle },
       options: obstacle.choices.map((choice, index) => ({
         id: choice.id,
         hotkey: String(index + 1),
         label: choice.label,
+        approach: choice.approach,
         detail: `${choice.description} ${describeObstacleCost(choice.cost)}`.trim()
       }))
     };
@@ -340,7 +503,7 @@ export function createGameController({ state, ui, api, audio }) {
     setDecision(buildObstacleDecision(state.activeObstacle));
   }
 
-  function applyResourceDelta(wagon, resourceType, deltaUnits, maxUnits = 99) {
+  function applyResourceDelta(wagon, resourceType, deltaUnits, maxUnits = Number.POSITIVE_INFINITY) {
     const key = resourceType === 'forage' || resourceType === 'herd' ? 'food' : resourceType;
     const current = wagon[key] ?? 0;
     if (deltaUnits <= 0) {
@@ -349,7 +512,7 @@ export function createGameController({ state, ui, api, audio }) {
       return { applied, blocked: 0 };
     }
 
-    const weightMap = { food: 2, water: 3, wood: 4, medicine: 0.5 };
+    const weightMap = { food: 1, water: 8, wood: 30, medicine: 0.5, ammunition: 3 };
     const unitWeight = weightMap[key] ?? 1;
     const freeCapacity = Math.max(0, WAGON_CAPACITY - wagonLoadWeight(wagon));
     const capacityLimit = unitWeight > 0 ? Math.floor(freeCapacity / unitWeight) : deltaUnits;
@@ -357,6 +520,45 @@ export function createGameController({ state, ui, api, audio }) {
     const allowed = Math.max(0, Math.min(deltaUnits, capacityLimit, stockLimit));
     wagon[key] = current + allowed;
     return { applied: allowed, blocked: Math.max(0, deltaUnits - allowed) };
+  }
+
+  function getApplicableSurrealEffect(actionType) {
+    const mutation = state.pendingSurrealEffect;
+    if (!mutation) return null;
+    const trigger = mutation.mechanicalEffect.trigger;
+    const applies = trigger === 'next_action'
+      || (trigger === 'next_travel' && actionType === 'press-on')
+      || (trigger === 'next_camp' && actionType === 'camp');
+    return applies ? mutation : null;
+  }
+
+  async function applyPendingSurrealEffect(actionType) {
+    const mutation = getApplicableSurrealEffect(actionType);
+    if (!mutation) return null;
+    const { mechanicalEffect } = mutation;
+    try {
+      await appendEvent('surreal_effect_resolution', {
+        mutationKey: mutation.mutationKey,
+        title: mutation.title,
+        actionType,
+        mechanicalEffect,
+        note: `${mutation.title} altered the ${actionType} outcome.`
+      });
+    } catch (error) {
+      state.statusMessage = 'The trail could not seal the reality shift in the ledger; its gameplay effect remains pending.';
+      console.error('Could not seal surreal gameplay effect', error);
+      return null;
+    }
+
+    state.pendingSurrealEffect = null;
+    applyPartyHealthDelta(state, mechanicalEffect.healthDelta, { status: 'Shaken' });
+    state.wagon.morale = Math.max(0, Math.min(100, state.wagon.morale + mechanicalEffect.moraleDelta));
+    applyResourceDelta(state.wagon, 'food', mechanicalEffect.foodDelta);
+    applyResourceDelta(state.wagon, 'water', mechanicalEffect.waterDelta);
+    applyResourceDelta(state.wagon, 'wood', mechanicalEffect.woodDelta);
+    applyResourceDelta(state.wagon, 'medicine', mechanicalEffect.medicineDelta);
+    state.statusMessage = `${state.statusMessage} Reality bends under ${mutation.title}: ${mutation.gameplayTwist}`;
+    return mutation;
   }
 
   function recentActionCount(actionType, windowSize = 3) {
@@ -405,19 +607,19 @@ export function createGameController({ state, ui, api, audio }) {
       statusMessage: state.statusMessage,
       availableOptionsAtStop: normalizedOptions.map((option) => describeAction(option).toLowerCase()),
       skippedOptionsAtStop: normalizedOptions.filter((option) => option !== actionType).map((option) => describeAction(option).toLowerCase()),
-      strangenessLevel: state.strangenessLevel,
+      strangenessLevel: getEffectiveStrangenessLevel(state),
       ...extraContext
     };
     state.lastActionContext = entry;
     state.actionHistory = [...state.actionHistory, entry].slice(-20);
-    debugNarration(state, 'action:recorded', { actionType, outcome, strangenessLevel: state.strangenessLevel, historyCount: state.actionHistory.length });
+    debugNarration(state, 'action:recorded', { actionType, outcome, strangenessLevel: getEffectiveStrangenessLevel(state), historyCount: state.actionHistory.length });
   }
 
   function buildDmDossier(state) {
     const pace = state.wagon?.pace ?? 'steady';
     const health = state.wagon?.health ?? 100;
     const morale = state.wagon?.morale ?? 100;
-    const strangeness = state.strangenessLevel ?? 0;
+    const strangeness = getEffectiveStrangenessLevel(state);
 
     const paceHabit = pace === 'grueling'
       ? 'Relentless and grueling; drives the team to the bone'
@@ -454,7 +656,6 @@ export function createGameController({ state, ui, api, audio }) {
 
     const recentDecisions = (state.actionHistory ?? [])
       .filter((entry) =>
-        entry.actionType === 'warp-west' ||
         entry.riverChoice ||
         entry.actionType === 'treat' ||
         entry.outcome === 'failed' ||
@@ -479,13 +680,19 @@ export function createGameController({ state, ui, api, audio }) {
       crewCompassion,
       riskHabit,
       recentDecisions,
-      crewSentiment
+      crewSentiment,
+      outfittingProfile: state.outfittingProfile ?? 'No outfitting profile recorded.',
+      entityMemory: (state.metaDialogueHistory ?? []).slice(-6).map((entry) =>
+        `Day ${entry.day}: ${entry.approach}; the Operator replied "${entry.playerResponse}"`
+      ),
+      aiNotes: (state.dmDossierUpdates ?? []).slice(-6)
     };
   }
 
   function getNarrationContext() {
     const selectedTile = state.currentTrailSnapshot ?? fallbackTile;
     const currentMilestone = getCurrentMilestone(state);
+    const nextLandmark = getNextMilestone(state)?.name ?? null;
     const journeyPhase = getJourneyPhase(state);
     const supplies = toSupplySnapshot(state.wagon);
     const remainingMiles = Math.max(0, TOTAL_TRAIL_MILES - state.milesTraveled);
@@ -497,6 +704,8 @@ export function createGameController({ state, ui, api, audio }) {
     const isArrivedLandmark = Boolean(state.lastActionContext?.arrivedMilestoneName);
     const isMajorLandmark = isArrivedLandmark || (state.day === 1 && (state.milesTraveled ?? 0) === 0) || state.journeyCompleted;
 
+    const selectedEra = getEraById(state.selectedEra);
+
     return {
       day: state.day,
       tileId: currentMilestone.id,
@@ -506,12 +715,24 @@ export function createGameController({ state, ui, api, audio }) {
       journeyStartTile: START_TILE_ID,
       journeyEndTile: FINISH_TILE_ID,
       useLlmNarration: state.llmNarrationPreferred,
+      selectedEra: {
+        id: selectedEra.id,
+        label: selectedEra.label,
+        shortLabel: selectedEra.shortLabel,
+        years: selectedEra.years
+      },
       weather: selectedTile.weather ?? { rain: 0, tempC: 0, windKph: 0 },
-      wagon: state.wagon,
+      wagon: {
+        ...state.wagon,
+        cargoWeight: wagonLoadWeight(state.wagon),
+        payloadTier: getCargoWeightTier(wagonLoadWeight(state.wagon))
+      },
       party: (state.wagon.party ?? []).map((member) => ({
         id: member.id,
         name: member.name,
         role: member.role,
+        gender: member.appearance?.gender ?? 'male',
+        outfitSummary: summarizeMemberOutfit(member.appearance),
         health: member.health,
         status: member.status
       })),
@@ -521,13 +742,16 @@ export function createGameController({ state, ui, api, audio }) {
         payload: event.payload ?? {}
       })),
       lastAction: state.lastActionContext,
+      justResolvedDecision: state.justResolvedDecision,
       historyLog: state.actionHistory,
+      metaDialogueHistory: (state.metaDialogueHistory ?? []).slice(-12),
+      pendingSurrealEffect: state.pendingSurrealEffect,
       priorNarration: state.narrationHistory.slice(-8),
       priorKeyPoints: state.storyKeyPoints.slice(-10),
       obstacleHistory: state.recentObstacleHistory
         .filter((entry) => state.day - entry.day <= 6)
         .slice(-6),
-      strangenessLevel: state.strangenessLevel,
+      strangenessLevel: getEffectiveStrangenessLevel(state),
       distanceDescriptor,
       journeyCompleted: state.journeyCompleted,
       availableActionTypes,
@@ -542,10 +766,12 @@ export function createGameController({ state, ui, api, audio }) {
       distanceToFrontier: remainingMiles,
       milesTraveled: state.milesTraveled,
       currentLandmark: currentMilestone.name ?? currentMilestone.shortName,
-      nextMilestone: getNextMilestone(state)?.name ?? null,
+      nextLandmark,
+      nextMilestone: nextLandmark,
       isMajorLandmark,
       dmDossier: buildDmDossier(state),
-      expeditionName: 'The Schachterle Family',
+      expeditionName: state.expeditionName,
+      outfittingProfile: state.outfittingProfile ?? '',
       gameOver: state.gameOver
     };
   }
@@ -568,11 +794,14 @@ export function createGameController({ state, ui, api, audio }) {
         payload: event.payload
       })),
       lastAction: context.lastAction,
+      justResolvedDecision: context.justResolvedDecision,
+      metaDialogueHistory: context.metaDialogueHistory,
       historyLog: (context.historyLog ?? []).slice(-8),
       priorNarration: (context.priorNarration ?? []).slice(-8),
       priorKeyPoints: (context.priorKeyPoints ?? []).slice(-8),
       obstacleHistory: context.obstacleHistory,
       strangenessLevel: context.strangenessLevel,
+      pendingSurrealEffect: context.pendingSurrealEffect,
       distanceDescriptor: context.distanceDescriptor,
       activeObstacle: context.activeObstacle
     });
@@ -580,82 +809,39 @@ export function createGameController({ state, ui, api, audio }) {
 
   function buildRoutineNarration(context, reason = 'routine') {
     const location = context.locationName ?? context.biome ?? 'the trail';
-    const lastAction = context.lastAction;
     const activeRisks = Object.entries(context.riskState ?? {})
       .filter(([, value]) => value)
       .map(([key]) => key.replace(/([A-Z])/g, ' $1').toLowerCase());
-    const riskClause = activeRisks.length
-      ? `the immediate pressure is ${activeRisks.join(', ')}`
+    const pressureLine = activeRisks.length
+      ? `The crew feels the immediate pressure of ${activeRisks.join(', ')}.`
       : context.weather.rain > 70
-        ? 'the weather is turning on the wagon faster than the crew would like'
+        ? 'Wet weather makes every sound close and every surface uncertain.'
         : context.weather.tempC < 0
-          ? 'cold is starting to make every ordinary choice more expensive'
-          : 'nothing on this stretch feels dramatic, but the trail still keeps its due';
-    const optionClause = context.decisionOptions?.length
-      ? `the crew is mostly weighing ${context.decisionOptions.slice(0, 2).join(' or ')} next`
-      : 'the crew has little to do but keep moving and conserve what remains';
-    if (lastAction?.riverOutcome) {
-      const milesGained = lastAction.milesGained ?? 0;
-      const nextMilestoneName = lastAction.nextMilestoneName ?? context.nextMilestone ?? 'the next landmark';
-      return {
-        source: 'deterministic',
-        headline: `River crossed: ${lastAction.riverChoice ? String(lastAction.riverChoice).toUpperCase() : 'SUCCESS'}`,
-        lines: [
-          lastAction.riverOutcome,
-          `The wagon clears the crossing and makes ${milesGained} miles west toward ${nextMilestoneName}.`,
-          `Stores stand at ${context.supplyEstimates.foodRations} rations, ${context.supplyEstimates.waterGallons} gal water, and ${context.supplyEstimates.firewoodBundles} bundles wood.`
-        ],
-        body: `${lastAction.riverOutcome} The wagon gained ${milesGained} miles toward ${nextMilestoneName}. Stores hold at ${context.supplyEstimates.foodRations} rations and ${context.supplyEstimates.waterGallons} gal water.`,
-        keyPoints: [
-          `River crossing resolved: ${lastAction.riverChoice}`,
-          `Miles gained: ${milesGained}`
-        ],
-        obstacle: undefined,
-        tone: 'plain'
-      };
-    }
-    if (lastAction?.actionType === 'press-on') {
-      const milesGained = lastAction.milesGained ?? 0;
-      const nextMilestoneName = lastAction.nextMilestoneName ?? context.nextMilestone ?? 'the next landmark';
-      const milesRemaining = lastAction.milesToNextMilestone ?? getMilesToNextMilestone(state);
-      const arrivalClause = lastAction.arrivedMilestoneName
-        ? `and reached ${lastAction.arrivedMilestoneName}`
-        : `and kept the wagon aimed at ${nextMilestoneName}`;
-      return {
-        source: 'deterministic',
-        headline: `The wagon presses on and makes ${milesGained} miles.`,
-        body: `${location} fell behind as the wagon pressed west ${arrivalClause}. The weather stays ${context.weather.rain > 60 ? 'mean and wet' : context.weather.windKph > 28 ? 'restless and windy' : 'watchful but manageable'}. The day closes with ${context.supplyEstimates.foodRations} rations, ${context.supplyEstimates.waterGallons} gal water, and ${milesRemaining} miles to ${nextMilestoneName}.`,
-        keyPoints: [
-          `Day ${context.day} at ${location}`,
-          `Travel gained ${milesGained} miles`,
-          `Next landmark: ${nextMilestoneName} (${milesRemaining} miles)`
-        ],
-        obstacle: undefined,
-        tone: 'plain'
-      };
-    }
-    const firstSentence = !lastAction
-      ? `${location} on day ${context.day} remains quiet while the expedition waits for its first hard choice.`
-      : lastAction.actionType === 'press-on'
-        ? `${location} on day ${context.day} came after ${lastAction.actionLabel.toLowerCase()}, with the wagon grinding onward through ${context.biome}.`
-        : `${location} on day ${context.day} followed ${lastAction.actionLabel.toLowerCase()}, leaving the wagon to reckon with the cost of that stop.`;
+          ? 'Cold settles into clothing and wagon fittings.'
+          : 'The country keeps its silence beneath the open sky.';
+    const firstName = context.party?.find((member) => member.status !== 'Dead')?.name;
+    const characterLine = firstName
+      ? `${firstName} watches the light move across the surrounding country.`
+      : 'The crew watches the light move across the surrounding country.';
     const headline = reason === 'routine-travel'
-      ? 'Another hard mile passes.'
+      ? 'The trail opens west.'
       : reason === 'routine-camp'
-        ? 'Camp settles the wagon for now.'
+        ? 'The country grows quiet.'
         : reason === 'routine-gather'
-          ? 'A practical stop on the trail.'
+          ? 'Wind moves through the grass.'
           : 'The trail keeps moving.';
+    const lines = [
+      `${location} lies beneath a ${context.weather.tempC < 0 ? 'pale, cold' : 'wide, unsettled'} sky.`,
+      characterLine,
+      pressureLine
+    ];
 
     return {
       source: 'deterministic',
       headline,
-      body: `${firstSentence} For now, ${riskClause}, and ${optionClause}.`,
-      keyPoints: [
-        `Day ${context.day} near ${location}`,
-        lastAction ? `Last action: ${lastAction.actionLabel}` : 'Last action: none',
-        activeRisks.length ? `Pressure: ${activeRisks.join(', ')}` : 'Pressure: routine trail wear'
-      ],
+      lines,
+      body: lines.join(' '),
+      keyPoints: [`Atmosphere near ${location}`, pressureLine],
       obstacle: undefined,
       tone: 'plain'
     };
@@ -703,11 +889,8 @@ export function createGameController({ state, ui, api, audio }) {
     if (latestEventType === 'funeral') {
       return { key: `funeral:${context.day}:${context.tileId}`, reason: 'funeral' };
     }
-    if (latestEventType === 'obstacle_resolution') {
+    if (latestEventType === 'obstacle_resolution' || latestEventType === 'meta_dilemma_response') {
       return { key: `obstacle-resolution:${context.day}:${context.tileId}`, reason: 'encounter-resolution' };
-    }
-    if (latestActionType === 'warp-west') {
-      return { key: `warp:${context.day}:${context.tileId}`, reason: 'warp-event' };
     }
     if (latestEventType === 'river_wait' || (context.lastAction?.riverOutcome && latestActionType === 'press-on')) {
       return { key: `river:${context.tileId}:${context.day}`, reason: 'river-crossing' };
@@ -741,17 +924,79 @@ export function createGameController({ state, ui, api, audio }) {
     return null;
   }
 
+  function getNarrativeUpdateKey(candidate) {
+    return JSON.stringify([
+      state.expeditionId,
+      state.day,
+      state.lastActionContext?.actionType ?? 'opening',
+      candidate.headline ?? '',
+      candidate.body ?? '',
+      candidate.surrealMutation?.title ?? '',
+      candidate.surrealMutation?.manifestation ?? '',
+      candidate.dmDossierUpdate?.sentimentDelta ?? ''
+    ]);
+  }
+
+  async function recordNarrativeUpdate(candidate) {
+    if (candidate?.source !== 'llm') return candidate;
+    const mutation = normalizeSurrealMutation(candidate.surrealMutation);
+    const sentimentDelta = typeof candidate.dmDossierUpdate?.sentimentDelta === 'string'
+      ? candidate.dmDossierUpdate.sentimentDelta.trim().slice(0, 300)
+      : '';
+    if (!mutation && !sentimentDelta) return candidate;
+
+    const updateKey = getNarrativeUpdateKey(candidate);
+    if (state.recordedNarrativeUpdateKeys.includes(updateKey)) {
+      return { ...candidate, surrealMutation: undefined, dmDossierUpdate: undefined };
+    }
+    const mutationKey = mutation ? `${updateKey}:mutation` : '';
+    const recordedMutation = mutation ? { ...mutation, mutationKey } : null;
+    try {
+      await appendEvent('dm_narrative_update', {
+        updateKey,
+        mutationKey: mutationKey || null,
+        surrealMutation: recordedMutation,
+        sentimentDelta: sentimentDelta || null,
+        note: mutation
+          ? `The DM recorded ${mutation.title}: ${mutation.gameplayTwist}`
+          : `The DM dossier changed: ${sentimentDelta}`
+      });
+    } catch (error) {
+      state.statusMessage = 'The AI narrative update could not be sealed in the ledger; its gameplay effect was withheld.';
+      console.error('Could not seal AI narrative update', error);
+      return { ...candidate, surrealMutation: undefined, dmDossierUpdate: undefined };
+    }
+
+    state.recordedNarrativeUpdateKeys.push(updateKey);
+    if (sentimentDelta) {
+      state.dmDossierUpdates = [...state.dmDossierUpdates, sentimentDelta].slice(-12);
+    }
+    if (mutation) {
+      state.dmDossierUpdates = [
+        ...state.dmDossierUpdates,
+        `Reality mutation ${mutation.title}: ${mutation.gameplayTwist}`
+      ].slice(-12);
+    }
+    return { ...candidate, surrealMutation: recordedMutation ?? undefined };
+  }
+
   async function renderNarrationCandidate(candidate, shouldAutoPlay, stateKey) {
-    ui.setNarrationLoading(false);
     state.narrationStateKey = stateKey;
     state.narrationInFlightKey = '';
-    applyNarrationBeat(state, candidate ?? null);
+    const recordedCandidate = await recordNarrativeUpdate(candidate ?? null);
+    applyNarrationBeat(state, recordedCandidate);
+    if (state.turnPhase !== 'resolving') {
+      ui.setNarrationLoading(false, state);
+    }
     ui.renderMap(state);
     ui.updateActionState(state);
     renderStoryPanel();
     syncObstacleDecision();
     audio.primeCloudNarrationCache(state.narrationText);
-    if (shouldAutoPlay && state.narrationAutoPlay) {
+    if (state.justResolvedDecision) {
+      state.justResolvedDecision = null;
+    }
+    if (shouldAutoPlay && state.narrationAutoPlay && state.turnPhase !== 'resolving') {
       await audio.playNarration();
     }
   }
@@ -759,10 +1004,25 @@ export function createGameController({ state, ui, api, audio }) {
   function renderStoryPanel() {
     const renderState = audio.getStoryRenderState();
     ui.renderStory(state, renderState);
+    ui.setLocalReadAloudEnabled(!renderState.cloudNarrationEnabled && audio.isBrowserSpeechAvailable());
     if (renderState.useBrowserFallback) {
       audio.populateVoiceSelect(ui.getStoryVoiceSelect());
     }
     ui.renderHazardBanner(state);
+  }
+
+  async function loadNarrationAndCompleteTurn(shouldAutoPlay = true) {
+    try {
+      await loadNarration(shouldAutoPlay);
+    } finally {
+      if (state.turnPhase === 'resolving') {
+        state.dispatchAutoPlayPending = shouldAutoPlay && state.narrationAutoPlay;
+        state.turnPhase = 'results';
+        ui.setNarrationLoading(false, state);
+        ui.renderMap(state);
+        ui.updateActionState(state);
+      }
+    }
   }
 
   function queueNarrationRefresh(shouldAutoPlay = true) {
@@ -774,7 +1034,7 @@ export function createGameController({ state, ui, api, audio }) {
       const autoPlay = state.pendingNarrationAutoPlay;
       state.narrationRefreshTimer = null;
       state.pendingNarrationAutoPlay = true;
-      void loadNarration(autoPlay);
+      void loadNarrationAndCompleteTurn(autoPlay);
     }, 60);
   }
 
@@ -796,12 +1056,61 @@ export function createGameController({ state, ui, api, audio }) {
 
   async function loadEvents() {
     try {
-      const response = await api.getEvents(8);
-      state.events = response.events ?? [];
+      const response = await api.getEvents(200);
+      const events = response.events ?? [];
+      state.events = events.slice(0, 8);
+      const expeditionEvents = events.filter((event) => event.payload?.expeditionId === state.expeditionId);
+      state.metaDialogueHistory = expeditionEvents
+        .filter((event) => event.eventType === 'meta_dilemma_response')
+        .map((event) => ({
+          day: event.payload?.day,
+          prompt: event.payload?.prompt,
+          playerResponse: event.payload?.playerResponse,
+          approach: event.payload?.approach,
+          choice: event.payload?.choice
+        }))
+        .filter((payload) =>
+          Number.isInteger(payload.day) &&
+          typeof payload.prompt === 'string' &&
+          typeof payload.playerResponse === 'string' &&
+          typeof payload.approach === 'string' &&
+          typeof payload.choice === 'string'
+        )
+        .slice(0, 12)
+        .reverse();
+      const narrativeUpdates = expeditionEvents.filter((event) => event.eventType === 'dm_narrative_update');
+      state.recordedNarrativeUpdateKeys = narrativeUpdates
+        .map((event) => event.payload?.updateKey)
+        .filter((key) => typeof key === 'string')
+        .slice(0, 200);
+      state.dmDossierUpdates = narrativeUpdates
+        .slice(0, 12)
+        .reverse()
+        .flatMap((event) => [
+          ...(typeof event.payload?.sentimentDelta === 'string' ? [event.payload.sentimentDelta] : []),
+          ...(event.payload?.surrealMutation && typeof event.payload.surrealMutation.gameplayTwist === 'string'
+            ? [`Reality mutation ${event.payload.surrealMutation.title}: ${event.payload.surrealMutation.gameplayTwist}`]
+            : [])
+        ])
+        .slice(-12);
+      const resolvedMutationKeys = new Set(
+        expeditionEvents
+          .filter((event) => event.eventType === 'surreal_effect_resolution')
+          .map((event) => event.payload?.mutationKey)
+          .filter((key) => typeof key === 'string')
+      );
+      const unresolvedMutationEvent = narrativeUpdates.find((event) => {
+        const mutation = normalizeSurrealMutation(event.payload?.surrealMutation);
+        return mutation && !resolvedMutationKeys.has(event.payload?.mutationKey);
+      });
+      state.pendingSurrealEffect = unresolvedMutationEvent
+        ? normalizeSurrealMutation(unresolvedMutationEvent.payload.surrealMutation)
+        : null;
       ui.renderEventLog(state.events);
-    } catch {
+    } catch (error) {
       state.events = [];
       ui.renderEventLog([]);
+      console.error('Could not load shared ledger events', error);
     }
   }
 
@@ -834,7 +1143,9 @@ export function createGameController({ state, ui, api, audio }) {
 
     const requestId = ++state.narrationRequestId;
     state.narrationInFlightKey = stateKey;
-    ui.setNarrationLoading(true);
+    ui.setNarrationLoading(true, state);
+    ui.renderMap(state);
+    ui.updateActionState(state);
     try {
       const json = await api.getNarration(context);
       if (requestId !== state.narrationRequestId) {
@@ -842,7 +1153,14 @@ export function createGameController({ state, ui, api, audio }) {
         return;
       }
       const candidate = json?.narration;
-      if (candidate && state.latestNarration && isNarrationDuplicate(candidate.body, state.latestNarration.body) && !shouldAutoPlay) {
+      if (
+        candidate &&
+        state.latestNarration &&
+        isNarrationDuplicate(candidate.body, state.latestNarration.body) &&
+        !shouldAutoPlay &&
+        !context.justResolvedDecision &&
+        state.turnPhase !== 'resolving'
+      ) {
         debugNarration(state, 'loadNarration:duplicate-body', {
           requestId,
           stateKey,
@@ -851,6 +1169,11 @@ export function createGameController({ state, ui, api, audio }) {
           shouldAutoPlay
         });
         state.narrationInFlightKey = '';
+        if (state.turnPhase === 'dispatch') {
+          ui.setNarrationLoading(false, state);
+          ui.renderMap(state);
+          ui.updateActionState(state);
+        }
         return;
       }
       state.lastRemoteNarrationTriggerKey = remoteTrigger.key;
@@ -865,8 +1188,8 @@ export function createGameController({ state, ui, api, audio }) {
       debugNarration(state, 'loadNarration:error-fallback-local', { requestId, stateKey, error: String(error), trigger: remoteTrigger.reason });
       await renderNarrationCandidate(buildRoutineNarration(context, remoteTrigger.reason), shouldAutoPlay, stateKey);
     } finally {
-      if (requestId === state.narrationRequestId) {
-        ui.setNarrationLoading(false);
+      if (requestId === state.narrationRequestId && state.turnPhase !== 'resolving') {
+        ui.setNarrationLoading(false, state);
       }
     }
   }
@@ -881,7 +1204,7 @@ export function createGameController({ state, ui, api, audio }) {
         prevHash: latest?.eventHash ?? null,
         tileId: ledgerTileId,
         eventType,
-        payload
+        payload: { ...payload, expeditionId: state.expeditionId, expeditionName: state.expeditionName }
       });
 
       if (response.status === 409) {
@@ -974,14 +1297,14 @@ export function createGameController({ state, ui, api, audio }) {
   function handleWagonFailure(reason) {
     state.gameOver = true;
     state.journeyCompleted = false;
-    state.statusMessage = `The wagon failed: ${reason}. The trail has claimed another party.`;
+    state.statusMessage = `${state.expeditionName} lost the wagon: ${reason}. The trail has claimed another party.`;
     state.wagon.status = 'Wagon lost';
     ui.renderStatusBanner(state);
     ui.renderWagonState(state);
     ui.renderObjective(state);
     applyNarrationBeat(state, {
       headline: 'The trail has claimed this wagon.',
-      body: `Day ${state.day} ended near ${currentLocationName()}. ${reason}. The expedition is over.`
+      body: `${currentLocationName()} lies beneath a dim and empty sky. The wind moves over the abandoned trail without finding a voice.`
     });
     renderStoryPanel();
     ui.updateActionState(state);
@@ -990,7 +1313,7 @@ export function createGameController({ state, ui, api, audio }) {
   function handleJourneyArrival() {
     state.journeyCompleted = true;
     state.wagon.status = 'Arrived at the valley settlement';
-    state.statusMessage = 'You reached Willamette Valley. The crossing is complete, but your settlement choices still matter.';
+    state.statusMessage = `${state.expeditionName} reached Willamette Valley. The crossing is complete, but your settlement choices still matter.`;
   }
 
   function applySkippedActionConsequences(chosenAction, availableOptionsAtStop, tile) {
@@ -1034,17 +1357,17 @@ export function createGameController({ state, ui, api, audio }) {
     const tempC = tile?.weather?.tempC ?? 8;
     const biome = tile?.biome ?? 'unknown';
     const paceProfile = {
-      steady: { food: 1, water: 1, health: 0, breakdown: 0.05 },
-      strenuous: { food: 2, water: 2, health: 1, breakdown: 0.11 },
-      grueling: { food: 3, water: 3, health: 3, breakdown: 0.18 }
-    }[wagon.pace] ?? { food: 1, water: 1, health: 0, breakdown: 0.05 };
+      steady: { food: 0, water: 0, health: 0, breakdown: 0.05, fatigue: 1 },
+      strenuous: { food: 1, water: 1, health: 1, breakdown: 0.11, fatigue: 3 },
+      grueling: { food: 2, water: 2, health: 3, breakdown: 0.18, fatigue: 5 }
+    }[wagon.pace] ?? { food: 0, water: 0, health: 0, breakdown: 0.05, fatigue: 1 };
     const rationProfile = {
       filling: { foodScale: 1.1, health: 0, morale: 1 },
-      meager: { foodScale: 0.8, health: 1, morale: -1 },
-      'bare-bones': { foodScale: 0.55, health: 3, morale: -4 }
+      normal: { foodScale: 1, health: 0, morale: 0 },
+      meager: { foodScale: 0.8, health: 1, morale: -1 }
     }[wagon.rations] ?? { foodScale: 1, health: 0, morale: 0 };
-    let foodDrain = actionLabel === 'travel' ? 2 : actionLabel === 'camp' ? 1 : 1;
-    let waterDrain = actionLabel === 'travel' ? 3 : 1;
+    let foodDrain = actionLabel === 'travel' ? 10 : 8;
+    let waterDrain = actionLabel === 'travel' ? 4 : 2;
 
     if (rain >= 60) {
       waterDrain += 1;
@@ -1059,17 +1382,12 @@ export function createGameController({ state, ui, api, audio }) {
     if (biome === 'mountain' && actionLabel === 'travel') {
       foodDrain += 1;
     }
-    if (repeatCount >= 2 && (actionLabel === 'hunt' || actionLabel === 'camp')) {
-      foodDrain += 1;
-    }
+    if (repeatCount >= 2 && (actionLabel === 'hunt' || actionLabel === 'camp')) foodDrain += 1;
 
     foodDrain = Math.max(1, Math.round((foodDrain + paceProfile.food) * rationProfile.foodScale));
     waterDrain = Math.max(1, Math.round(waterDrain + paceProfile.water));
     wagon.food = Math.max(0, wagon.food - foodDrain);
     wagon.water = Math.max(0, wagon.water - waterDrain);
-    if (state.strangenessLevel >= 6 && actionLabel === 'travel') {
-      wagon.food = Math.max(0, wagon.food - 1);
-    }
     if ((tempC < 0 || rain > 70) && actionLabel !== 'trade') {
       if (wagon.wood > 0) {
         wagon.wood = Math.max(0, wagon.wood - 1);
@@ -1082,7 +1400,12 @@ export function createGameController({ state, ui, api, audio }) {
       ? (rain > 70 ? 2 : 1)
       : (rain > 70 ? 5 : rain > 45 ? 3 : 1);
     const biomeHealthPenalty = biome === 'mountain' && actionLabel === 'travel' ? 2 : 0;
-    applyPartyHealthDelta(state, -(weatherHealthPenalty + biomeHealthPenalty + paceProfile.health + rationProfile.health), {
+    const clothingProtection = tempC < 0
+      ? Math.min(4, wagon.clothingSets ?? 0) * 2
+      : rain > 70
+        ? Math.min(4, wagon.clothingSets ?? 0)
+        : 0;
+    applyPartyHealthDelta(state, -Math.max(0, weatherHealthPenalty + biomeHealthPenalty + paceProfile.health + rationProfile.health - clothingProtection), {
       status: rain > 70 ? 'Fever' : 'Exhaustion'
     });
     wagon.morale = Math.max(0, wagon.morale - (actionLabel === 'travel' ? 2 + Math.min(2, repeatCount) : 1) + rationProfile.morale);
@@ -1111,6 +1434,14 @@ export function createGameController({ state, ui, api, audio }) {
       wagon.morale = Math.max(0, wagon.morale - (restorativeAction ? 2 : 4));
     }
 
+    const loadTier = getCargoWeightTier(wagonLoadWeight(wagon));
+    if (actionLabel === 'travel') {
+      const loadFatigue = loadTier === 'overburdened' ? 4 : loadTier === 'nominal' ? 2 : 0;
+      wagon.oxenFatigue = Math.min(100, wagon.oxenFatigue + paceProfile.fatigue + loadFatigue);
+    } else if (actionLabel === 'camp') {
+      wagon.oxenFatigue = Math.max(0, wagon.oxenFatigue - (getRoleHolder(state, 'Carpenter') ? 18 : 12));
+    }
+
     const afflictionNote = maybeAfflictParty(tile);
     if (afflictionNote) {
       state.statusMessage = `${state.statusMessage} ${afflictionNote}`.trim();
@@ -1118,16 +1449,27 @@ export function createGameController({ state, ui, api, audio }) {
 
     if (actionLabel === 'travel' && !wagon.wagonParts.brokenPart) {
       const terrainBonus = biome === 'mountain' || biome === 'badlands' ? 0.18 : 0;
-      if (Math.random() < paceProfile.breakdown + terrainBonus) {
-        wagon.wagonParts.brokenPart = Math.random() < 0.5 ? 'Broken axle' : 'Shattered wheel';
-        if (wagon.wagonParts.brokenPart === 'Broken axle') {
-          wagon.wagonParts.axle = Math.max(0, wagon.wagonParts.axle - 35);
+      const loadPenalty = loadTier === 'overburdened' ? 0.08 : loadTier === 'light' ? -0.03 : 0;
+      const carpenter = getRoleHolder(state, 'Carpenter');
+      const carpenterProtection = carpenter ? 0.05 : 0;
+      const failureChance = Math.max(0.01, paceProfile.breakdown + terrainBonus + loadPenalty + wagon.oxenFatigue / 1000 - carpenterProtection);
+      if (Math.random() < failureChance) {
+        const failureRoll = Math.random();
+        const partKey = failureRoll < 0.34 ? 'axle' : failureRoll < 0.67 ? 'wheels' : 'tongue';
+        const spareKey = partKey === 'axle' ? 'spareAxles' : partKey === 'wheels' ? 'spareWheels' : 'spareTongues';
+        const partName = partKey === 'axle' ? 'Broken axle' : partKey === 'wheels' ? 'Shattered wheel' : 'Broken wagon tongue';
+        if (carpenter && wagon[spareKey] > 0) {
+          wagon[spareKey] -= 1;
+          wagon.wagonParts[partKey] = 100;
+          wagon.status = `${carpenter.name} replaced the ${partKey}`;
+          state.statusMessage = `${state.statusMessage} ${carpenter.name} fitted a spare ${partKey} before the wagon could be stranded.`;
         } else {
-          wagon.wagonParts.wheels = Math.max(0, wagon.wagonParts.wheels - 35);
+          wagon.wagonParts.brokenPart = partName;
+          wagon.wagonParts[partKey] = Math.max(0, wagon.wagonParts[partKey] - 35);
+          wagon.status = partName;
+          state.statusMessage = `${state.statusMessage} ${partName} left the wagon stranded until repaired.`;
+          setDecision(buildBreakdownDecision(wagon.wagonParts.brokenPart));
         }
-        wagon.status = wagon.wagonParts.brokenPart;
-        state.statusMessage = `${state.statusMessage} ${wagon.wagonParts.brokenPart} left the wagon stranded until repaired.`;
-        setDecision(buildBreakdownDecision(wagon.wagonParts.brokenPart));
       }
     }
 
@@ -1143,6 +1485,7 @@ export function createGameController({ state, ui, api, audio }) {
   function createWagonSummarySnapshot(wagon) {
     const supplies = toSupplySnapshot(wagon);
     return {
+      day: state.day,
       health: wagon.health,
       morale: wagon.morale,
       food: supplies.foodRations,
@@ -1150,15 +1493,26 @@ export function createGameController({ state, ui, api, audio }) {
       wood: supplies.firewoodBundles,
       medicine: supplies.medicineDoses,
       ammunition: supplies.ammunitionBoxes,
+      cash: wagon.cash,
+      cargoWeight: wagonLoadWeight(wagon),
+      oxenFatigue: wagon.oxenFatigue,
       axle: wagon.wagonParts.axle,
       wheels: wagon.wagonParts.wheels,
-      milesTraveled: state.milesTraveled
+      tongue: wagon.wagonParts.tongue,
+      milesTraveled: state.milesTraveled,
+      partyVitals: (wagon.party ?? []).map((member) => ({
+        id: member.id,
+        name: member.name,
+        health: member.health,
+        status: member.status
+      }))
     };
   }
 
-  function setActionSummary(actionType, beforeSnapshot) {
+  function setActionSummary(actionType, beforeSnapshot, { awaitingDispatch = true } = {}) {
     const afterSnapshot = createWagonSummarySnapshot(state.wagon);
     const metricConfig = [
+      { key: 'day', label: 'Days elapsed', suffix: ' days', invertTone: true },
       { key: 'health', label: 'Health', suffix: '' },
       { key: 'morale', label: 'Morale', suffix: '' },
       { key: 'food', label: 'Food', suffix: ' rations' },
@@ -1166,8 +1520,12 @@ export function createGameController({ state, ui, api, audio }) {
       { key: 'wood', label: 'Wood', suffix: ' bundles' },
       { key: 'medicine', label: 'Medicine', suffix: ' doses' },
       { key: 'ammunition', label: 'Ammo', suffix: ' boxes' },
+      { key: 'cash', label: 'Cash', suffix: '$', money: true },
+      { key: 'cargoWeight', label: 'Cargo load', suffix: ' lbs', invertTone: true },
+      { key: 'oxenFatigue', label: 'Oxen fatigue', suffix: '%', invertTone: true },
       { key: 'axle', label: 'Axle integrity', suffix: '%' },
       { key: 'wheels', label: 'Wheel integrity', suffix: '%' },
+      { key: 'tongue', label: 'Tongue integrity', suffix: '%' },
       { key: 'milesTraveled', label: 'Distance', suffix: ' mi' }
     ];
     const metrics = metricConfig
@@ -1176,13 +1534,36 @@ export function createGameController({ state, ui, api, audio }) {
         if (!delta) {
           return null;
         }
+        const formattedDelta = metric.money
+          ? `${delta > 0 ? '+' : '-'}$${Math.abs(delta).toFixed(2)}`
+          : `${delta > 0 ? '+' : ''}${delta}${metric.suffix}`;
         return {
           label: metric.label,
-          delta: `${delta > 0 ? '+' : ''}${delta}${metric.suffix}`,
-          tone: delta > 0 ? 'positive' : 'negative'
+          delta: formattedDelta,
+          tone: (delta > 0) !== Boolean(metric.invertTone) ? 'positive' : 'negative'
         };
       })
       .filter(Boolean);
+    const beforeParty = new Map((beforeSnapshot.partyVitals ?? []).map((member) => [member.id, member]));
+    for (const member of afterSnapshot.partyVitals) {
+      const previous = beforeParty.get(member.id);
+      if (!previous) continue;
+      const healthDelta = member.health - previous.health;
+      if (healthDelta) {
+        metrics.push({
+          label: `${member.name} health`,
+          delta: `${healthDelta > 0 ? '+' : ''}${healthDelta} HP`,
+          tone: healthDelta > 0 ? 'positive' : 'negative'
+        });
+      }
+      if (member.status !== previous.status) {
+        metrics.push({
+          label: `${member.name} status`,
+          delta: `${previous.status} -> ${member.status}`,
+          tone: 'neutral'
+        });
+      }
+    }
 
     state.lastActionSummary = {
       actionType,
@@ -1191,6 +1572,10 @@ export function createGameController({ state, ui, api, audio }) {
       detail: state.statusMessage,
       metrics: metrics.length ? metrics : [{ label: 'Outcome', delta: 'No immediate wagon change', tone: 'neutral' }]
     };
+    state.turnPhase = awaitingDispatch ? 'resolving' : 'results';
+    if (awaitingDispatch) {
+      ui.setNarrationLoading(true, state);
+    }
     ui.renderActionSummary(state);
   }
 
@@ -1199,9 +1584,21 @@ export function createGameController({ state, ui, api, audio }) {
   }
 
   async function handleAction(actionType, context = {}) {
-    if (state.gameOver || !state.journeyStarted || state.journeyLoading || state.actionInProgress) return;
+    if (state.gameOver || !state.journeyStarted || state.journeyLoading || state.actionInProgress || state.turnPhase === 'results' || state.turnPhase === 'resolving') return;
     if (state.journeyCompleted && actionType === 'press-on') return;
     if (state.activeDecision && !context.fromDecision) return;
+    if (actionType === 'press-on' && state.wagon.oxenYokes < 2) {
+      state.statusMessage = 'The wagon needs at least 2 yokes (4 oxen) before it can move.';
+      ui.renderStatusBanner(state);
+      ui.renderMap(state);
+      return;
+    }
+    if (actionType === 'press-on' && wagonLoadWeight(state.wagon) > WAGON_CAPACITY) {
+      state.statusMessage = 'The wagon is overloaded. Reduce cargo before pressing on.';
+      ui.renderStatusBanner(state);
+      ui.renderMap(state);
+      return;
+    }
 
     state.actionInProgress = true;
     const shouldAutoPlayNarration = actionType === 'press-on';
@@ -1213,11 +1610,13 @@ export function createGameController({ state, ui, api, audio }) {
       const availableOptionsAtStop = getAvailableActionOptions();
       const repeatCount = recentActionCount(actionType, 3);
       const { wagon } = state;
-      const beforeSummarySnapshot = createWagonSummarySnapshot(wagon);
+      const beforeSummarySnapshot = context.beforeSummarySnapshot ?? createWagonSummarySnapshot(wagon);
       syncWagonHealthFromParty(state);
       if (wagon.health <= 0) {
         handleWagonFailure('the crew collapsed under the accumulated strain');
         recordActionHistory(actionType, 'failed', availableOptionsAtStop);
+        setActionSummary(actionType, beforeSummarySnapshot);
+        ui.renderMap(state);
         queueNarrationRefresh(shouldAutoPlayNarration);
         return;
       }
@@ -1226,9 +1625,10 @@ export function createGameController({ state, ui, api, audio }) {
         state.statusMessage = `The wagon cannot move until the ${wagon.wagonParts.brokenPart.toLowerCase()} is repaired.`;
         setDecision(buildBreakdownDecision(wagon.wagonParts.brokenPart));
         ui.renderStatusBanner(state);
-        ui.renderMap(state);
         ui.updateActionState(state);
         recordActionHistory(actionType, 'blocked', availableOptionsAtStop);
+        setActionSummary(actionType, beforeSummarySnapshot, { awaitingDispatch: false });
+        ui.renderMap(state);
         return;
       }
 
@@ -1241,15 +1641,40 @@ export function createGameController({ state, ui, api, audio }) {
 
         const previousMiles = state.milesTraveled;
         const previousMilestone = getCurrentMilestone(state);
-        const calculatedMiles = calculateTravelMiles(selectedTile);
-        const milesGained = Math.min(calculatedMiles, TOTAL_TRAIL_MILES - previousMiles);
-        const destinationName = nextMilestone ? nextMilestone.name : 'Willamette Valley';
+        if (previousMilestone.id === 'the-dalles' && !state.dallesRouteChoice) {
+          setDecision(buildDallesRouteDecision());
+          state.statusMessage = 'The Dalles presents the final fork: pay for the Barlow Road or risk the Columbia River.';
+          ui.renderStatusBanner(state);
+          ui.renderMap(state);
+          return;
+        }
+        const pendingTravelMutation = getApplicableSurrealEffect(actionType);
+        const baseCalculatedMiles = calculateTravelMiles(selectedTile);
+        const mutationMiles = pendingTravelMutation?.mechanicalEffect.travelMilesDelta ?? 0;
+        let milesGained = Math.min(
+          Math.max(1, baseCalculatedMiles + mutationMiles),
+          TOTAL_TRAIL_MILES - previousMiles
+        );
+        const riverMilestone = context.riverContext
+          ? state.tileMap.find((milestone) => milestone.id === context.riverContext.nextTileId)
+          : null;
+        const destinationName = riverMilestone?.name ?? nextMilestone?.name ?? 'Willamette Valley';
 
-        const reachingRiver = nextMilestone && nextMilestone.biome === 'river' && (previousMiles + milesGained >= nextMilestone.mile);
+        const reachingRiver = !riverMilestone
+          && nextMilestone
+          && nextMilestone.id !== 'the-dalles'
+          && nextMilestone.biome === 'river'
+          && (previousMiles + milesGained >= nextMilestone.mile);
 
         if (reachingRiver && !context.riverChoice) {
           state.milesTraveled = nextMilestone.mile;
           syncTrailProgress();
+          await appendEvent('milestone_arrival', {
+            milestoneId: nextMilestone.id,
+            milestoneName: nextMilestone.name,
+            milesTraveled: state.milesTraveled,
+            note: `${state.expeditionName} reached ${nextMilestone.name} after ${state.milesTraveled} miles; river crossing remains ahead.`
+          });
           const riverData = nextMilestone.river ?? { depthFt: 2.8, flowRate: 180 };
           setDecision(buildRiverDecision(actionType, nextMilestone.id, 'west', destinationName, riverData));
           state.statusMessage = `You have reached ${destinationName}. Swollen river waters block the trail ahead.`;
@@ -1262,8 +1687,20 @@ export function createGameController({ state, ui, api, audio }) {
         }
 
         let riverOutcomeFeedback = '';
+        if (context.riverChoice === 'ferry' || context.riverChoice === 'guide') {
+          const ferryFare = riverFerryFare(riverMilestone?.id ?? nextMilestone?.id ?? '');
+          if (wagon.cash < ferryFare) {
+            state.statusMessage = `The ferry requires $${ferryFare.toFixed(2)}; only $${wagon.cash.toFixed(2)} remains. Choose another crossing.`;
+            const river = riverMilestone ?? nextMilestone;
+            setDecision(buildRiverDecision(actionType, river?.id ?? '', 'west', destinationName, river?.river ?? { depthFt: 2.8, flowRate: 180 }));
+            return;
+          }
+          wagon.cash -= ferryFare;
+          const service = context.riverChoice === 'guide' ? 'local river guide' : 'ferry';
+          riverOutcomeFeedback = `You paid $${ferryFare.toFixed(2)} for a ${service} and crossed ${destinationName} without risking the wagon or spending provisions.`;
+        }
         if (context.riverChoice) {
-          const riverSnapshot = nextMilestone?.river ?? { depthFt: 2.8, flowRate: 180 };
+          const riverSnapshot = riverMilestone?.river ?? nextMilestone?.river ?? { depthFt: 2.8, flowRate: 180 };
           if (context.riverChoice === 'caulk') {
             applyResourceDelta(wagon, 'wood', -2);
             state.day += 1;
@@ -1276,11 +1713,6 @@ export function createGameController({ state, ui, api, audio }) {
             } else {
               riverOutcomeFeedback = `You caulked the wagon box (-2 wood, +1 day) and floated safely across ${destinationName}. The pitch and timber held tight against the flow.`;
             }
-          } else if (context.riverChoice === 'ferry') {
-            const paidMedicine = wagon.medicine >= 2;
-            if (paidMedicine) applyResourceDelta(wagon, 'medicine', -2);
-            else applyResourceDelta(wagon, 'food', -2);
-            riverOutcomeFeedback = `You hired a ferry guide (${paidMedicine ? '2 medicine doses' : '2 food rations'}). The wagon crossed ${destinationName} without taking a drop of water.`;
           } else if (context.riverChoice === 'ford') {
             const depthFt = riverSnapshot.depthFt ?? 2.8;
             if (depthFt > 3) {
@@ -1297,13 +1729,18 @@ export function createGameController({ state, ui, api, audio }) {
 
         wagon.status = riverOutcomeFeedback ? 'Crossed river' : 'Pressing west';
         state.statusMessage = riverOutcomeFeedback || `The wagon presses on toward ${destinationName}.`;
+        const appliedMutation = await applyPendingSurrealEffect(actionType);
+        if (pendingTravelMutation && !appliedMutation) {
+          milesGained = Math.min(Math.max(1, baseCalculatedMiles), TOTAL_TRAIL_MILES - previousMiles);
+        }
         ui.renderWagonState(state);
         ui.renderStatusBanner(state);
         ui.updateActionState(state);
         await playWagonAnimation();
 
-        if (context.riverChoice && nextMilestone) {
-          state.milesTraveled = Math.min(TOTAL_TRAIL_MILES, nextMilestone.mile + Math.max(5, Math.round(milesGained / 2)));
+        const actualMilesGained = context.riverContext ? Math.max(5, Math.round(milesGained / 2)) : milesGained;
+        if (context.riverChoice && riverMilestone) {
+          state.milesTraveled = Math.min(TOTAL_TRAIL_MILES, riverMilestone.mile + actualMilesGained);
         } else {
           state.milesTraveled = Math.min(TOTAL_TRAIL_MILES, previousMiles + milesGained);
         }
@@ -1312,9 +1749,6 @@ export function createGameController({ state, ui, api, audio }) {
         const crossedMilestone = arrivedMilestone.id !== previousMilestone.id ? arrivedMilestone : null;
 
         wagon.status = 'Traversing the trail';
-        applyResourceDelta(wagon, 'food', -1);
-        applyResourceDelta(wagon, 'water', -1);
-        applyPartyHealthDelta(state, -(selectedTile.weather?.rain > 60 ? 4 : 1), { status: 'Exhaustion' });
         const travelSummary = crossedMilestone
           ? `You covered ${milesGained} miles and reached ${arrivedMilestone.name}.`
           : `You covered ${milesGained} miles west toward ${destinationName}. ${getMilesToNextMilestone(state)} miles remain to the next landmark.`;
@@ -1323,26 +1757,35 @@ export function createGameController({ state, ui, api, audio }) {
           fromTileId: previousMilestone.id,
           toTileId: arrivedMilestone.id,
           direction: 'west',
-          milesGained: context.riverChoice ? Math.max(5, Math.round(milesGained / 2)) : milesGained,
+          milesGained: actualMilesGained,
           milesTraveled: state.milesTraveled,
           note: crossedMilestone
-            ? `Wagon covered ${milesGained} miles and arrived at ${arrivedMilestone.name}.`
-            : `Wagon covered ${milesGained} miles west through ${selectedTile.biome || 'the trail'}.`
+            ? `${state.expeditionName} covered ${actualMilesGained} miles and arrived at ${arrivedMilestone.name}.`
+            : `${state.expeditionName} covered ${actualMilesGained} miles west through ${selectedTile.biome || 'the trail'}.`
         });
+        if (context.riverContext) {
+          await appendEvent('river_crossing', {
+            riverId: context.riverContext.nextTileId,
+            riverName: context.riverContext.destinationName,
+            crossingMethod: context.riverChoice,
+            farePaid: ['ferry', 'guide'].includes(context.riverChoice) ? riverFerryFare(context.riverContext.nextTileId) : 0,
+            note: riverOutcomeFeedback
+          });
+        }
         applyTurnPressure('travel', selectedTile, repeatCount);
         if (crossedMilestone && trailLandmarks[arrivedMilestone.id]) {
           await appendEvent('milestone_arrival', {
             milestoneId: arrivedMilestone.id,
             milestoneName: arrivedMilestone.name,
             milesTraveled: state.milesTraveled,
-            note: `Reached ${arrivedMilestone.name} after ${state.milesTraveled} miles on the trail.`
+            note: `${state.expeditionName} reached ${arrivedMilestone.name} after ${state.milesTraveled} miles on the trail.`
           });
         }
         if (state.journeyCompleted && !state.gameOver) {
           handleJourneyArrival();
         }
         recordActionHistory(actionType, 'completed', availableOptionsAtStop, {
-          milesGained,
+          milesGained: actualMilesGained,
           milesTraveled: state.milesTraveled,
           arrivedMilestoneName: crossedMilestone?.name,
           nextMilestoneName: getNextMilestone(state)?.name ?? 'Willamette Valley',
@@ -1351,29 +1794,16 @@ export function createGameController({ state, ui, api, audio }) {
           riverOutcome: riverOutcomeFeedback
         });
         setActionSummary(actionType, beforeSummarySnapshot);
+        ui.renderMap(state);
         ui.renderWagonState(state);
         ui.renderObjective(state);
         ui.renderStatusBanner(state);
         ui.renderHazardBanner(state);
         ui.renderSelectedTile(state.currentTrailSnapshot ?? selectedTile);
-        await loadNarration(shouldAutoPlayNarration);
-        ui.updateActionState(state);
         await loadEvents();
+        await loadNarrationAndCompleteTurn(shouldAutoPlayNarration);
+        ui.updateActionState(state);
         return;
-      }
-
-      if (actionType === 'warp-west') {
-        state.milesTraveled = Math.min(TOTAL_TRAIL_MILES, state.milesTraveled + 120);
-        syncTrailProgress();
-        wagon.morale = Math.max(0, wagon.morale - 20);
-        applyPartyHealthDelta(state, -14, { status: 'Delirium' });
-        wagon.status = 'Reality folded around the wagon';
-        state.statusMessage = 'Space folded in on itself and the wagon lurched far west at a ruinous cost to morale.';
-        await appendEvent('warp', {
-          toTileId: getCurrentMilestone(state).id,
-          milesTraveled: state.milesTraveled,
-          note: 'A high-strangeness fold warped the wagon westward.'
-        });
       }
 
       if (actionType === 'gather') {
@@ -1387,7 +1817,8 @@ export function createGameController({ state, ui, api, audio }) {
         const biomeBonus = selectedTile.biome === 'forest' && resourceType === 'wood' ? 3 : selectedTile.biome === 'river' && resourceType === 'water' ? 3 : 0;
         const rainPenalty = (selectedTile.weather?.rain ?? 0) > 75 ? 2 : 0;
         const repeatedPenalty = Math.min(4, repeatCount * 2);
-        const amount = Math.max(2, 8 + biomeBonus - rainPenalty - repeatedPenalty);
+        const guideForageBonus = resourceType === 'forage' && getRoleHolder(state, 'Guide') ? 2 : 0;
+        const amount = Math.max(2, 8 + biomeBonus + guideForageBonus - rainPenalty - repeatedPenalty);
         try {
           await finalizeResourceClaim('consume_resource', { nodeId, amount });
         } catch (claimError) {
@@ -1411,14 +1842,16 @@ export function createGameController({ state, ui, api, audio }) {
 
       if (actionType === 'camp') {
       const campPenalty = Math.min(6, repeatCount * 2);
-      const campRecovery = Math.max(5, 12 - campPenalty);
+      const campRecovery = Math.max(5, 12 - campPenalty + (getRoleHolder(state, 'Doctor') ? 4 : 0));
       applyTurnPressure('camp', selectedTile, repeatCount);
       if (state.gameOver) {
         recordActionHistory(actionType, 'failed', availableOptionsAtStop);
+        setActionSummary(actionType, beforeSummarySnapshot);
+        ui.renderMap(state);
         queueNarrationRefresh(shouldAutoPlayNarration);
         return;
       }
-      wagon.health = Math.min(100, wagon.health + campRecovery);
+      applyPartyHealthDelta(state, campRecovery);
       wagon.morale = Math.min(100, wagon.morale + Math.max(3, 8 - repeatCount));
       wagon.status = 'Camped for the night';
       state.statusMessage = repeatCount > 0
@@ -1440,11 +1873,12 @@ export function createGameController({ state, ui, api, audio }) {
       deer: { yield: 11, success: 0.75, weightPenalty: 1 },
       grouse: { yield: 6, success: 0.9, weightPenalty: 0 }
     }[context.huntTarget] ?? { yield: 8, success: 0.7, weightPenalty: 1 };
+    const guideBonus = getRoleHolder(state, 'Guide') ? 0.1 : 0;
     const biomeBonus = selectedTile.biome === 'plains' || selectedTile.biome === 'grassland' ? 3 : 0;
     const weatherPenalty = (selectedTile.weather?.windKph ?? 0) > 30 ? 2 : 0;
     const repeatedPenalty = Math.min(7, repeatCount * 3);
-    const successRoll = Math.random() <= targetConfig.success;
-    const foodGain = successRoll ? Math.max(2, targetConfig.yield + biomeBonus - weatherPenalty - repeatedPenalty - targetConfig.weightPenalty) : 0;
+    const successRoll = Math.random() <= Math.min(0.95, targetConfig.success + guideBonus);
+    const foodGain = successRoll ? Math.max(2, targetConfig.yield + biomeBonus + (guideBonus ? 3 : 0) - weatherPenalty - repeatedPenalty - targetConfig.weightPenalty) : 0;
     const gain = applyResourceDelta(wagon, 'forage', foodGain);
     wagon.morale = Math.min(100, wagon.morale + Math.max(1, 5 - repeatCount));
     wagon.status = 'Hunting for provisions';
@@ -1453,11 +1887,11 @@ export function createGameController({ state, ui, api, audio }) {
       const hunterName = guide ? guide.name : 'The hunting party';
       state.statusMessage = `${hunterName} brought down ${context.huntTarget} with a clean shot and returned with ${gain.applied} rations.`;
     } else {
-      const billy = (state.wagon.party ?? []).find((m) => m.name === 'Billy' && m.health > 0);
-      if (billy && Math.random() < 0.65) {
-        setPartyCondition(state, billy.id, 'Injured');
-        applyPartyHealthDelta(state, -10, { memberId: billy.id, status: 'Injured' });
-        state.statusMessage = `The ${context.huntTarget} slipped away after Billy tripped in the brush and hurt his ankle. He is now injured and needs medicine.`;
+      const youth = getRoleHolder(state, 'Youth');
+      if (youth && Math.random() < 0.65) {
+        setPartyCondition(state, youth.id, 'Injured');
+        applyPartyHealthDelta(state, -10, { memberId: youth.id, status: 'Injured' });
+        state.statusMessage = `The ${context.huntTarget} slipped away after ${youth.name} tripped in the brush and hurt their ankle. They are now injured and need medicine.`;
       } else {
         const member = randomLivingMember();
         if (member && Math.random() < 0.4) {
@@ -1488,19 +1922,24 @@ export function createGameController({ state, ui, api, audio }) {
       return;
     }
     if (wagon.medicine > 0) {
-      applyResourceDelta(wagon, 'medicine', -1);
+      const hasDoctor = Boolean(getRoleHolder(state, 'Doctor'));
+      const medicineCost = hasDoctor ? (wagon.doctorTreatments % 2 === 0 ? 1 : 0) : 1;
+      if (medicineCost) applyResourceDelta(wagon, 'medicine', -medicineCost);
+      if (hasDoctor) wagon.doctorTreatments += 1;
         applyTurnPressure('treat', selectedTile, repeatCount);
         if (state.gameOver) {
         recordActionHistory(actionType, 'failed', availableOptionsAtStop);
-        queueNarrationRefresh(shouldAutoPlayNarration);
-        return;
-      }
+          setActionSummary(actionType, beforeSummarySnapshot);
+          ui.renderMap(state);
+          queueNarrationRefresh(shouldAutoPlayNarration);
+          return;
+        }
       applyPartyHealthDelta(state, 18 + doctorHealBonus(), { memberId: patient.id });
       patient.status = 'Healthy';
       wagon.status = 'Treated illness';
       state.statusMessage = `${patient.name} steadied after treatment from the medical kit.`;
       await appendEvent('treat_illness', {
-        medicineUsed: 1,
+        medicineUsed: medicineCost,
         memberName: patient.name,
         note: `Treated ${patient.name} with a field remedy.`
       });
@@ -1516,6 +1955,8 @@ export function createGameController({ state, ui, api, audio }) {
       applyTurnPressure('treat', selectedTile, repeatCount);
       if (state.gameOver) {
           recordActionHistory(actionType, 'failed', availableOptionsAtStop);
+          setActionSummary(actionType, beforeSummarySnapshot);
+          ui.renderMap(state);
           queueNarrationRefresh(shouldAutoPlayNarration);
           return;
         }
@@ -1526,63 +1967,146 @@ export function createGameController({ state, ui, api, audio }) {
         if (state.activeDecision?.type === 'wagon-breakdown') {
           clearDecision({ render: false });
         }
-        const repairCost = breakdownRepairCost();
-        if (wagon.wood < repairCost) {
-          state.statusMessage = `Repairing the wagon needs ${repairCost} wood bundles.`;
+        const repaired = wagon.wagonParts.brokenPart;
+        if (context.useSpare && repaired) {
+          const partKey = repaired.toLowerCase().includes('axle')
+            ? 'axle'
+            : repaired.toLowerCase().includes('wheel')
+              ? 'wheels'
+              : 'tongue';
+          const spareKey = partKey === 'axle' ? 'spareAxles' : partKey === 'wheels' ? 'spareWheels' : 'spareTongues';
+          if (wagon[spareKey] > 0) {
+            wagon[spareKey] -= 1;
+            wagon.wagonParts[partKey] = 100;
+            wagon.wagonParts.brokenPart = null;
+            wagon.status = 'Wagon repaired with a spare';
+            state.statusMessage = `The spare ${partKey} replaced the broken part and returned the wagon to the trail.`;
+            await appendEvent('repair', { repairedPart: repaired, sparePartUsed: spareKey, note: state.statusMessage });
+          } else {
+            state.statusMessage = `No spare ${partKey} remains.`;
+            setDecision(buildBreakdownDecision(repaired));
+            return;
+          }
         } else {
-          applyResourceDelta(wagon, 'wood', -repairCost);
-          wagon.wagonParts.axle = Math.min(100, wagon.wagonParts.axle + 30);
-          wagon.wagonParts.wheels = Math.min(100, wagon.wagonParts.wheels + 30);
-          const repaired = wagon.wagonParts.brokenPart;
-          wagon.wagonParts.brokenPart = null;
-          wagon.status = 'Wagon repaired';
-          state.statusMessage = repaired
-            ? `You repaired the ${repaired.toLowerCase()} using ${repairCost} wood bundle${repairCost === 1 ? '' : 's'}.`
-            : `You reinforced the wagon with ${repairCost} wood bundle${repairCost === 1 ? '' : 's'}.`;
-          await appendEvent('repair', {
-            repairedPart: repaired ?? 'preventive maintenance',
-            woodSpent: repairCost,
-            note: repaired ? `Repaired ${repaired.toLowerCase()} with trail lumber.` : 'Performed preventive wagon repairs.'
-          });
+          const repairCost = breakdownRepairCost();
+          if (wagon.wood < repairCost) {
+            state.statusMessage = `Repairing the wagon needs ${repairCost} wood bundles.`;
+          } else {
+            applyResourceDelta(wagon, 'wood', -repairCost);
+            wagon.wagonParts.axle = Math.min(100, wagon.wagonParts.axle + 30);
+            wagon.wagonParts.wheels = Math.min(100, wagon.wagonParts.wheels + 30);
+            wagon.wagonParts.tongue = Math.min(100, wagon.wagonParts.tongue + 30);
+            wagon.wagonParts.brokenPart = null;
+            wagon.status = 'Wagon repaired';
+            state.statusMessage = repaired
+              ? `You repaired the ${repaired.toLowerCase()} using ${repairCost} wood bundle${repairCost === 1 ? '' : 's'}.`
+              : `You reinforced the wagon with ${repairCost} wood bundle${repairCost === 1 ? '' : 's'}.`;
+            await appendEvent('repair', {
+              repairedPart: repaired ?? 'preventive maintenance',
+              woodSpent: repairCost,
+              note: repaired ? `${state.expeditionName} repaired ${repaired.toLowerCase()} with trail lumber.` : 'Performed preventive wagon repairs.'
+            });
+          }
         }
         applyTurnPressure('camp', selectedTile, repeatCount);
       }
 
       if (actionType === 'trade') {
-      const woodSpent = 2;
-      const tradeMedicine = repeatCount >= 2 ? 0 : 1;
-      const trade = await api.proposeTrade({
-        counterpartyPubkey: 'self',
-        tileId: getCurrentMilestone(state).id,
-        offer: { wood: woodSpent },
-        request: { medicine: tradeMedicine }
-      });
-      await api.signTrade({
-        tradeId: trade.trade_id ?? trade.tradeId,
-        proposerPubkey: trade.proposer_pub_key ?? trade.proposer_pubkey,
-        counterpartyPubkey: trade.counterparty_pubkey,
-        offer: trade.offer,
-        request: trade.request
-      });
-      await api.commitTrade(trade.trade_id ?? trade.tradeId);
-      applyResourceDelta(wagon, 'wood', -woodSpent);
-      const medicineGain = applyResourceDelta(wagon, 'medicine', Number(trade.request?.medicine ?? 0)).applied;
-      wagon.status = 'Bartered for medicine';
-      state.statusMessage = medicineGain > 0
-        ? 'A passing settler sealed a signed trade for medicine in exchange for your firewood.'
-        : 'You recorded a hard bargain on the ledger, but the trail market yielded no medicine.';
-      applyTurnPressure('trade', selectedTile, repeatCount);
-    }
+        const fortId = getCurrentMilestone(state).id;
+        const isFort = ['fort-kearny', 'fort-laramie', 'fort-bridger'].includes(fortId);
+        if (isFort) {
+          if (!context.fortItemKey) {
+            const storeDecision = buildFortResupplyDecision(fortId);
+            if (storeDecision.options.length) {
+              setDecision(storeDecision);
+              return;
+            }
+            state.statusMessage = storeDecision.body;
+          } else {
+            const item = OUTFITTING_CATALOG.find((entry) => entry.key === context.fortItemKey);
+            const bindings = {
+              foodSacks: { wagonKey: 'food', quantity: 25 },
+              waterCasks: { wagonKey: 'water', quantity: 10 },
+              firewoodBundles: { wagonKey: 'wood', quantity: 1 },
+              ammunitionBoxes: { wagonKey: 'ammunition', quantity: 1 },
+              medicalKits: { wagonKey: 'medicine', quantity: 4 },
+              spareAxles: { wagonKey: 'spareAxles', quantity: 1 },
+              spareWheels: { wagonKey: 'spareWheels', quantity: 1 },
+              spareTongues: { wagonKey: 'spareTongues', quantity: 1 }
+            };
+            const binding = item ? bindings[item.key] : null;
+            if (!item || !binding) {
+              state.statusMessage = 'That item is not stocked at this fort.';
+            } else {
+              const price = item.price * storeMarkup(fortId);
+              const freeCapacity = WAGON_CAPACITY - wagonLoadWeight(wagon);
+              if (wagon.cash < price) {
+                state.statusMessage = `The item costs $${price.toFixed(2)}, but only $${wagon.cash.toFixed(2)} remains.`;
+              } else if (item.cargoWeight > freeCapacity) {
+                state.statusMessage = `There is not enough cargo room for ${item.name.toLowerCase()}.`;
+              } else {
+                let purchaseSucceeded = false;
+                if (binding.wagonKey.startsWith('spare')) {
+                  wagon[binding.wagonKey] += binding.quantity;
+                  purchaseSucceeded = true;
+                } else {
+                  const result = applyResourceDelta(wagon, binding.wagonKey, binding.quantity);
+                  purchaseSucceeded = result.applied === binding.quantity;
+                }
+                if (purchaseSucceeded) {
+                  wagon.cash -= price;
+                  state.statusMessage = `${state.expeditionName} bought ${item.name.toLowerCase()} at ${storeMarkup(fortId)}x the Independence price for $${price.toFixed(2)}.`;
+                  await appendEvent('fort_purchase', {
+                    fortId,
+                    item: item.key,
+                    price,
+                    cashRemaining: wagon.cash,
+                    note: state.statusMessage
+                  });
+                } else {
+                  state.statusMessage = `The wagon could not carry ${item.name.toLowerCase()}.`;
+                }
+              }
+            }
+          }
+        } else {
+          const woodSpent = 2;
+          const tradeMedicine = repeatCount >= 2 ? 0 : 1;
+          const trade = await api.proposeTrade({
+            counterpartyPubkey: 'self',
+            tileId: getCurrentMilestone(state).id,
+            offer: { wood: woodSpent },
+            request: { medicine: tradeMedicine }
+          });
+          await api.signTrade({
+            tradeId: trade.trade_id ?? trade.tradeId,
+            proposerPubkey: trade.proposer_pub_key ?? trade.proposer_pubkey,
+            counterpartyPubkey: trade.counterparty_pubkey,
+            offer: trade.offer,
+            request: trade.request
+          });
+          await api.commitTrade(trade.trade_id ?? trade.tradeId);
+          applyResourceDelta(wagon, 'wood', -woodSpent);
+          const medicineGain = applyResourceDelta(wagon, 'medicine', Number(trade.request?.medicine ?? 0)).applied;
+          wagon.status = 'Bartered for medicine';
+          state.statusMessage = medicineGain > 0
+            ? 'A passing settler sealed a signed trade for medicine in exchange for your firewood.'
+            : 'You recorded a hard bargain on the ledger, but the trail market yielded no medicine.';
+        }
+        applyTurnPressure('trade', selectedTile, repeatCount);
+      }
 
     if (actionType === 'scout') {
       const nextMilestone = getNextMilestone(state);
       const nextSnapshot = nextMilestone ? getTrailSnapshot({ ...state, milesTraveled: nextMilestone.mile }) : null;
+      const guide = getRoleHolder(state, 'Guide');
+      const guideName = guide?.name ?? 'The guide';
       applyTurnPressure('gather', selectedTile, repeatCount);
       wagon.status = 'Scouting ahead';
       wagon.morale = Math.min(100, wagon.morale + 2);
       state.statusMessage = nextMilestone && nextSnapshot
-        ? `Jedediah scouts ahead: ${nextMilestone.name} lies ${getMilesToNextMilestone(state)} miles west through ${nextSnapshot.biome}, with rain near ${Math.round(nextSnapshot.weather?.rain ?? 0)}%.`
-        : 'Jedediah scouts ahead and sees only the last miles into the valley.';
+        ? `${guideName} scouts ahead: ${nextMilestone.name} lies ${getMilesToNextMilestone(state)} miles west through ${nextSnapshot.biome}, with rain near ${Math.round(nextSnapshot.weather?.rain ?? 0)}%.`
+        : `${guideName} scouts ahead and sees only the last miles into the valley.`;
       await appendEvent('scout', {
         milestoneId: nextMilestone?.id ?? null,
         milestoneName: nextMilestone?.name ?? 'Willamette Valley',
@@ -1590,7 +2114,11 @@ export function createGameController({ state, ui, api, audio }) {
       });
     }
 
-    const skippedConsequenceNote = applySkippedActionConsequences(actionType, availableOptionsAtStop, selectedTile);
+      await applyPendingSurrealEffect(actionType);
+      if (actionType !== 'press-on') {
+        await playWagonAnimation(650);
+      }
+      const skippedConsequenceNote = applySkippedActionConsequences(actionType, availableOptionsAtStop, selectedTile);
     if (skippedConsequenceNote) {
       state.statusMessage = `${state.statusMessage} ${skippedConsequenceNote}`.trim();
     }
@@ -1599,6 +2127,8 @@ export function createGameController({ state, ui, api, audio }) {
 
       if (state.gameOver) {
         recordActionHistory(actionType, 'failed', availableOptionsAtStop);
+        setActionSummary(actionType, beforeSummarySnapshot);
+        ui.renderMap(state);
         queueNarrationRefresh(shouldAutoPlayNarration);
         return;
       }
@@ -1613,9 +2143,10 @@ export function createGameController({ state, ui, api, audio }) {
       syncTrailProgress();
       const currentTile = state.currentTrailSnapshot ?? selectedTile;
       ui.renderSelectedTile(currentTile);
-      await loadNarration(shouldAutoPlayNarration);
-      ui.updateActionState(state);
+      ui.renderMap(state);
       await loadEvents();
+      await loadNarrationAndCompleteTurn(shouldAutoPlayNarration);
+      ui.updateActionState(state);
     } finally {
       stopWagonAnimation();
       state.actionInProgress = false;
@@ -1624,24 +2155,331 @@ export function createGameController({ state, ui, api, audio }) {
     }
   }
 
-  async function beginJourney() {
-    if (state.journeyLoading) return;
-    state.journeyStarted = true;
+  async function generateOpeningPrologue() {
+    if (state.journeyLoading || state.setupStage !== 'prologue') return;
+    state.turnPhase = 'prologue';
+    state.journeyStarted = false;
+    state.prologueHeadline = '';
+    state.prologueParagraphs = [];
+    state.prologueReady = false;
+    state.setupError = '';
+    const startingStrangenessRoll = state.strangenessLevelOverride
+      ?? Math.floor(Math.random() * (MAX_STRANGENESS_LEVEL + 1));
+    state.strangenessLevel = startingStrangenessRoll;
     ui.hideJourneyModal();
     state.journeyLoading = true;
-    ui.setJourneyLoading(true);
+    ui.setJourneyLoading(true, 'prologue');
+    ui.syncJourneyControls(state);
+    let prologueReady = false;
     try {
-      await loadWorld();
+      await loadWorld({ includeNarration: false, includeEvents: false, includeNarrationAudio: false });
+      await loadEvents();
+      const genesisResponse = await api.getNarration({
+        ...getNarrationContext(),
+        promptType: 'prologue-genesis',
+        startingStrangenessRoll,
+        strangenessLevel: startingStrangenessRoll
+      });
+      const genesis = genesisResponse?.narration;
+      const paragraphs = Array.isArray(genesis?.prologueParagraphs)
+        ? genesis.prologueParagraphs.map((paragraph) => String(paragraph).trim()).filter(Boolean)
+        : [];
+      const openingText = paragraphs[0]?.slice(-500) ?? '';
+      const leadsIntoStore = /Independence General Store/i.test(openingText)
+        && /Independence, Missouri/i.test(openingText)
+        && /\b1848\b/.test(openingText)
+        && /\bready to choose\b/i.test(openingText);
+      if (paragraphs.length !== 1 || !String(genesis?.headline ?? '').trim() || !leadsIntoStore) {
+        throw new Error('The opening prologue did not end at the Independence General Store.');
+      }
+      state.prologueHeadline = String(genesis.headline).trim();
+      state.prologueParagraphs = paragraphs;
+      state.prologueReady = true;
+      prologueReady = true;
+    } catch (error) {
+      state.setupStage = 'register';
+      state.turnPhase = 'dispatch';
+      state.setupError = 'The opening story could not be prepared. Check the connection and confirm the roster to try again.';
+      console.error('Could not generate the opening prologue', error);
     } finally {
       state.journeyLoading = false;
       ui.setJourneyLoading(false);
+      ui.syncJourneyControls(state);
+      if (prologueReady) {
+        ui.renderMap(state);
+      } else {
+        ui.showJourneyModal(state);
+      }
       ui.updateActionState(state);
     }
+  }
+
+  async function beginJourney() {
+    if (state.journeyLoading || state.setupStage !== 'outfitting' || !state.prologueReady) return;
+    const startingBudget = getStartingCashForState(state);
+    const totals = getOutfittingTotals(state.outfittingCart);
+    if (state.outfittingCart.oxenYokes < 2) {
+      state.setupError = 'At least 2 yokes (4 oxen) are required to pull the wagon.';
+      ui.updateOutfittingCart(state);
+      return;
+    }
+    if (totals.cost > startingBudget) {
+      state.setupError = `The cart is $${(totals.cost - startingBudget).toFixed(2)} over budget. Remove provisions before departure.`;
+      ui.updateOutfittingCart(state);
+      return;
+    }
+    if (totals.cargoWeight > WAGON_CAPACITY) {
+      state.setupError = `The cart exceeds the 2,400 lb cargo limit by ${Math.ceil(totals.cargoWeight - WAGON_CAPACITY)} lbs.`;
+      ui.updateOutfittingCart(state);
+      return;
+    }
+
+    const cart = state.outfittingCart;
+    const wagon = state.wagon;
+    wagon.cash = startingBudget - totals.cost;
+    wagon.oxenYokes = cart.oxenYokes;
+    wagon.oxen = cart.oxenYokes * 2;
+    wagon.oxenFatigue = 0;
+    wagon.food = cart.foodSacks * 25;
+    wagon.water = cart.waterCasks * 10;
+    wagon.wood = cart.firewoodBundles;
+    wagon.ammunition = cart.ammunitionBoxes;
+    wagon.medicine = cart.medicalKits * 4;
+    wagon.spareAxles = cart.spareAxles;
+    wagon.spareWheels = cart.spareWheels;
+    wagon.spareTongues = cart.spareTongues;
+    wagon.clothingSets = cart.clothingSets;
+    wagon.wagonParts.tongue = 100;
+    state.outfittingProfile = outfitProfile(totals.cargoWeight, wagon.cash, wagon.oxenYokes);
+    state.setupError = '';
+    state.turnPhase = 'dispatch';
+    state.journeyStarted = false;
+    const startingStrangenessRoll = state.strangenessLevel;
+    const selectedEra = getEraById(state.selectedEra);
+    void audio.fadeOutSetupMusic();
+    ui.hideJourneyModal();
+    state.journeyLoading = true;
+    ui.setJourneyLoading(true);
+    ui.syncJourneyControls(state);
+    let departureRecorded = false;
+    try {
+      await loadWorld({ includeNarration: false, includeEvents: false, includeNarrationAudio: false });
+      await loadEvents();
+      await appendEvent('expedition_departure', {
+        expeditionName: state.expeditionName,
+        selectedEra: {
+          id: selectedEra.id,
+          label: selectedEra.label,
+          years: selectedEra.years
+        },
+        party: wagon.party.map(({ name, role, appearance }) => ({
+          name,
+          role,
+          gender: appearance?.gender ?? 'male',
+          outfitSummary: summarizeMemberOutfit(appearance)
+        })),
+        outfit: { ...cart },
+        cargoWeight: totals.cargoWeight,
+        payloadTier: getCargoWeightTier(totals.cargoWeight),
+        cashRemaining: wagon.cash,
+        outfittingProfile: state.outfittingProfile,
+        startingStrangenessRoll,
+        prologueHeadline: state.prologueHeadline,
+        prologueParagraphs: [...state.prologueParagraphs],
+        note: `${state.expeditionName} (${selectedEra.shortLabel || selectedEra.label}) departed Independence with ${wagon.oxenYokes} yokes, ${Math.round(totals.cargoWeight)} lbs of cargo, and starting strangeness ${startingStrangenessRoll}/10.`
+      });
+      state.setupStage = 'complete';
+      state.journeyStarted = true;
+      state.landscapeScrollX = 0;
+      departureRecorded = true;
+    } catch (error) {
+      state.journeyStarted = false;
+      state.setupStage = 'outfitting';
+      state.setupError = 'The departure could not be sealed in the shared ledger. Check the connection and try again.';
+      ui.renderMap(state);
+      void audio.playSetupMusic();
+      console.error('Could not seal the expedition departure', error);
+    } finally {
+      state.journeyLoading = false;
+      ui.setJourneyLoading(false);
+      ui.syncJourneyControls(state);
+      if (departureRecorded) {
+        ui.renderMap(state);
+        ui.renderEventLog(state.events);
+      }
+      ui.updateActionState(state);
+    }
+    if (departureRecorded) {
+      void playWagonAnimation(1100);
+      state.latestNarration = null;
+      state.narrationText = '';
+      state.narrationStateKey = '';
+      state.narrationInFlightKey = '';
+      state.lastRemoteNarrationTriggerKey = '';
+      await loadNarration(true);
+    }
+  }
+
+  async function startTrailAfterPrologue() {
+    if (state.turnPhase !== 'prologue' || state.setupStage !== 'prologue' || state.journeyLoading || !state.prologueReady) return;
+    await animateWalkToGeneralStore();
+    state.setupStage = 'outfitting';
+    state.turnPhase = 'dispatch';
+    state.journeyStarted = false;
+    ui.syncJourneyControls(state);
+    ui.renderMap(state);
+    ui.updateActionState(state);
+  }
+
+  function setPartyEra(eraId) {
+    const validEra = getEraById(eraId).id;
+    state.selectedEra = validEra;
+    (state.wagon.party ?? []).forEach((member, idx) => {
+      if (member.appearance) {
+        equipMemberEraOutfit(
+          member.appearance,
+          validEra,
+          member.appearance.preferredHeadwearType || (idx % 2 === 0 ? 'hat' : 'hair'),
+          idx
+        );
+      }
+    });
+    syncAllPartyAppearancesToEra(state.wagon.party, validEra);
+    state.setupError = '';
+    ui.renderJourneyModal(state);
+  }
+
+  function selectCreatorMember(index) {
+    const idx = Math.max(0, Math.min(3, Number(index) || 0));
+    state.activeCreatorMemberIndex = idx;
+    ui.renderJourneyModal(state);
+  }
+
+  function updateCreatorMember(update = {}) {
+    const idx = typeof update.memberIndex === 'number'
+      ? Math.max(0, Math.min(3, update.memberIndex))
+      : (state.activeCreatorMemberIndex ?? 0);
+    const member = state.wagon.party?.[idx];
+    if (!member) return;
+    syncAllPartyAppearancesToEra(state.wagon.party, state.selectedEra);
+
+    if (typeof update.expeditionName === 'string') {
+      state.expeditionName = update.expeditionName.slice(0, 48);
+    }
+    if (typeof update.name === 'string') {
+      member.name = update.name.slice(0, 24);
+    }
+    if (typeof update.role === 'string' && ARCHETYPE_OPTIONS.some((a) => a.role === update.role)) {
+      member.role = update.role;
+      state.wagon.cash = getStartingCashForState(state);
+    }
+    if (update.gender === 'female' || update.gender === 'male') {
+      member.appearance.gender = update.gender;
+      equipMemberEraOutfit(member.appearance, state.selectedEra, member.appearance.preferredHeadwearType || 'hat', idx);
+    }
+    if (typeof update.bodyTemplateId === 'string') {
+      member.appearance.bodyTemplateId = update.bodyTemplateId;
+    }
+    if (typeof update.skinToneId === 'string') {
+      member.appearance.skinToneId = update.skinToneId;
+    }
+    if (typeof update.creatorCategory === 'string') {
+      state.creatorCategory = update.creatorCategory;
+    }
+    if (typeof update.headwearSubFilter === 'string') {
+      state.creatorHeadwearSubFilter = update.headwearSubFilter;
+    }
+    if (update.presetCategory && typeof update.presetId === 'string') {
+      member.appearance.equippedPresets[update.presetCategory] = update.presetId;
+    }
+    if (update.dyeCategory && typeof update.dyeId === 'string') {
+      member.appearance.categoryDyes[update.dyeCategory] = update.dyeId;
+    }
+    if (update.action === 'randomize-member') {
+      randomizeMemberInEra(member.appearance, state.selectedEra);
+    } else if (update.action === 'randomize-party') {
+      (state.wagon.party ?? []).forEach((m) => randomizeMemberInEra(m.appearance, state.selectedEra));
+    } else if (update.action === 'equip-era-hat') {
+      equipMemberEraOutfit(member.appearance, state.selectedEra, 'hat', Math.floor(Math.random() * 6));
+    } else if (update.action === 'equip-era-hair') {
+      equipMemberEraOutfit(member.appearance, state.selectedEra, 'hair', Math.floor(Math.random() * 6));
+    }
+    if (update.renderModal !== false) {
+      ui.renderJourneyModal(state);
+    } else {
+      ui.refreshCreatorCanvases?.(state);
+    }
+  }
+
+  function configureParty(names = {}) {
+    const expeditionName = String(names.expeditionName ?? state.expeditionName ?? '').trim();
+    if (names.selectedEra) {
+      state.selectedEra = getEraById(names.selectedEra).id;
+    }
+    syncAllPartyAppearancesToEra(state.wagon.party, state.selectedEra);
+
+    if (Array.isArray(names.members) && names.members.length === 4) {
+      names.members.forEach((entry, idx) => {
+        const member = state.wagon.party[idx];
+        if (!member) return;
+        member.name = String(entry.name ?? '').trim().slice(0, 24);
+        if (entry.role && ARCHETYPE_OPTIONS.some((a) => a.role === entry.role)) {
+          member.role = entry.role;
+        }
+      });
+    } else if (names.guideName || names.doctorName || names.youthName || names.carpenterName) {
+      const legacyNames = [names.guideName, names.doctorName, names.youthName, names.carpenterName];
+      state.wagon.party.forEach((member, idx) => {
+        const candidate = String(legacyNames[idx] ?? member.name ?? '').trim();
+        if (candidate) member.name = candidate.slice(0, 24);
+      });
+    }
+
+    if (!expeditionName || state.wagon.party.some((m) => !String(m.name ?? '').trim())) {
+      state.setupError = 'Enter an expedition name and a first name for every party member.';
+      ui.showJourneyModal(state);
+      return;
+    }
+
+    state.expeditionName = expeditionName.slice(0, 48);
+    state.wagon.cash = getStartingCashForState(state);
+    state.landscapeCharX = 34;
+    state.landscapeScrollX = 0;
+    state.landscapeMoving = false;
+    state.setupError = '';
+    state.setupStage = 'prologue';
+    void generateOpeningPrologue();
+  }
+
+  function setOutfittingQuantity(key, rawQuantity) {
+    if (!OUTFITTING_CATALOG.some((item) => item.key === key)) return;
+    const quantity = Math.max(0, Math.min(999, Math.floor(Number(rawQuantity) || 0)));
+    state.outfittingCart[key] = quantity;
+    state.setupError = '';
+    ui.updateOutfittingCart(state);
+  }
+
+  function applyRecommendedOutfit() {
+    state.outfittingCart = { ...RECOMMENDED_OUTFIT };
+    state.setupError = '';
+    ui.updateOutfittingCart(state, true);
+  }
+
+  function returnToPartyRegister() {
+    state.setupStage = 'register';
+    state.turnPhase = 'dispatch';
+    state.prologueReady = false;
+    state.prologueHeadline = '';
+    state.prologueParagraphs = [];
+    state.setupError = '';
+    ui.renderMap(state);
+    ui.showJourneyModal(state);
   }
 
   function resetToJourneySetup() {
     resetExpedition(state);
     audio.stopAllNarration();
+    ui.setNarrationLoading(false, state);
     ui.resetActionButtons();
     ui.renderWagonState(state);
     ui.renderObjective(state);
@@ -1651,12 +2489,14 @@ export function createGameController({ state, ui, api, audio }) {
     ui.renderEventLog();
     ui.syncJourneyControls(state);
     ui.renderActionSummary(state);
-    ui.showJourneyModal();
+    ui.showJourneyModal(state);
+    void audio.playSetupMusic();
     ui.setJourneyLoading(false);
   }
 
   async function bootstrapApp() {
     resetExpedition(state);
+    ui.setNarrationLoading(false, state);
     ui.renderWagonState(state);
     ui.renderObjective(state);
     applyNarrationBeat(state, null);
@@ -1665,7 +2505,8 @@ export function createGameController({ state, ui, api, audio }) {
     ui.renderEventLog();
     ui.syncJourneyControls(state);
     ui.renderActionSummary(state);
-    ui.showJourneyModal();
+    ui.showJourneyModal(state);
+    void audio.playSetupMusic();
     try {
       await loadNarrationConfig();
     } catch {
@@ -1691,6 +2532,34 @@ export function createGameController({ state, ui, api, audio }) {
     ui.syncJourneyControls(state);
   }
 
+  function setStrangenessOverride(value) {
+    const override = value === '' ? null : Number(value);
+    if (override !== null && (!Number.isInteger(override) || override < 0 || override > MAX_STRANGENESS_LEVEL)) {
+      state.statusMessage = 'Invalid strangeness override. Choose a level from 0 to 10 or natural progression.';
+      ui.renderStatusBanner(state);
+      console.error('Rejected invalid strangeness test override', value);
+      return;
+    }
+
+    const previousLevel = getEffectiveStrangenessLevel(state);
+    state.strangenessLevelOverride = override;
+    ui.syncJourneyControls(state);
+    ui.renderMap(state);
+    if (previousLevel === getEffectiveStrangenessLevel(state)) return;
+
+    state.narrationStateKey = '';
+    state.lastRemoteNarrationTriggerKey = '';
+    if (
+      state.journeyStarted &&
+      !state.journeyLoading &&
+      !state.actionInProgress &&
+      !state.activeDecision &&
+      !state.activeObstacle
+    ) {
+      queueNarrationRefresh(false);
+    }
+  }
+
   function setPace(value) {
     state.wagon.pace = ['steady', 'strenuous', 'grueling'].includes(value) ? value : 'steady';
     state.statusMessage = `The wagon pace is now ${paceLabel(state.wagon.pace).toLowerCase()}.`;
@@ -1699,22 +2568,47 @@ export function createGameController({ state, ui, api, audio }) {
   }
 
   function setRations(value) {
-    state.wagon.rations = ['filling', 'meager', 'bare-bones'].includes(value) ? value : 'filling';
+    state.wagon.rations = ['filling', 'normal', 'meager'].includes(value) ? value : 'filling';
     state.statusMessage = `The ration plan is now ${rationsLabel(state.wagon.rations).toLowerCase()}.`;
     ui.renderMap(state);
     ui.renderWagonState(state);
   }
 
-  async function resolveDecisionChoice(choiceInput) {
+  async function resolveDecisionChoice(choiceInput, responseText = '') {
     const decision = state.activeDecision;
     if (!decision) return;
+    const pendingMetaDialogue = state.pendingMetaDialogue;
+    const effectiveChoiceInput = pendingMetaDialogue?.choiceId ?? choiceInput;
     const matchingOption = (decision.options ?? []).find(
-      (opt) => opt.id === choiceInput || String(opt.hotkey) === String(choiceInput)
+      (opt) => opt.id === effectiveChoiceInput || String(opt.hotkey) === String(effectiveChoiceInput)
     );
-    const choiceId = matchingOption ? matchingOption.id : choiceInput;
+    const choiceId = matchingOption ? matchingOption.id : effectiveChoiceInput;
+    const obstacle = decision.type === 'obstacle-dilemma'
+      ? decision.context?.obstacle ?? state.activeObstacle
+      : null;
+    const obstacleChoice = obstacle?.choices?.find((option) => option.id === choiceId);
+    if (obstacle?.dilemmaType === 'surreal' && obstacleChoice?.approach === 'meta-engagement' && !pendingMetaDialogue) {
+      state.pendingMetaDialogue = {
+        choiceId,
+        prompt: obstacle.description,
+        title: decision.title
+      };
+      ui.renderMap(state);
+      return;
+    }
+    const operatorResponse = pendingMetaDialogue ? String(responseText).trim().slice(0, 240) : '';
+    if (pendingMetaDialogue && !operatorResponse) {
+      ui.setDecisionInputFeedback('Type a response before sending it to the Operator.');
+      return;
+    }
+    state.pendingMetaDialogue = null;
     clearDecision({ render: false });
 
     if (decision.type === 'wagon-breakdown') {
+      if (choiceId === 'replace-spare') {
+        await handleAction('repair', { fromDecision: true, useSpare: true });
+        return;
+      }
       if (choiceId === 'repair-wood') {
         await handleAction('repair', { fromDecision: true });
         return;
@@ -1726,10 +2620,11 @@ export function createGameController({ state, ui, api, audio }) {
       if (choiceId === 'trade-spare') {
         const repairCost = breakdownRepairCost();
         if (state.wagon.food >= 2) {
+          const beforeSummarySnapshot = createWagonSummarySnapshot(state.wagon);
           applyResourceDelta(state.wagon, 'food', -2);
           applyResourceDelta(state.wagon, 'wood', repairCost);
           state.statusMessage = `You bartered 2 food rations for ${repairCost} wood bundles to fix the wagon.`;
-          await handleAction('repair', { fromDecision: true });
+          await handleAction('repair', { fromDecision: true, beforeSummarySnapshot });
         } else {
           state.statusMessage = 'Not enough food to barter. Try foraging for timber.';
           setDecision(buildBreakdownDecision(state.wagon.wagonParts.brokenPart ?? 'Broken part'));
@@ -1741,6 +2636,7 @@ export function createGameController({ state, ui, api, audio }) {
     if (decision.type === 'river-crossing') {
       if (choiceId === 'wait') {
         state.actionInProgress = true;
+        const beforeSummarySnapshot = createWagonSummarySnapshot(state.wagon);
         ui.updateActionState(state);
         try {
           const selectedTile = state.currentTrailSnapshot ?? fallbackTile;
@@ -1758,19 +2654,64 @@ export function createGameController({ state, ui, api, audio }) {
             note: `The wagon delayed at ${decision.context.destinationName}, hoping for lower water.`
           });
           await processPartyDeaths();
+          recordActionHistory('river-wait', state.gameOver ? 'failed' : 'completed', getAvailableActionOptions());
+          setActionSummary('river-wait', beforeSummarySnapshot);
           ui.renderStatusBanner(state);
           ui.renderWagonState(state);
           ui.renderMap(state);
           ui.updateActionState(state);
-          queueNarrationRefresh(false);
           await loadEvents();
+          queueNarrationRefresh(false);
         } finally {
           state.actionInProgress = false;
           ui.updateActionState(state);
         }
         return;
       }
-      await handleAction(decision.context.travelAction, { fromDecision: true, riverChoice: choiceId });
+      await handleAction(decision.context.travelAction, {
+        fromDecision: true,
+        riverChoice: choiceId,
+        riverContext: decision.context
+      });
+      return;
+    }
+
+    if (decision.type === 'dalles-route') {
+      const beforeSummarySnapshot = createWagonSummarySnapshot(state.wagon);
+      if (choiceId === 'barlow-road') {
+        if (state.wagon.cash < 10) {
+          state.statusMessage = 'The Barlow Road toll requires $10.00. The Columbia raft is still available.';
+          setDecision(buildDallesRouteDecision());
+          return;
+        }
+        state.wagon.cash -= 10;
+        state.dallesRouteChoice = 'barlow-road';
+        state.statusMessage = `${state.expeditionName} paid the $10.00 Barlow Road toll.`;
+        await appendEvent('route_choice', {
+          route: 'barlow-road',
+          tollPaid: 10,
+          note: `${state.expeditionName} paid the Barlow Road toll at The Dalles.`
+        });
+      } else if (choiceId === 'columbia-raft') {
+        state.dallesRouteChoice = 'columbia-raft';
+        applyPartyHealthDelta(state, -10, { status: 'Shaken' });
+        applyResourceDelta(state.wagon, 'food', -12);
+        applyResourceDelta(state.wagon, 'water', -5);
+        state.wagon.wagonParts.wheels = Math.max(0, state.wagon.wagonParts.wheels - 15);
+        state.statusMessage = `${state.expeditionName} risked the Columbia raft; spray soaked the cargo and battered the wagon.`;
+        await appendEvent('route_choice', {
+          route: 'columbia-raft',
+          foodLost: 12,
+          waterLost: 5,
+          note: state.statusMessage
+        });
+      }
+      await handleAction('press-on', { fromDecision: true, beforeSummarySnapshot });
+      return;
+    }
+
+    if (decision.type === 'fort-resupply') {
+      await handleAction('trade', { fromDecision: true, fortItemKey: choiceId });
       return;
     }
 
@@ -1790,11 +2731,11 @@ export function createGameController({ state, ui, api, audio }) {
     }
 
     if (decision.type === 'obstacle-dilemma') {
-      const obstacle = decision.context?.obstacle ?? state.activeObstacle;
-      const choice = obstacle?.choices?.find((option) => option.id === choiceId);
+      const choice = obstacleChoice;
       if (!choice) return;
 
       state.actionInProgress = true;
+      const beforeSummarySnapshot = createWagonSummarySnapshot(state.wagon);
       ui.updateActionState(state);
       try {
         const cost = choice.cost ?? {};
@@ -1812,7 +2753,20 @@ export function createGameController({ state, ui, api, audio }) {
         state.statusMessage = `${choice.label} resolved the dilemma. ${choice.description} ${describeObstacleCost(cost)}`.trim();
         state.lastObstacleDay = state.day;
         state.activeObstacle = null;
+        state.justResolvedDecision = {
+          decisionType: 'obstacle-dilemma',
+          kind: obstacle.dilemmaType,
+          prompt: obstacle.description,
+          chosenOption: choice.label,
+          chosenOptionId: choice.id,
+          rejectedOptions: obstacle.choices.filter((option) => option.id !== choice.id).map((option) => option.label),
+          costSummary: describeObstacleCost(cost),
+          responseText: operatorResponse || undefined,
+          outcome: state.statusMessage
+        };
         clearDecision({ render: false });
+        await applyPendingSurrealEffect('decision');
+        state.justResolvedDecision.outcome = state.statusMessage;
         await appendEvent('obstacle_resolution', {
           obstacle: obstacle.description,
           choiceId: choice.id,
@@ -1820,7 +2774,24 @@ export function createGameController({ state, ui, api, audio }) {
           cost,
           note: `${choice.label}: ${choice.description}`
         });
+        if (obstacle.dilemmaType === 'surreal') {
+          const dialogueEntry = {
+            day: state.day,
+            prompt: obstacle.description,
+            playerResponse: operatorResponse || choice.label,
+            approach: choice.approach ?? 'survival',
+            choice: choice.label
+          };
+          await appendEvent('meta_dilemma_response', {
+            ...dialogueEntry,
+            rejectedOptions: state.justResolvedDecision.rejectedOptions,
+            costSummary: state.justResolvedDecision.costSummary,
+            note: `${state.expeditionName} answered a reality dilemma through ${dialogueEntry.approach}.`
+          });
+          state.metaDialogueHistory = [...state.metaDialogueHistory, dialogueEntry].slice(-12);
+        }
         await processPartyDeaths();
+        setActionSummary('obstacle-dilemma', beforeSummarySnapshot);
         if (!state.gameOver) {
           ui.renderStatusBanner(state);
           ui.renderWagonState(state);
@@ -1828,6 +2799,9 @@ export function createGameController({ state, ui, api, audio }) {
           ui.renderHazardBanner(state);
           ui.updateActionState(state);
           await loadEvents();
+          queueNarrationRefresh(false);
+        } else {
+          ui.renderMap(state);
           queueNarrationRefresh(false);
         }
       } finally {
@@ -1840,19 +2814,48 @@ export function createGameController({ state, ui, api, audio }) {
     }
   }
 
+  function continueToDispatch() {
+    if (state.turnPhase !== 'results' || state.actionInProgress) return;
+    const shouldAutoPlay = state.dispatchAutoPlayPending;
+    state.dispatchAutoPlayPending = false;
+    state.turnPhase = 'dispatch';
+    ui.renderMap(state);
+    ui.updateActionState(state);
+    if (shouldAutoPlay) {
+      void audio.playNarration();
+    }
+  }
+
+  function cancelMetaDialogue() {
+    if (!state.pendingMetaDialogue) return;
+    state.pendingMetaDialogue = null;
+    ui.renderMap(state);
+  }
+
   return {
     beginJourney,
+    startTrailAfterPrologue,
     bootstrapApp,
+    cancelMetaDialogue,
+    continueToDispatch,
+    configureParty,
     handleAction,
     handleTileSelection,
     loadNarrationConfig,
     resolveDecisionChoice,
     renderStoryPanel,
     resetToJourneySetup,
+    applyRecommendedOutfit,
+    returnToPartyRegister,
+    setOutfittingQuantity,
+    setPartyEra,
+    selectCreatorMember,
+    updateCreatorMember,
     setPace,
     setRations,
     setJourneyAutoReadPreference,
     setJourneyCloudPreference,
-    setJourneyLlmPreference
+    setJourneyLlmPreference,
+    setStrangenessOverride
   };
 }

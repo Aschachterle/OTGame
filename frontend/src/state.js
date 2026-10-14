@@ -1,12 +1,71 @@
+import {
+  DEFAULT_PARTY_ERA_ID,
+  SKIN_TONES,
+  createMemberAppearance,
+  getEraById,
+  summarizeMemberOutfit,
+  syncAllPartyAppearancesToEra
+} from './character-designer.js';
+
 export const CLOUD_NARRATION_STORAGE_KEY = 'immutable-trail-cloud-narration';
 export const LLM_NARRATION_STORAGE_KEY = 'immutable-trail-llm-narration';
 export const AUTO_READ_STORAGE_KEY = 'immutable-trail-auto-read';
 export const START_TILE_ID = 'independence';
 export const FINISH_TILE_ID = 'willamette-valley';
 export const MAX_STRANGENESS_LEVEL = 10;
-export const WAGON_CAPACITY = 320;
+export const STARTING_CASH = 1000;
+export const WAGON_CAPACITY = 2400;
 export const TOTAL_TRAIL_MILES = 2000;
-export const ACTION_TYPES = ['press-on', 'camp', 'hunt', 'gather', 'treat', 'trade', 'repair', 'scout', 'warp-west'];
+export const ACTION_TYPES = ['press-on', 'camp', 'hunt', 'gather', 'treat', 'trade', 'repair', 'scout'];
+
+export function getStartingCashForState(state) {
+  const bankerCount = (state?.wagon?.party ?? []).filter((m) => m.role === 'Banker' && (m.health ?? 100) > 0).length;
+  return STARTING_CASH + bankerCount * 250;
+}
+export const OUTFITTING_CATALOG = [
+  { key: 'oxenYokes', id: 'oxen', name: 'Yoke of oxen', unit: 'yoke', price: 40, cargoWeight: 0, displayWeight: '1,000 lbs draft', detail: '2 oxen per yoke; at least 2 yokes required to travel.' },
+  { key: 'foodSacks', id: 'food', name: 'Food sack (25 lb)', unit: 'sack', price: 5, cargoWeight: 25, detail: '25 food rations.' },
+  { key: 'waterCasks', id: 'water', name: 'Fresh water cask (10 gal)', unit: 'cask', price: 2, cargoWeight: 80, detail: '10 gallons of water.' },
+  { key: 'firewoodBundles', id: 'wood', name: 'Firewood bundle', unit: 'bundle', price: 2, cargoWeight: 30, detail: '10 logs for warmth, boiling, and repairs.' },
+  { key: 'ammunitionBoxes', id: 'ammunition', name: 'Ammunition box (20)', unit: 'box', price: 2, cargoWeight: 3, detail: '20 cartridges for hunting.' },
+  { key: 'medicalKits', id: 'medicine', name: 'Medical kit (4 doses)', unit: 'kit', price: 8, cargoWeight: 2, detail: '4 field-treatment doses.' },
+  { key: 'spareAxles', id: 'axle', name: 'Spare axle', unit: 'each', price: 10, cargoWeight: 45, detail: 'Running-gear replacement.' },
+  { key: 'spareWheels', id: 'wheel', name: 'Spare wheel', unit: 'each', price: 12, cargoWeight: 50, detail: 'Running-gear replacement.' },
+  { key: 'spareTongues', id: 'tongue', name: 'Spare tongue', unit: 'each', price: 8, cargoWeight: 40, detail: 'Running-gear replacement.' },
+  { key: 'clothingSets', id: 'clothing', name: 'Warm clothing & bedding', unit: 'set', price: 10, cargoWeight: 15, detail: 'One set of wool clothing and bedding.' }
+];
+export const RECOMMENDED_OUTFIT = Object.freeze({
+  oxenYokes: 3,
+  foodSacks: 16,
+  waterCasks: 8,
+  firewoodBundles: 6,
+  ammunitionBoxes: 8,
+  medicalKits: 3,
+  spareAxles: 1,
+  spareWheels: 2,
+  spareTongues: 1,
+  clothingSets: 4
+});
+
+export function createOutfittingCart() {
+  return Object.fromEntries(OUTFITTING_CATALOG.map((item) => [item.key, 0]));
+}
+
+export function getOutfittingTotals(cart) {
+  return OUTFITTING_CATALOG.reduce((totals, item) => {
+    const quantity = Math.max(0, Math.floor(Number(cart?.[item.key]) || 0));
+    totals.cost += quantity * item.price;
+    totals.cargoWeight += quantity * item.cargoWeight;
+    return totals;
+  }, { cost: 0, cargoWeight: 0 });
+}
+
+export function getCargoWeightTier(weight) {
+  if (weight < 1400) return 'light';
+  if (weight <= 2100) return 'nominal';
+  if (weight <= WAGON_CAPACITY) return 'overburdened';
+  return 'overloaded';
+}
 
 export const fallbackWorld = {
   id: 'fallback-world',
@@ -264,29 +323,99 @@ function createInitialWagonState() {
     location: START_TILE_ID,
     health: 100,
     morale: 71,
-    food: 34,
-    water: 26,
-    wood: 12,
-    medicine: 3,
-    ammunition: 6,
+    cash: STARTING_CASH,
+    oxenYokes: 0,
+    oxen: 0,
+    oxenFatigue: 0,
+    food: 0,
+    water: 0,
+    wood: 0,
+    medicine: 0,
+    ammunition: 0,
+    spareAxles: 0,
+    spareWheels: 0,
+    spareTongues: 0,
+    clothingSets: 0,
+    doctorTreatments: 0,
     pace: 'steady',
     rations: 'filling',
     party,
     wagonParts: {
       axle: 100,
       wheels: 100,
+      tongue: 100,
       brokenPart: null
     },
     status: 'On the trail'
   };
 }
 
-function createInitialParty() {
+function createInitialParty(eraId = DEFAULT_PARTY_ERA_ID) {
   return [
-    { id: 'leader', name: 'Jedediah', role: 'Guide', health: 100, status: 'Healthy', deceasedLogged: false },
-    { id: 'member_1', name: 'Abigail', role: 'Doctor', health: 100, status: 'Healthy', deceasedLogged: false },
-    { id: 'member_2', name: 'Billy', role: 'Youth', health: 100, status: 'Healthy', deceasedLogged: false },
-    { id: 'member_3', name: 'Sarah', role: 'Carpenter', health: 100, status: 'Healthy', deceasedLogged: false }
+    {
+      id: 'leader',
+      name: 'Jedediah',
+      role: 'Guide',
+      health: 100,
+      status: 'Healthy',
+      deceasedLogged: false,
+      appearance: createMemberAppearance({
+        gender: 'male',
+        eraId,
+        bodyTemplateId: 'broad_guardian',
+        skinToneId: SKIN_TONES[0].id,
+        headwearType: 'hat',
+        variantIndex: 0
+      })
+    },
+    {
+      id: 'member_1',
+      name: 'Abigail',
+      role: 'Doctor',
+      health: 100,
+      status: 'Healthy',
+      deceasedLogged: false,
+      appearance: createMemberAppearance({
+        gender: 'female',
+        eraId,
+        bodyTemplateId: 'standard_adventurer',
+        skinToneId: SKIN_TONES[1].id,
+        headwearType: 'hat',
+        variantIndex: 0
+      })
+    },
+    {
+      id: 'member_2',
+      name: 'Billy',
+      role: 'Youth',
+      health: 100,
+      status: 'Healthy',
+      deceasedLogged: false,
+      appearance: createMemberAppearance({
+        gender: 'male',
+        eraId,
+        bodyTemplateId: 'nimble_scout',
+        skinToneId: SKIN_TONES[0].id,
+        headwearType: 'hair',
+        variantIndex: 1
+      })
+    },
+    {
+      id: 'member_3',
+      name: 'Sarah',
+      role: 'Carpenter',
+      health: 100,
+      status: 'Healthy',
+      deceasedLogged: false,
+      appearance: createMemberAppearance({
+        gender: 'female',
+        eraId,
+        bodyTemplateId: 'standard_adventurer',
+        skinToneId: SKIN_TONES[4].id,
+        headwearType: 'hair',
+        variantIndex: 1
+      })
+    }
   ];
 }
 
@@ -294,24 +423,44 @@ export function createAppState() {
   const currentTrailSnapshot = getTrailSnapshot({ milesTraveled: 0, currentMilestoneIndex: 0, day: 1 });
   return {
     tileMap: trailMilestones,
+    expeditionId: crypto.randomUUID(),
+    expeditionName: 'The Schachterle Family',
+    selectedEra: DEFAULT_PARTY_ERA_ID,
+    activeCreatorMemberIndex: 0,
+    creatorCategory: 'hats',
+    creatorHeadwearSubFilter: 'all',
+    landscapeCharX: 34,
+    landscapeScrollX: 0,
+    landscapeMoving: false,
+    setupStage: 'register',
+    setupError: '',
+    outfittingProfile: '',
+    prologueHeadline: '',
+    prologueParagraphs: [],
+    prologueReady: false,
+    outfittingCart: createOutfittingCart(),
+    dallesRouteChoice: null,
     milesTraveled: 0,
     currentMilestoneIndex: 0,
     currentTrailSnapshot,
     events: [],
     statusMessage: 'The trail is quiet. Pick a move and see what the world does next.',
     day: 1,
+    turnPhase: 'dispatch',
     gameOver: false,
     journeyCompleted: false,
     narrationAutoPlay: loadBooleanPreference(AUTO_READ_STORAGE_KEY, true),
     llmNarrationPreferred: loadBooleanPreference(LLM_NARRATION_STORAGE_KEY, true),
     narrationText: '',
     latestNarration: null,
+    narrationLoading: false,
     narrationRequestId: 0,
     narrationSpeechId: 0,
     narrationStateKey: '',
     narrationInFlightKey: '',
     narrationRefreshTimer: null,
     pendingNarrationAutoPlay: true,
+    dispatchAutoPlayPending: false,
     selectedVoiceName: '',
     availableVoices: [],
     llmNarrationAvailable: false,
@@ -329,6 +478,13 @@ export function createAppState() {
     recentObstacleHistory: [],
     storyKeyPoints: [],
     strangenessLevel: 0,
+    strangenessLevelOverride: null,
+    pendingSurrealEffect: null,
+    pendingMetaDialogue: null,
+    justResolvedDecision: null,
+    metaDialogueHistory: [],
+    dmDossierUpdates: [],
+    recordedNarrativeUpdateKeys: [],
     lastRemoteNarrationTriggerKey: '',
     lastObstacleDay: 0,
     activeObstacle: null,
@@ -337,27 +493,51 @@ export function createAppState() {
   };
 }
 
+export function getEffectiveStrangenessLevel(state) {
+  return state.strangenessLevelOverride ?? state.strangenessLevel;
+}
+
 export const appState = createAppState();
 
 export function resetExpedition(state = appState) {
   state.tileMap = trailMilestones;
+  state.expeditionId = crypto.randomUUID();
+  state.expeditionName = 'The Schachterle Family';
+  state.selectedEra = DEFAULT_PARTY_ERA_ID;
+  state.activeCreatorMemberIndex = 0;
+  state.creatorCategory = 'hats';
+  state.creatorHeadwearSubFilter = 'all';
+  state.landscapeCharX = 34;
+  state.landscapeScrollX = 0;
+  state.landscapeMoving = false;
+  state.setupStage = 'register';
+  state.setupError = '';
+  state.outfittingProfile = '';
+  state.prologueHeadline = '';
+  state.prologueParagraphs = [];
+  state.prologueReady = false;
+  state.outfittingCart = createOutfittingCart();
+  state.dallesRouteChoice = null;
   state.milesTraveled = 0;
   state.currentMilestoneIndex = 0;
   state.currentTrailSnapshot = getTrailSnapshot({ milesTraveled: 0, currentMilestoneIndex: 0, day: 1 });
   state.events = [];
   state.statusMessage = 'The trail is quiet. Pick a move and see what the world does next.';
   state.day = 1;
+  state.turnPhase = 'dispatch';
   state.gameOver = false;
   state.journeyCompleted = false;
   state.journeyStarted = false;
   state.narrationText = '';
   state.latestNarration = null;
+  state.narrationLoading = false;
   state.narrationRequestId = 0;
   state.narrationSpeechId = 0;
   state.narrationStateKey = '';
   state.narrationInFlightKey = '';
   state.narrationRefreshTimer = null;
   state.pendingNarrationAutoPlay = true;
+  state.dispatchAutoPlayPending = false;
   state.selectedVoiceName = '';
   state.availableVoices = [];
   state.elevenLabsAvailable = false;
@@ -372,6 +552,13 @@ export function resetExpedition(state = appState) {
   state.recentObstacleHistory = [];
   state.storyKeyPoints = [];
   state.strangenessLevel = 0;
+  state.strangenessLevelOverride = null;
+  state.pendingSurrealEffect = null;
+  state.pendingMetaDialogue = null;
+  state.justResolvedDecision = null;
+  state.metaDialogueHistory = [];
+  state.dmDossierUpdates = [];
+  state.recordedNarrativeUpdateKeys = [];
   state.lastRemoteNarrationTriggerKey = '';
   state.lastObstacleDay = 0;
   state.activeObstacle = null;
@@ -495,6 +682,7 @@ export function normalizeObstacleCandidate(obstacle) {
         id: choice.id.trim(),
         label: choice.label.trim(),
         description: choice.description.trim(),
+        approach: ['meta-engagement', 'reality-anchor', 'defiant-refusal'].includes(choice.approach) ? choice.approach : undefined,
         cost: {
           health: clampObstacleCostValue(cost.health),
           morale: clampObstacleCostValue(cost.morale),
@@ -513,13 +701,53 @@ export function normalizeObstacleCandidate(obstacle) {
   if (choices.length < 2) return null;
   return {
     description: obstacle.description.trim(),
+    dilemmaType: obstacle.dilemmaType === 'surreal' ? 'surreal' : 'survival',
     choices
   };
 }
 
+function clampSignedEffect(value, limit) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(-limit, Math.min(limit, Math.round(number))) : 0;
+}
+
+export function normalizeSurrealMutation(mutation) {
+  if (!mutation || typeof mutation !== 'object') return null;
+  const title = typeof mutation.title === 'string' ? mutation.title.trim().slice(0, 100) : '';
+  const manifestation = typeof mutation.manifestation === 'string' ? mutation.manifestation.trim().slice(0, 500) : '';
+  const gameplayTwist = typeof mutation.gameplayTwist === 'string' ? mutation.gameplayTwist.trim().slice(0, 300) : '';
+  const severity = typeof mutation.severity === 'string' ? mutation.severity.trim().slice(0, 40) : '';
+  if (!title || !manifestation || !gameplayTwist || !severity) return null;
+
+  const effect = mutation.mechanicalEffect && typeof mutation.mechanicalEffect === 'object'
+    ? mutation.mechanicalEffect
+    : {};
+  return {
+    mutationKey: typeof mutation.mutationKey === 'string' ? mutation.mutationKey : '',
+    title,
+    manifestation,
+    gameplayTwist,
+    severity,
+    mechanicalEffect: {
+      trigger: ['next_action', 'next_travel', 'next_camp'].includes(effect.trigger) ? effect.trigger : 'next_action',
+      travelMilesDelta: clampSignedEffect(effect.travelMilesDelta, 20),
+      healthDelta: clampSignedEffect(effect.healthDelta, 10),
+      moraleDelta: clampSignedEffect(effect.moraleDelta, 15),
+      foodDelta: clampSignedEffect(effect.foodDelta, 5),
+      waterDelta: clampSignedEffect(effect.waterDelta, 5),
+      woodDelta: clampSignedEffect(effect.woodDelta, 3),
+      medicineDelta: clampSignedEffect(effect.medicineDelta, 2)
+    }
+  };
+}
+
 export function applyNarrationBeat(state, narration) {
-  state.latestNarration = narration;
+  const surrealMutation = normalizeSurrealMutation(narration?.surrealMutation);
+  state.latestNarration = narration ? { ...narration, surrealMutation: surrealMutation ?? undefined } : narration;
   state.activeObstacle = normalizeObstacleCandidate(narration?.obstacle);
+  if (surrealMutation) {
+    state.pendingSurrealEffect = surrealMutation;
+  }
   state.narrationText = narration?.body ?? '';
   if (narration?.body) {
     rememberNarrationBody(state, narration.body);
@@ -539,15 +767,14 @@ export function describeAction(actionType) {
     trade: 'Trade resources',
     repair: 'Repair wagon',
     scout: 'Scout ahead',
-    'warp-west': 'Warp west'
   };
   return actionMap[actionType] ?? actionType;
 }
 
 export function toSupplySnapshot(wagon) {
   return {
-    foodRations: Math.max(0, Math.round(wagon.food * 2)),
-    waterGallons: Math.max(0, Math.round(wagon.water * 3)),
+    foodRations: Math.max(0, Math.round(wagon.food)),
+    waterGallons: Math.max(0, Math.round(wagon.water)),
     firewoodBundles: Math.max(0, Math.round(wagon.wood)),
     medicineDoses: Math.max(0, Math.round(wagon.medicine)),
     ammunitionBoxes: Math.max(0, Math.round(wagon.ammunition))
@@ -564,7 +791,15 @@ export function resourceUnitsLabel(resourceType) {
 }
 
 export function wagonLoadWeight(wagon) {
-  return (wagon.food * 2) + (wagon.water * 3) + (wagon.wood * 4) + (wagon.medicine * 0.5) + (wagon.ammunition * 3);
+  return (wagon.food * 1)
+    + (wagon.water * 8)
+    + (wagon.wood * 30)
+    + (wagon.medicine * 0.5)
+    + (wagon.ammunition * 3)
+    + ((wagon.spareAxles ?? 0) * 45)
+    + ((wagon.spareWheels ?? 0) * 50)
+    + ((wagon.spareTongues ?? 0) * 40)
+    + ((wagon.clothingSets ?? 0) * 15);
 }
 
 export function averagePartyHealth(party = []) {
@@ -584,6 +819,10 @@ export function getLivingPartyMembers(state) {
 
 export function getRoleHolder(state, role) {
   return (state.wagon.party ?? []).find((member) => member.role === role && member.health > 0) ?? null;
+}
+
+export function getRoleCount(state, role) {
+  return (state.wagon.party ?? []).filter((member) => member.role === role && member.health > 0).length;
 }
 
 export function applyPartyHealthDelta(state, delta, options = {}) {
@@ -639,8 +878,8 @@ export function paceLabel(value) {
 export function rationsLabel(value) {
   const labels = {
     filling: 'Filling',
+    normal: 'Normal',
     meager: 'Meager',
-    'bare-bones': 'Bare Bones'
   };
   return labels[value] ?? value;
 }

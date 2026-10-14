@@ -4,12 +4,27 @@ export type NarrationEvent = {
 };
 
 export type NarrationContext = {
+  promptType?: 'dispatch' | 'prologue-genesis';
+  startingStrangenessRoll?: number;
+  selectedEra?: {
+    id: string;
+    label: string;
+    shortLabel?: string;
+    years?: string;
+  };
+  outfittingSummary?: {
+    cashReserved: number;
+    cargoWeightLbs: number;
+    oxenYokes: number;
+    notableSupplies: string;
+  };
   expeditionName?: string;
   day: number;
   tileId: string;
   locationName?: string;
   currentLandmark?: string;
   nextLandmark?: string | null;
+  nextMilestone?: string | null;
   milesTraveled?: number;
   totalMiles?: number;
   biome: string;
@@ -30,6 +45,12 @@ export type NarrationContext = {
     wood: number;
     medicine: number;
     status: string;
+    cash?: number;
+    oxen?: number;
+    oxenYokes?: number;
+    cargoWeight?: number;
+    payloadTier?: string;
+    rations?: string;
   };
   supplyEstimates?: {
     foodRations: number;
@@ -39,8 +60,11 @@ export type NarrationContext = {
     ammunitionBoxes?: number;
   };
   party?: Array<{
+    id?: string;
     name: string;
     role: string;
+    gender?: string;
+    outfitSummary?: string;
     health: number;
     status: string;
   }>;
@@ -85,7 +109,29 @@ export type NarrationContext = {
     chosenOptionId?: string;
     rejectedOptions?: string[];
     costSummary?: string;
+    responseText?: string;
     outcome?: string;
+  } | null;
+  metaDialogueHistory?: Array<{
+    day: number;
+    prompt: string;
+    playerResponse: string;
+    approach: string;
+    choice: string;
+  }>;
+  pendingSurrealEffect?: {
+    title: string;
+    gameplayTwist: string;
+    mechanicalEffect: {
+      trigger: 'next_action' | 'next_travel' | 'next_camp';
+      travelMilesDelta: number;
+      healthDelta: number;
+      moraleDelta: number;
+      foodDelta: number;
+      waterDelta: number;
+      woodDelta: number;
+      medicineDelta: number;
+    };
   } | null;
   priorNarration?: string[];
   priorKeyPoints?: string[];
@@ -133,7 +179,11 @@ export type NarrationContext = {
     riskHabit?: string;
     recentDecisions?: string[];
     crewSentiment?: string;
+    outfittingProfile?: string;
+    entityMemory?: string[];
+    aiNotes?: string[];
   };
+  outfittingProfile?: string;
 };
 
 export type NarrationObstacleChoice = {
@@ -157,37 +207,6 @@ export type NarrationObstacle = {
   choices: NarrationObstacleChoice[];
 };
 
-function recentEventLine(events: NarrationEvent[]): string {
-  const latest = events[0];
-  if (!latest) {
-    return 'No one has written to the trail today.';
-  }
-
-  const payload = latest.payload ?? {};
-  const detail =
-    typeof payload.note === 'string'
-      ? payload.note
-      : typeof payload.direction === 'string'
-        ? `moved ${payload.direction}`
-        : typeof payload.resourceType === 'string'
-          ? `worked a ${payload.resourceType} node`
-          : latest.eventType.replace(/_/g, ' ');
-
-  return `The latest mark on the ledger: ${detail}.`;
-}
-
-function describeActionLabel(actionType: string): string {
-  if (actionType === 'press-on') return 'press on';
-  if (actionType === 'gather') return 'gather supplies';
-  if (actionType === 'camp') return 'make camp';
-  if (actionType === 'hunt') return 'hunt';
-  if (actionType === 'treat') return 'treat illness';
-  if (actionType === 'trade') return 'trade';
-  if (actionType === 'repair') return 'repair the wagon';
-  if (actionType === 'scout') return 'scout ahead';
-  return actionType.replace(/-/g, ' ');
-}
-
 function normalizeNarrationPhrase(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 }
@@ -207,9 +226,7 @@ function chooseNarrationPhrase(context: NarrationContext, options: string[], sal
 }
 
 export function composeNarration(context: NarrationContext) {
-  const expeditionName = context.expeditionName?.trim() || 'The wagon party';
   const location = context.currentLandmark ?? context.locationName ?? 'the trail';
-  const nextLandmark = context.nextLandmark ?? 'the next landmark';
   const weatherMood =
     context.weather.rain > 70
       ? chooseNarrationPhrase(context, [
@@ -278,26 +295,27 @@ export function composeNarration(context: NarrationContext) {
               'The party keeps a cautious rhythm, finding comfort in familiar chores.',
               'No one mistakes the road for kindness, but the crew has not yet lost its resolve.'
             ], 8);
-  const supplies = context.supplyEstimates
-    ? `${context.supplyEstimates.foodRations} rations, ${context.supplyEstimates.waterGallons} gal water, ${context.supplyEstimates.firewoodBundles} wood, ${context.supplyEstimates.medicineDoses} medicine`
-    : 'their stores under close watch';
-  const lastAction = context.lastAction;
-  const actionLine = context.justResolvedDecision
-    ? `${expeditionName} ${context.justResolvedDecision.chosenOption.toLowerCase()} at ${location}, and the choice leaves its mark at once.`
-    : lastAction?.actionType === 'press-on'
-      ? `${expeditionName} presses west from ${location}, taking ${lastAction.milesGained ?? 0} miles from the trail.`
-      : lastAction
-        ? `${expeditionName} stops at ${location} to ${describeActionLabel(lastAction.actionType)}, surrendering distance for necessity.`
-        : `${expeditionName} stands at ${location}, the trail still measuring the party before the next mile.`;
+  const speaker = context.party?.find((member) => member.status !== 'Dead');
+  const dialogueOptions = speaker?.role === 'Guide'
+    ? ['The western sky is changing; keep watch on the ridge.', 'The ruts are telling us more than the map ever could.', 'We will have to read the weather one mile at a time.']
+    : speaker?.role === 'Doctor'
+      ? ['Stay close to the blankets when the light goes.', 'A little rest now is worth more than courage spent foolishly.', 'Keep your water covered; the dust is thick today.']
+      : speaker?.role === 'Youth'
+        ? ['Do you think Oregon really looks the way they say?', 'I can keep walking; just do not leave me behind.', 'Will the sky be this wide all the way west?']
+        : speaker?.role === 'Carpenter'
+          ? ['A sound wheel is worth more than a fast mile.', 'Keep the timber dry, and I can mend what the road gives us.', 'That wagon will hold if we do not ask too much of it.']
+          : ['The road is quiet, but I do not trust it.', 'We should keep together until the light changes.', 'There is more to this country than the map can show.'];
+  const dialogue = chooseNarrationPhrase(context, dialogueOptions, 9);
+  const characterLine = speaker
+    ? `${speaker.name} says, "${dialogue}"`
+    : `A line in the family journal reads, "${dialogue}"`;
   const sensesLine = `${weatherMood} ${strainMood}`;
-  const outcomeLine = context.gameOver
-    ? `The day closes in failure, and the trail keeps the memory of what was lost here.`
-    : context.journeyCompleted
-      ? `The route is complete at last; what remains is settlement, burial, or the long aftertaste of survival.`
-      : context.justResolvedDecision
-        ? `${context.justResolvedDecision.outcome ?? 'The cost settles over the camp.'} Stores now stand at ${supplies}. ${recentEventLine(context.recentEvents)}`
-        : `${recentEventLine(context.recentEvents)} Stores hold at ${supplies}. ${nextLandmark ? `Next landmark: ${nextLandmark}.` : ''}`.trim();
-  const lines = [actionLine, sensesLine, outcomeLine];
+  const landscapeLine = context.journeyCompleted
+    ? `The valley opens beneath a broad sky, its distant fields marked by smoke and timber.`
+    : context.gameOver
+      ? `${location} settles into a stillness that seems to reach beyond the trail.`
+      : `Beyond ${location}, the road runs through ${context.biome} beneath a sky with no promise in it.`;
+  const lines = [landscapeLine, sensesLine, characterLine];
 
   return {
     source: 'deterministic',

@@ -6,6 +6,20 @@ import { composeNarration } from '../lib/narration.js';
 import { generateNarrationBeat, isLlmNarrationEnabled } from '../lib/story-ai.js';
 
 const narrationSchema = z.object({
+  promptType: z.enum(['dispatch', 'prologue-genesis']).default('dispatch'),
+  startingStrangenessRoll: z.number().int().min(0).max(10).optional(),
+  selectedEra: z.object({
+    id: z.string().min(1).max(40),
+    label: z.string().min(1).max(120),
+    shortLabel: z.string().max(60).optional(),
+    years: z.string().max(40).optional()
+  }).optional(),
+  outfittingSummary: z.object({
+    cashReserved: z.number().nonnegative(),
+    cargoWeightLbs: z.number().nonnegative(),
+    oxenYokes: z.number().int().nonnegative(),
+    notableSupplies: z.string().max(600)
+  }).optional(),
   day: z.number().int().positive(),
   tileId: z.string(),
   locationName: z.string().optional(),
@@ -33,6 +47,8 @@ const narrationSchema = z.object({
       id: z.string().optional(),
       name: z.string(),
       role: z.string(),
+      gender: z.string().optional(),
+      outfitSummary: z.string().max(400).optional(),
       health: z.number(),
       status: z.string(),
       deceasedLogged: z.boolean().optional()
@@ -118,6 +134,7 @@ const narrationSchema = z.object({
   isMajorLandmark: z.boolean().default(false),
   milesTraveled: z.number().optional(),
   currentLandmark: z.string().optional(),
+  nextLandmark: z.string().nullable().optional(),
   nextMilestone: z.string().nullable().optional(),
   dmDossier: z.object({
     temperament: z.string().optional(),
@@ -125,11 +142,42 @@ const narrationSchema = z.object({
     crewCompassion: z.string().optional(),
     riskHabit: z.string().optional(),
     recentDecisions: z.array(z.string()).default([]),
-    crewSentiment: z.string().optional()
+    crewSentiment: z.string().optional(),
+    outfittingProfile: z.string().optional(),
+    entityMemory: z.array(z.string().max(400)).max(12).default([]),
+    aiNotes: z.array(z.string().max(300)).max(12).default([])
   }).optional(),
+  outfittingProfile: z.string().optional(),
+  metaDialogueHistory: z.array(z.object({
+    day: z.number().int().positive(),
+    prompt: z.string().max(260),
+    playerResponse: z.string().max(240),
+    approach: z.string().max(40),
+    choice: z.string().max(120)
+  })).max(12).default([]),
+  pendingSurrealEffect: z.object({
+    title: z.string().max(100),
+    gameplayTwist: z.string().max(300),
+    mechanicalEffect: z.object({
+      trigger: z.enum(['next_action', 'next_travel', 'next_camp']),
+      travelMilesDelta: z.number().int().min(-20).max(20),
+      healthDelta: z.number().int().min(-10).max(10),
+      moraleDelta: z.number().int().min(-15).max(15),
+      foodDelta: z.number().int().min(-5).max(5),
+      waterDelta: z.number().int().min(-5).max(5),
+      woodDelta: z.number().int().min(-3).max(3),
+      medicineDelta: z.number().int().min(-2).max(2)
+    })
+  }).nullable().optional(),
   justResolvedDecision: z.object({
     decisionType: z.string(),
+    kind: z.string().optional(),
+    prompt: z.string().max(260).optional(),
     chosenOption: z.string(),
+    chosenOptionId: z.string().optional(),
+    rejectedOptions: z.array(z.string().max(120)).max(3).default([]),
+    costSummary: z.string().max(300).optional(),
+    responseText: z.string().max(240).optional(),
     outcome: z.string().optional()
   }).nullable().optional()
 });
@@ -157,7 +205,11 @@ export async function registerNarrationRoutes(app: FastifyInstance): Promise<voi
       return reply.code(400).send({ error: 'Invalid narration context', details: parsed.error.flatten() });
     }
 
-    const narration = await generateNarrationBeat(parsed.data);
+    const narrationContext = {
+      ...parsed.data,
+      nextLandmark: parsed.data.nextLandmark ?? parsed.data.nextMilestone ?? null
+    };
+    const narration = await generateNarrationBeat(narrationContext);
     return { narration };
   });
 
@@ -171,7 +223,12 @@ export async function registerNarrationRoutes(app: FastifyInstance): Promise<voi
       return reply.code(503).send({ error: 'ElevenLabs is not configured' });
     }
 
-    const narrationText = 'text' in parsed.data ? parsed.data.text : composeNarration(parsed.data).body;
+    const narrationText = 'text' in parsed.data
+      ? parsed.data.text
+      : composeNarration({
+          ...parsed.data,
+          nextLandmark: parsed.data.nextLandmark ?? parsed.data.nextMilestone ?? null
+        }).body;
     const audio = await synthesizeNarrationAudio(narrationText);
 
     return reply

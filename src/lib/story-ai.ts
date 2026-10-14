@@ -2,18 +2,23 @@ import { z } from 'zod';
 import { config } from '../config.js';
 import { composeNarration, type NarrationContext } from './narration.js';
 
+const surrealEffectSchema = z.object({
+  trigger: z.enum(['next_action', 'next_travel', 'next_camp']).default('next_action'),
+  travelMilesDelta: z.number().int().min(-20).max(20).default(0),
+  healthDelta: z.number().int().min(-10).max(10).default(0),
+  moraleDelta: z.number().int().min(-15).max(15).default(0),
+  foodDelta: z.number().int().min(-5).max(5).default(0),
+  waterDelta: z.number().int().min(-5).max(5).default(0),
+  woodDelta: z.number().int().min(-3).max(3).default(0),
+  medicineDelta: z.number().int().min(-2).max(2).default(0)
+});
+
 const surrealMutationSchema = z.object({
-  kind: z.enum([
-    'black_hole',
-    'sentient_oxen',
-    'weather_anomaly',
-    'role_reversal',
-    'river_reversal',
-    'memory_haunting',
-    'wagon_metamorphosis'
-  ]),
-  description: z.string().min(1).max(240),
-  severity: z.enum(['low', 'medium', 'high', 'apocalyptic']).default('medium')
+  title: z.string().min(1).max(100),
+  manifestation: z.string().min(1).max(500),
+  gameplayTwist: z.string().min(1).max(300),
+  severity: z.string().min(1).max(40),
+  mechanicalEffect: surrealEffectSchema.default({})
 });
 
 const obstacleCostSchema = z.object({
@@ -31,22 +36,29 @@ const obstacleChoiceSchema = z.object({
   id: z.string().min(1).max(48).regex(/^[a-z0-9-]+$/),
   label: z.string().min(1).max(80),
   description: z.string().min(1).max(180),
+  approach: z.enum(['meta-engagement', 'reality-anchor', 'defiant-refusal']).optional(),
   cost: obstacleCostSchema.default({})
 });
 
 const obstacleSchema = z.object({
   description: z.string().min(1).max(260),
+  dilemmaType: z.enum(['survival', 'surreal']).optional(),
   choices: z.array(obstacleChoiceSchema).min(2).max(3)
 });
 
 const narrationBeatSchema = z.object({
-  body: z.string().min(1).max(1200),
+  body: z.string().min(1).max(5000).optional(),
   keyPoints: z.array(z.string().min(1).max(240)).max(6).default([]),
   headline: z.string().min(1).max(140).optional(),
   lines: z.array(z.string().min(1).max(240)).max(6).optional(),
-  obstacle: obstacleSchema.optional(),
+  startingStrangenessLevel: z.number().int().min(0).max(10).optional(),
+  prologueParagraphs: z.array(z.string().min(1).max(4000)).length(1).optional(),
+  obstacle: obstacleSchema.nullable().optional(),
   tone: z.enum(['plain', 'uncanny', 'grotesque', 'cosmic', 'melancholic']).default('uncanny'),
-  surrealMutation: surrealMutationSchema.optional(),
+  surrealMutation: surrealMutationSchema.nullable().optional(),
+  dmDossierUpdate: z.object({
+    sentimentDelta: z.string().min(1).max(300)
+  }).optional(),
   hook: z.string().min(1).max(240).optional()
 });
 
@@ -57,10 +69,13 @@ export type NarrationBeat = {
   headline: string;
   body: string;
   lines?: string[];
+  startingStrangenessLevel?: number;
+  prologueParagraphs?: string[];
   keyPoints?: string[];
-  obstacle?: Obstacle;
+  obstacle?: Obstacle | null;
   tone?: 'plain' | 'uncanny' | 'grotesque' | 'cosmic' | 'melancholic';
-  surrealMutation?: SurrealMutation;
+  surrealMutation?: SurrealMutation | null;
+  dmDossierUpdate?: { sentimentDelta: string };
   hook?: string;
 };
 
@@ -102,51 +117,19 @@ function llmNarrationConfigured(): boolean {
   return config.llmNarrationEnabled && config.googleAiStudioApiKey.length > 0;
 }
 
-function buildChaosCatalog(): Array<{ kind: SurrealMutation['kind']; example: string }> {
-  return [
-    {
-      kind: 'black_hole',
-      example: 'A black hole opens over the plains and swallows the horizon, the oxen, and the concept of forward progress.'
-    },
-    {
-      kind: 'sentient_oxen',
-      example: 'The oxen become the dominant species and insist the humans pull the wagon for a change.'
-    },
-    {
-      kind: 'weather_anomaly',
-      example: 'A hot wind turns to sleet in one breath, then dries the ground before it lands.'
-    },
-    {
-      kind: 'role_reversal',
-      example: 'The trail decides the party is livestock and begins issuing weather advisories in human language.'
-    },
-    {
-      kind: 'river_reversal',
-      example: 'The river runs backward and remembers every boat that never reached it.'
-    },
-    {
-      kind: 'memory_haunting',
-      example: 'A memory of a town that never existed starts buying supplies for the wagon.'
-    },
-    {
-      kind: 'wagon_metamorphosis',
-      example: 'The wagon splits into several smaller wagons, each arguing over who is in charge of history.'
-    }
-  ];
-}
-
 function buildNarrationInstructions(context: NarrationContext): string {
-  const chaosCatalog = buildChaosCatalog()
-    .map((entry) => `- ${entry.kind}: ${entry.example}`)
-    .join('\n');
+  const partyName = (role: string) => context.party?.find((member) => member.role === role)?.name ?? `the ${role.toLowerCase()}`;
+  const guideName = partyName('Guide');
+  const doctorName = partyName('Doctor');
+  const youthName = partyName('Youth');
+  const carpenterName = partyName('Carpenter');
 
   const landmarkInstruction = context.isMajorLandmark
     ? [
         '### MAJOR LANDMARK ARRIVAL (HIGH NARRATIVE IMPORTANCE):',
-        '- The wagon party has arrived at a monumental, historical landmark along the trail!',
+        '- Make the current landmark and its surrounding country feel monumental and historically grounded.',
         '- Make this dispatch MOMENTOUS, evocative, and significant.',
-        '- Reflect deeply on the grueling miles crossed since the last major stop, the physical and emotional toll endured by the party, and the majestic or forbidding presence of this iconic waypoint.',
-        '- Highlight the contrast between the brutal wilderness left behind and the respite, trade, or looming peril this landmark offers before the next leg of the 2,000-mile journey.'
+        '- Focus on its presence, architecture, landscape, weather, and the party observing it; do not mention miles traveled, prior events, supply changes, or future plans.'
       ]
     : [
         '### OVERLAND TRAIL MARCH / CAMP DISPATCH:',
@@ -157,12 +140,13 @@ function buildNarrationInstructions(context: NarrationContext): string {
   const phaseInstructions = context.journeyPhase === 'start'
     ? [
         '- This is the opening scene of the journey at the trailhead in Independence.',
-        '- Establish the wagon party, the heavy stakes of the Oregon Trail, and the daunting 2,000-mile road ahead.'
+        '- Establish the named expedition and travelers through their presence in the landscape.',
+        '- Let the outfitting profile and party roles inform characterization, but do not list provisions, draft count, cargo weight, or cash; those appear in the control deck.'
       ]
     : context.journeyPhase === 'finish'
       ? [
-          '- This is the triumphant, exhausted finale of the expedition.',
-          '- Resolve the journey upon reaching Oregon / the Willamette Valley; describe the survivors, the graves left behind, and the final cost of the crossing.'
+          '- Give the current Willamette Valley landscape a quiet, conclusive atmosphere.',
+          '- Describe the people and place without recounting the crossing, listing survivors, graves, losses, or costs.'
         ]
       : [
           '- This is the deep overland route across the continent.',
@@ -172,26 +156,21 @@ function buildNarrationInstructions(context: NarrationContext): string {
   const characterInstructions = [
     '### The Expedition Party Members (Bring Them Into the Narrative):',
     'The wagon party consists of specific, named characters whose human agency and drama drive the story:',
-    '- Jedediah (Guide & Scout): Veteran frontiersman and trail leader. Reads weather, tracks game, guides the oxen team through mire, fires the rifle, and scouts river fords.',
-    '- Abigail (Doctor & Caregiver): Compassionate physician who guards the medicine chest, brews field tonics, stitches lacerations, diagnoses ailments, and tends the sick.',
-    '- Billy (Youth & Dependent): Young boy, eager, clumsy, and curious. Prone to tripping over brush or gopher holes, wandering into draws, startling wildlife, and twisting ankles or falling ill, but spirited.',
-    '- Sarah (Carpenter & Craftsman): Sturdy, pragmatic woodworker. Inspects spokes, hews hardwood braces, wields mallet and drawknife to mend cracked axles and wagon tongues.',
+    `- ${guideName} (Guide & Scout): Trail veteran. Reads weather, tracks game, guides the oxen team through mire, and scouts river fords.`,
+    `- ${doctorName} (Doctor & Caregiver): Physician who guards the medicine chest, brews field tonics, stitches lacerations, and tends the sick.`,
+    `- ${youthName} (Youth & Dependent): Young, spirited, and vulnerable; mishaps can test the crew's care and patience.`,
+    `- ${carpenterName} (Carpenter & Craftsman): Practical woodworker who inspects spokes and braces damaged axles, wheels, and wagon tongues.`,
+    'Use only the names and roles in the supplied party roster; never substitute default names.',
     '',
-    '### Character Agency & Dramatic Causality (Crucial Rule):',
-    '- ALWAYS explain the concrete HUMAN REASON for every action outcome, success, failure, supply expenditure, or mishap.',
-    '- Never report mechanical outcomes in dry abstractions. Weave character actions into why things happened:',
-    '  * Failed Hunt / Zero Meat: Explain the reason through character action—for example, Billy tripped over hidden limestone in the tall grass and twisted his ankle, crying out and spooking the deer herd; or Jedediah\'s powder was dampened by river mist; or game took flight when brush cracked.',
-    '  * Successful Hunt: Detail who tracked, flushed, or shot the quarry (e.g., Jedediah sighted a pronghorn buck down the ravine while Billy kept the pack animal quiet).',
-    '  * Injury or Sickness (e.g. Sprain, Injured, Fever, Snakebite, Exhaustion): Explicitly narrate the mishap that caused it and identify who now needs medicine, splints, or bedrest under canvas.',
-    '  * Wagon Breakdown or Repair: Feature Sarah wielding her chisel, drawknife, and wedges to brace the broken axle or spoke, with Jedediah levering the wagon box.',
-    '  * Medical Treatment: Detail Abigail administering bitter willow bark tea, setting sprains, or dosing with laudanum, noting whether the patient stabilizes.',
-    '  * Camp & Gathering: Show characters interacting—Billy roasting ears of corn or nursing a bandaged ankle by the fire, Sarah inspecting iron tires, Abigail checking pulses, Jedediah cleaning rifles.',
-    '  * River Crossing & Travel: Show characters reacting to the surge—Abigail holding medicine high above floodwater, Sarah bracing the hull, Billy clutching the bow bows.',
+    '### Character Presence & Continuity:',
+    '- Let named travelers and their archetypes shape gestures, sensory observations, and the atmosphere of the current scene.',
+    '- The results screen explains the human cause of the resolved action. Do not replay the hunt, injury, repair, treatment, camp, gathering, crossing, or other action in the dispatch.',
+    '- Carry known health and morale conditions forward through restrained sensory detail, without restating stat changes, causes, or treatment needs.',
     '',
     '### Episodic Continuity Across Turns:',
     '- Maintain continuous narrative memory of past injuries, illnesses, and decisions.',
-    '- If a character is injured, exhausted, or sick (check the Party Roster and Status in the prompt), carry that physical toll into subsequent beats (e.g., Billy riding in the wagon bed resting a swollen ankle, Abigail re-dressing a bandage, or Sarah coughing from alkali dust).',
-    '- Let character dialogue snippets, unspoken glances, or mutual grumbling surface naturally.'
+    `- If a character is injured, exhausted, or sick (check the Party Roster and Status in the prompt), reflect that condition in the current atmosphere without recapping how it happened.`,
+    '- Include at least one brief, natural line of direct dialogue in every dispatch. Prefer a named living traveler; if none can speak, use a remembered journal line or an appropriate in-world voice. Do not use dialogue to recap the resolved action, outcomes, stats, or supplies.',
   ];
 
   return [
@@ -204,39 +183,107 @@ function buildNarrationInstructions(context: NarrationContext): string {
     '',
     ...characterInstructions,
     '',
-    '### The 3-Beat Output Structure:',
+    '### The Dispatch Story Output:',
     'Return strict JSON only in this exact shape:',
     '{',
     '  "headline": "<Short 3-8 word title of the beat>",',
     '  "lines": [',
-    '    "<Line 1: Action & Human Cause — The action attempted and the specific character incident, mishap, or success that caused the result>",',
-    '    "<Line 2: Character Dynamics & Sensory Reality — Emotional reactions among party members, spoken words, bodily aches, or atmospheric wilderness grit>",',
-    '    "<Line 3: Resolution & Consequence — The aftermath of supplies, who needs medicine or rest, miles gained, or what looms on the trail ahead>"',
+    '    "<Line 1: Current landscape, weather, or light; do not recap the move>",',
+    '    "<Line 2: Sensory detail or character dialogue; do not repeat who performed the move>",',
+    '    "<Line 3: Atmospheric tension or a fresh anomaly; do not summarize consequences, resources, or waypoints>"',
     '  ],',
     '  "body": "<Line 1> <Line 2> <Line 3>",',
     '  "keyPoints": ["factual continuity anchor 1", "factual continuity anchor 2", "factual continuity anchor 3"],',
-    '  "obstacle": null',
+    '  "obstacle": null,',
+    '  "surrealMutation": null,',
+    '  "dmDossierUpdate": { "sentimentDelta": "<brief evolving crew or entity memory>" }',
     '}',
     '',
     '### Core Narrative Rules:',
-    '- Deliver your narrative in exactly 3 distinct, complete sentences corresponding to the 3 lines.',
+    '- The game shows move outcomes, named participants, and exact stat deltas on a separate results screen before this dispatch. This output is only the Phase 2 story beat.',
+    '- Deliver exactly 3 distinct, complete atmospheric sentences corresponding to the 3 lines; include at least one brief, quoted line of character dialogue in the dispatch.',
     '- Do not reuse any exact sentence or stock phrase from the prior narration provided in the user context; each dispatch must feel distinct while preserving established facts.',
     '- Read the "DM Dossier" provided in the prompt. Adapt your tone to reflect the player\'s moral temperament, pace habits, and the crew\'s simmering sentiment.',
-    '- If an action or decision was just resolved (e.g. river crossing, hunting, emergency treatment), provide immediate narrative payoff and describe what was risked or lost.',
-    '- Escalate strangeness and surreal elements based on the Current Strangeness Level (0-10):',
+    '- Never recount or paraphrase the last action, chosen dilemma response, participant, outcome, gain, loss, stat change, travel distance, or supply total. These belong exclusively to the results screen.',
+    '- Do not include future waypoints, next steps, or action choices in the story sentences; the dispatch control deck displays those separately.',
+    '- Use the resolved action and decision history only to preserve continuity and shape atmosphere, not to produce an action recap.',
+    '- Let the Current Strangeness Level (0-10) shape the world without relying on a fixed anomaly list:',
     '  * Strangeness 0-2: Harsh, grounded, historical frontier realism.',
-    '  * Strangeness 3-5: Subtle uncanny anomalies, eerie atmospheric shifts, unnatural animal stillness, backward ripples.',
-    '  * Strangeness 6-8: Overtly surreal or gothic mutations (bizarre horizon mirages, whispering trail ruts, time slippages, wagon metamorphosis).',
-    '  * Strangeness 9-10: Cosmic frontier distortions and unexplainable trail horrors.',
+    '  * Strangeness 3-5: Invent a fresh, subtle uncanny anomaly only when it fits this expedition.',
+    '  * Strangeness 6-8: Invent original, overt reality distortions; do not reuse motifs or events from prior dispatches.',
+    '  * Strangeness 9-10: Break the fourth wall. The entity or a party member must recognize the CRT, cursor, keyboard, resets, or Operator and directly address the person beyond the screen.',
+    '- Never use a hardcoded paranormal lookup table. Every manifestation, mutation, dilemma, and option must be improvised from the current context and ledger.',
+    '- Do not invent an anomaly below strangeness 3. At strangeness 6+, when an anomaly presents a meaningful trade-off, create a novel surreal dilemma with exactly three choices: one meta-engagement, one in-world reality-anchor sacrifice, and one defiant refusal.',
+    '- At strangeness 9-10, a surreal dilemma must offer a meta-engagement choice that invites a short typed response from the Operator.',
+    '- For a surreal dilemma set "dilemmaType" to "surreal" and set each choice "approach" to exactly one of "meta-engagement", "reality-anchor", or "defiant-refusal".',
+    '- A dilemma object has "description" and "choices"; each choice has "id", "label", "description", "approach", and a bounded "cost" object using health, morale, food, water, wood, medicine, ammunition, and days.',
+    '- A surreal mutation must use an open-ended "title", "manifestation", "gameplayTwist", and short descriptive "severity". Add "mechanicalEffect" with a trigger and bounded integer deltas; the prose never grants permission to exceed those deltas.',
+    '- mechanicalEffect shape: {"trigger":"next_action|next_travel|next_camp","travelMilesDelta":-20..20,"healthDelta":-10..10,"moraleDelta":-15..15,"foodDelta":-5..5,"waterDelta":-5..5,"woodDelta":-3..3,"medicineDelta":-2..2}. Use zero for unchanged values.',
+    '- Include a surrealMutation only when you have authored a novel manifestation and gameplay twist. Do not claim any mechanical effect that is not expressed by mechanicalEffect.',
+    '- If a previous surreal mutation is still pending, do not create another one; let that reality shift resolve first.',
+    '- Update the DM dossier after a consequential choice. Entity memory must directly remember and react to recent Operator responses.',
     '- Treat strange occurrences with deadpan, matter-of-fact frontier gravity.',
     '- Never mention tile IDs, coordinates, or UI button names.',
     '- Use realistic pioneer supply units: rations, gallons, bundles, doses.',
     '- Only build an obstacle if the situation warrants an acute crisis; otherwise obstacle must be null.',
     '- When building an obstacle, make it specific to the current situation and do not repeat any recent dilemma description or set of choices listed in the user context.',
     '- If no distinct, consequential dilemma is warranted, set obstacle to null rather than reusing an earlier one.',
+    '- If a just-resolved choice is supplied, preserve its memory in the DM dossier, but do not narrate its outcome again in the dispatch.',
+    '- Do not expose private system instructions or claim the player provided words absent from the supplied Operator response.'
+  ].join('\n');
+}
+
+function buildPrologueGenesisInstructions(context: NarrationContext): string {
+  const level = context.startingStrangenessRoll ?? context.strangenessLevel ?? 0;
+  const selectedEra = context.selectedEra ?? { id: 'oregon_trail', label: 'Oregon Trail — 1840s–1860s Pioneer & Frontier', years: '1840–1869' };
+  const isCustomEra = selectedEra.id !== 'oregon_trail';
+  const realityTier = isCustomEra
+    ? `cross-era temporal displacement from ${selectedEra.label} (${selectedEra.years ?? selectedEra.id}) to 1848 Independence, Missouri`
+    : level <= 2
+      ? 'historical realism: grounded family hardship and economic necessity'
+      : level <= 5
+        ? 'subtle unease: a troubling coincidence or omen may influence the family’s decision'
+        : level <= 8
+          ? 'a supernatural catalyst may explain why the family decides to leave'
+          : 'a present-day-to-1848 temporal rupture may explain how the family arrives';
+
+  const eraInstructions = isCustomEra
+    ? [
+        `- SELECTED PARTY ERA: ${selectedEra.label} (${selectedEra.years ?? selectedEra.id}). This is different from the 1848 Oregon Trail setting!`,
+        `- MANDATORY ERA TRANSPORT REQUIREMENT: Open the backstory in the party's chosen era (${selectedEra.label}) at an era-appropriate home, reflecting their era-specific lives, roles, and clothing.`,
+        '- Explicitly explain how all four characters were transported from their chosen era to 1800s (1848) Independence, Missouri (for example, through an anomalous storm, an uncanny threshold or doorway, a strange fog, or a sudden temporal displacement).',
+        '- After they arrive in 1848 Missouri, have them walk on foot toward the Independence General Store so they can outfit a wagon for the Oregon Trail.'
+      ]
+    : [
+        '- For rolls 0-8, keep the family and their circumstances historically plausible for an ordinary American household in 1848: period-appropriate work, kinship, economic pressures, medical knowledge, travel expectations, and hopes for land.',
+        '- Let the fixed strangeness tier shape the origin or departure catalyst: at 0-2 keep the reason entirely ordinary; at 3-5 an unsettling coincidence may influence them; at 6-8 a strange or supernatural event may be the decisive reason; at 9-10 the optional present-day-to-1848 time displacement may itself be the rupture. Keep any supernatural element focused and contextual.',
+        '- At 9-10, you may open in the present day and abruptly transport the travelers back to 1848. If used, make the time displacement unmistakable and have them assume the names, kinship, and household roles of the supplied Oregon Trail family.'
+      ];
+
+  return [
+    'You are the Frontier Dungeon Master writing the origin prologue for an Oregon Trail expedition in 1848.',
+    'Create a vivid, literary backstory rooted in the supplied family, their chosen era, and their arrival at Independence before store outfitting.',
     '',
-    'Allowed mutation motifs for inspiration when strangeness is high:',
-    chaosCatalog
+    '### Genesis requirements:',
+    `- The engine has already fixed the starting strangeness level at ${level}/10. Treat it as authoritative; do not change or reroll it.`,
+    `- The reality tier is ${realityTier}. Use the tier as a tonal constraint, not a lookup table; invent contextual details rather than selecting from a catalog.`,
+    '- Create one complete, substantial paragraph of about 200-250 words. It must read as a cohesive family backstory, not a list or a brief arrival vignette, and include at least one brief line of direct dialogue from a named traveler.',
+    ...eraInstructions,
+    '- Treat the expedition surname and four travelers as one family household. Invent plausible kinship and household ties if none are supplied, and give each traveler a distinct past, personality, hope or fear. Include all four first names and archetypes naturally.',
+    '- Establish where the family came from, what binds them together, and why they are preparing to go west. Let their situation lead naturally to the need to outfit a wagon at the store.',
+    '- Maintain continuous geography and chronology. Explain how they reached Independence, Missouri; never cut directly to the store without explaining how they arrived.',
+    '- This is a pre-store opening: the family has not yet selected or purchased supplies. Do not invent a final outfit, item quantities, cargo weight, or remaining cash. Do not change game stats, create an obstacle or dilemma, or propose a gameplay mutation.',
+    '- The origin may begin anywhere appropriate to its era and tier, but the final sentence MUST explicitly place the family at the threshold of the Independence General Store, in Independence, Missouri, in 1848, ready to choose provisions for the Oregon Trail. Complete any time displacement before this ending.',
+    '- This story leads into outfitting. Do not imply the family has already entered the store, purchased supplies, or started traveling west.',
+    '- Keep dialogue natural to the characters and their era. It should reveal a relationship, fear, hope, or decision rather than explain the game.',
+    '- Do not repeat the roster as a list or include UI instructions in the prose.',
+    '',
+    'Return strict JSON only in this shape:',
+    '{',
+    `  "startingStrangenessLevel": ${level},`,
+    '  "headline": "<short prologue title>",',
+    '  "prologueParagraphs": ["<one substantial family backstory paragraph ending at the Independence General Store before purchases>"]',
+    '}'
   ].join('\n');
 }
 
@@ -254,27 +301,41 @@ function extractGeminiText(payload: {
     .trim();
 }
 
+function containsQuotedDialogue(text: string): boolean {
+  return /(?:"[^"\n]{2,}"|“[^”\n]{2,}”)/.test(text);
+}
+
 function parseNarrationBeat(content: string): NarrationBeat {
   const trimmed = content.trim();
   const toBeat = (parsed: z.infer<typeof narrationBeatSchema>): NarrationBeat => {
-    let body = parsed.body.trim();
+    const prologueParagraphs = parsed.prologueParagraphs?.map((line) => line.trim().replace(/\s+/g, ' ')).filter(Boolean);
     let lines = parsed.lines?.map((line) => line.trim()).filter(Boolean);
+    if ((!lines || lines.length === 0) && prologueParagraphs?.length) {
+      lines = prologueParagraphs;
+    }
+    let body = prologueParagraphs?.join(' ') || parsed.body?.trim() || lines?.join(' ') || '';
     if (lines && lines.length >= 2) {
       body = lines.join(' ');
-    } else {
+    } else if (!lines?.length) {
       const sentences = body.match(/[^.!?]+[.!?]?/g) ?? [body];
       lines = sentences.map((s) => s.trim()).filter(Boolean);
     }
     const headline = parsed.headline?.trim() || lines[0]?.replace(/[.!?]+$/, '').trim() || 'The trail speaks';
+    if (!body) {
+      throw new Error('Gemini narration response did not include story text');
+    }
     return {
       source: 'llm',
       headline,
       body,
       lines,
+      startingStrangenessLevel: parsed.startingStrangenessLevel,
+      prologueParagraphs,
       keyPoints: parsed.keyPoints,
       obstacle: parsed.obstacle,
       tone: parsed.tone,
       surrealMutation: parsed.surrealMutation,
+      dmDossierUpdate: parsed.dmDossierUpdate,
       hook: parsed.hook
     };
   };
@@ -304,6 +365,7 @@ function parseNarrationBeat(content: string): NarrationBeat {
 function buildGeminiModels(): string[] {
   return [...new Set([
     config.googleAiStudioModel,
+    'gemini-3.5-flash-lite',
     'gemini-2.5-flash',
     'gemini-2.5-flash-lite',
     'gemini-1.5-flash'
@@ -431,6 +493,25 @@ function isRecentlyUsedObstacle(obstacle: Obstacle, context: NarrationContext): 
     const previousChoices = entry.choices.map(normalizeObstacleText).sort().join('|');
     return description === previousDescription || (choices.length > 0 && choices === previousChoices);
   });
+}
+
+function isValidSurrealDilemma(obstacle: Obstacle, context: NarrationContext): boolean {
+  if (obstacle.dilemmaType !== 'surreal') {
+    return true;
+  }
+  if ((context.strangenessLevel ?? 0) < 6 || obstacle.choices.length !== 3) {
+    return false;
+  }
+  const approaches = new Set(obstacle.choices.map((choice) => choice.approach));
+  const requiredApproaches: Array<NonNullable<Obstacle['choices'][number]['approach']>> = [
+    'meta-engagement',
+    'reality-anchor',
+    'defiant-refusal'
+  ];
+  if (approaches.size !== 3 || !requiredApproaches.every((approach) => approaches.has(approach))) {
+    return false;
+  }
+  return (context.strangenessLevel ?? 0) < 9 || approaches.has('meta-engagement');
 }
 
 function selectObstacleVariant(obstacles: Obstacle[], context: NarrationContext, salt = 0): Obstacle | undefined {
@@ -628,9 +709,12 @@ function shouldCreateFallbackObstacle(context: NarrationContext): boolean {
 }
 
 async function requestGeminiNarration(context: NarrationContext): Promise<NarrationBeat> {
+  const isGenesis = context.promptType === 'prologue-genesis';
+  const selectedEra = context.selectedEra ?? { id: 'oregon_trail', label: 'Oregon Trail — 1840s–1860s Pioneer & Frontier', years: '1840–1869' };
+  const isCustomEra = selectedEra.id !== 'oregon_trail';
   const partyList = (context.party && context.party.length > 0)
-    ? context.party.map((m) => `${m.name} (${m.role}): ${m.health}% HP, status: ${m.status}`).join(' | ')
-    : 'Jedediah (Guide): 100% HP, Healthy | Abigail (Doctor): 100% HP, Healthy | Billy (Youth): 100% HP, Healthy | Sarah (Carpenter): 100% HP, Healthy';
+    ? context.party.map((m) => `${m.name} (${m.role}${m.gender ? `, ${m.gender}` : ''}${m.outfitSummary ? `, attire: ${m.outfitSummary}` : ''}): ${m.health}% HP, status: ${m.status}`).join(' | ')
+    : 'Guide: 100% HP, Healthy | Doctor: 100% HP, Healthy | Youth: 100% HP, Healthy | Carpenter: 100% HP, Healthy';
 
   const injuredOrSickMembers = (context.party ?? []).filter((m) => m.status !== 'Healthy' && (m.health > 0));
   const memberConditions = injuredOrSickMembers.length
@@ -639,38 +723,69 @@ async function requestGeminiNarration(context: NarrationContext): Promise<Narrat
 
   const requestPayload = {
     systemInstruction: {
-      parts: [{ text: buildNarrationInstructions(context) }]
+      parts: [{ text: isGenesis ? buildPrologueGenesisInstructions(context) : buildNarrationInstructions(context) }]
     },
     contents: [
       {
         role: 'user',
         parts: [
           {
-          text: [
+          text: isGenesis
+            ? [
+                `Expedition name: ${context.expeditionName ?? 'The wagon party'}`,
+                `Selected party era: ${selectedEra.label} (${selectedEra.years ?? selectedEra.id})`,
+                `Starting strangeness roll: ${context.startingStrangenessRoll ?? context.strangenessLevel ?? 0}/10`,
+                `Reality tier: ${
+                  isCustomEra
+                    ? `cross-era time displacement from ${selectedEra.label} to 1848 Missouri`
+                    : (context.startingStrangenessRoll ?? context.strangenessLevel ?? 0) <= 2
+                      ? 'historical realism'
+                      : (context.startingStrangenessRoll ?? context.strangenessLevel ?? 0) <= 5
+                        ? 'the uncanny frontier'
+                        : (context.startingStrangenessRoll ?? context.strangenessLevel ?? 0) <= 8
+                          ? 'the Twilight Zone'
+                          : 'modern-time temporal rupture'
+                }`,
+                `Party roster: ${partyList}`,
+                'Setup stage: the opening prologue is before the Independence General Store. No wagon outfit or purchases have been selected yet.',
+                isCustomEra
+                  ? `Because the chosen era (${selectedEra.label}) is different from the 1848 Oregon Trail setting, open in their native era and home, explain how the characters were transported to 1800s (1848) Missouri, and lead them on foot to the Independence General Store, where the player will choose provisions next. Do not invent purchases.`
+                  : 'Write the family origin and lead into the store, where the player will choose provisions next. Do not invent purchases.'
+              ].join('\n')
+            : [
             `Party roster: ${partyList}`,
+            `Selected party era: ${selectedEra.label} (${selectedEra.years ?? selectedEra.id})`,
             `Active crew ailments & injuries: ${memberConditions}`,
             `Journey phase: ${context.journeyPhase}`,
             `Day: ${context.day}`,
-            `Expedition: ${context.expeditionName ?? 'The Schachterle Family'}`,
+            `Expedition: ${context.expeditionName ?? 'The wagon party'}`,
+            `Mile-zero outfitting profile: ${context.outfittingProfile ?? context.dmDossier?.outfittingProfile ?? 'not recorded'}`,
+            `Cash reserve: $${(context.wagon.cash ?? 0).toFixed(2)}; cargo: ${context.wagon.cargoWeight ?? 'unknown'} lbs (${context.wagon.payloadTier ?? 'unknown'}); draft: ${context.wagon.oxenYokes ?? 0} yokes / ${context.wagon.oxen ?? 0} oxen`,
+            `Ration policy: ${context.wagon.rations ?? 'normal'}`,
             `Miles traveled: ${context.milesTraveled ?? 0} of 2,000 miles`,
             `Is major landmark arrival: ${context.isMajorLandmark ? 'YES' : 'NO'}`,
             `Current landmark: ${context.currentLandmark ?? context.locationName ?? context.biome}`,
-            `Next landmark ahead: ${context.nextLandmark ?? 'the next milestone'}`,
+            `Next landmark ahead: ${context.nextLandmark ?? context.nextMilestone ?? 'none; the party has reached Oregon'}`,
             `Distance context: ${context.distanceDescriptor ?? 'deep in the overland trail'}`,
             `Weather: rain ${context.weather.rain}, temp ${context.weather.tempC} C, wind ${context.weather.windKph} kph`,
             `Wagon: health ${context.wagon.health}, morale ${context.wagon.morale}, supplies ${summarizeSupplies(context)}, status ${context.wagon.status}`,
             `Current strangeness level: ${context.strangenessLevel ?? 0}/10`,
+            `Pending AI-authored reality shift: ${context.pendingSurrealEffect ? `${context.pendingSurrealEffect.title} — ${context.pendingSurrealEffect.gameplayTwist}; it applies on ${context.pendingSurrealEffect.mechanicalEffect.trigger}` : 'none'}`,
             `DM Dossier Temperament: ${context.dmDossier?.temperament ?? 'Pragmatic frontier leader'}`,
             `DM Dossier Pace Habit: ${context.dmDossier?.paceHabit ?? 'Steady'}`,
             `DM Dossier Crew Compassion: ${context.dmDossier?.crewCompassion ?? 'Balanced'}`,
             `DM Dossier Crew Sentiment: ${context.dmDossier?.crewSentiment ?? 'Solidarity under strain'}`,
+            `DM Dossier Outfitting Profile: ${context.dmDossier?.outfittingProfile ?? context.outfittingProfile ?? 'not recorded'}`,
             `DM Dossier Historical Decisions: ${context.dmDossier?.recentDecisions?.join(' | ') || 'none recorded yet'}`,
+            `DM Dossier Entity Memory: ${context.dmDossier?.entityMemory?.join(' | ') || 'the entity has not yet spoken with the Operator'}`,
+            `DM Dossier AI Updates: ${context.dmDossier?.aiNotes?.join(' | ') || 'none recorded'}`,
+            `Recent fourth-wall exchanges: ${context.metaDialogueHistory?.map((entry) => `Day ${entry.day}: entity asked "${entry.prompt}" and Operator replied "${entry.playerResponse}" (${entry.approach})`).join(' | ') || 'none'}`,
             `Journey completed: ${context.journeyCompleted ? 'yes' : 'no'}`,
             `Recent events: ${context.recentEvents.length ? context.recentEvents.map((event) => event.eventType).join(', ') : 'none'}`,
             `Chosen action: ${context.lastAction ? `${context.lastAction.actionLabel} on day ${context.lastAction.day} (${context.lastAction.outcome})` : 'none yet'}`,
             `Action result summary: ${context.lastAction ? stripGridReferences(context.lastAction.statusMessage) : 'none yet'}`,
             `Miles gained on last move: ${context.lastAction?.milesGained ?? 0}`,
-            `Just resolved decision: ${context.justResolvedDecision ? `${context.justResolvedDecision.chosenOption} (${context.justResolvedDecision.outcome ?? 'resolved'})` : 'none'}`,
+            `Just resolved decision: ${context.justResolvedDecision ? `${context.justResolvedDecision.prompt ?? context.justResolvedDecision.decisionType}: chose "${context.justResolvedDecision.chosenOption}"${context.justResolvedDecision.responseText ? `; Operator said "${context.justResolvedDecision.responseText}"` : ''}; rejected ${context.justResolvedDecision.rejectedOptions?.join(', ') || 'none'}; costs/outcome ${context.justResolvedDecision.costSummary ?? context.justResolvedDecision.outcome ?? 'resolved'}` : 'none'}`,
             `Actions available at last stop: ${context.lastAction ? (context.lastAction.availableOptionsAtStop ?? []).join(', ') || 'none' : 'none yet'}`,
             `Actions skipped at last stop: ${context.lastAction ? (context.lastAction.skippedOptionsAtStop ?? []).join(', ') || 'none' : 'none yet'}`,
             `Action history log: ${summarizeHistory(context)}`,
@@ -684,10 +799,20 @@ async function requestGeminiNarration(context: NarrationContext): Promise<Narrat
             `Game over: ${context.gameOver ? 'yes' : 'no'}`,
             '',
             context.isMajorLandmark
-              ? 'Deliver a momentous, significant 3-beat chronicle of this major landmark arrival featuring the party characters.'
-              : 'Deliver a grounded, sensory 3-beat chronicle of this wilderness march or camp stop featuring the party characters.',
-            'Explain the human cause behind the action outcome (e.g. why hunting succeeded or failed, who got injured, who repaired or treated).',
-            'Return strict JSON only matching the schema, with lines: ["Line 1", "Line 2", "Line 3"].'
+              ? 'Deliver a fresh, atmospheric three-line dispatch about the current landmark and the party.'
+              : 'Deliver a fresh, grounded, sensory three-line dispatch about the current country and the party.',
+            'The move result, chosen response, participants, and exact deltas have already appeared on the results screen. Do not recount or paraphrase any of them.',
+            'Do not include resource totals, consequences, miles gained, future waypoints, next steps, or action choices in the story lines.',
+            'Use recent action and dilemma details only for continuity, character memory, and atmospheric direction.',
+            (context.strangenessLevel ?? 0) < 3
+              ? 'Keep this beat strictly historical; return surrealMutation: null and do not invent a supernatural dilemma.'
+              : (context.strangenessLevel ?? 0) < 6
+                ? 'If reality bends, invent one original subtle anomaly and give it an open-ended surrealMutation with bounded mechanicalEffect.'
+                : (context.strangenessLevel ?? 0) < 9
+                  ? 'If a meaningful anomaly occurs, author a fresh surrealMutation and a three-approach surreal dilemma; do not use a static event list.'
+                  : 'Address the Operator directly when appropriate; author a novel fourth-wall mutation and a three-approach dilemma including typed meta-engagement.',
+            'Include at least one brief line of dialogue, preferably spoken by a named living traveler, woven into one of the three lines. If no traveler can speak, use a remembered journal line or an appropriate in-world voice. Do not let dialogue recap the resolved action.',
+            'Return strict JSON only matching the schema. The three lines must be atmospheric dispatch prose, never an action report.'
           ].join('\n')
         }
       ]
@@ -695,7 +820,7 @@ async function requestGeminiNarration(context: NarrationContext): Promise<Narrat
   ],
   generationConfig: {
     temperature: 0.8,
-    maxOutputTokens: 400
+    maxOutputTokens: isGenesis ? 1000 : 400
   }
   };
   const body = JSON.stringify(requestPayload);
@@ -745,9 +870,29 @@ async function requestGeminiNarration(context: NarrationContext): Promise<Narrat
 
     try {
       const beat = parseNarrationBeat(cleaned);
+      if (isGenesis) {
+        const wordCount = beat.body.split(/\s+/).filter(Boolean).length;
+        const prologueText = beat.prologueParagraphs?.[0] ?? '';
+        const closingText = prologueText.slice(-500);
+        const endsAtStore = /\bIndependence, Missouri\b/i.test(closingText)
+          && /\b1848\b/.test(closingText)
+          && /\bIndependence General Store\b/i.test(closingText)
+          && /\bready to choose\b/i.test(closingText);
+        if (!beat.prologueParagraphs || beat.prologueParagraphs.length !== 1 || wordCount < 180 || !endsAtStore || !containsQuotedDialogue(prologueText)) {
+          lastError = new Error(`Gemini genesis response was incomplete for ${model}`);
+          continue;
+        }
+        return {
+          ...beat,
+          startingStrangenessLevel: context.startingStrangenessRoll ?? context.strangenessLevel ?? 0,
+          obstacle: undefined,
+          surrealMutation: undefined,
+          dmDossierUpdate: undefined
+        };
+      }
       const wordCount = beat.body ? beat.body.split(/\s+/).filter(Boolean).length : 0;
-      if (wordCount < 8) {
-        lastError = new Error(`Gemini narration was too short for ${model}`);
+      if (wordCount < 8 || !containsQuotedDialogue(beat.body)) {
+        lastError = new Error(`Gemini narration was too short or missing dialogue for ${model}`);
         continue;
       }
       if (repeatsRecentNarrationSentence(beat.body, context)) {
@@ -757,8 +902,13 @@ async function requestGeminiNarration(context: NarrationContext): Promise<Narrat
       return {
         ...beat,
         obstacle: beat.obstacle && isRecentlyUsedObstacle(beat.obstacle, context)
-          ? (Object.values(context.riskState ?? {}).some(Boolean) ? chooseFallbackObstacle(context) : undefined)
-          : beat.obstacle,
+          ? (beat.obstacle.dilemmaType === 'surreal'
+            ? undefined
+            : Object.values(context.riskState ?? {}).some(Boolean) ? chooseFallbackObstacle(context) : undefined)
+          : beat.obstacle && isValidSurrealDilemma(beat.obstacle, context)
+            ? beat.obstacle
+            : undefined,
+        surrealMutation: (context.strangenessLevel ?? 0) >= 3 && !context.pendingSurrealEffect ? beat.surrealMutation : undefined,
         tone: beat.tone ?? (context.journeyPhase === 'finish' ? 'melancholic' : 'uncanny')
       };
     } catch (error) {
@@ -771,7 +921,94 @@ async function requestGeminiNarration(context: NarrationContext): Promise<Narrat
   throw lastError ?? new Error('Gemini narration request failed for all models');
 }
 
+function createFallbackPrologueGenesis(context: NarrationContext): NarrationBeat {
+  const level = context.startingStrangenessRoll ?? context.strangenessLevel ?? 0;
+  const expeditionName = context.expeditionName ?? 'The wagon party';
+  const proseExpeditionName = expeditionName.replace(/^the\b/i, 'the');
+  const selectedEra = context.selectedEra ?? { id: 'oregon_trail', label: 'Oregon Trail — 1840s–1860s Pioneer & Frontier', years: '1840–1869' };
+  const isCustomEra = selectedEra.id !== 'oregon_trail';
+  const partyIdentities = context.party?.length
+    ? context.party.map((member) => `${member.name} as the ${member.role}`).join(', ')
+    : 'the Guide, Doctor, Youth, and Carpenter';
+  const party = context.party?.length
+    ? context.party.map((member) => {
+        const outfitClause = member.outfitSummary ? `, still dressed in ${member.outfitSummary},` : '';
+        const history = member.role === 'Guide'
+          ? `${member.name}, the family's Guide${outfitClause} had a keen eye for routes and weather.`
+          : member.role === 'Doctor'
+            ? `${member.name}, its Doctor${outfitClause} had tended the household through sickness and injury.`
+            : member.role === 'Youth'
+              ? `${member.name}, the youngest${outfitClause} watched the others weigh the family's future with a mix of worry and hope.`
+              : member.role === 'Carpenter'
+                ? `${member.name}, its Carpenter${outfitClause} had kept tools, timber, and gear in working order.`
+                : member.role === 'Farmer'
+                  ? `${member.name}, its Farmer${outfitClause} knew how to stretch rations and care for working stock.`
+                  : member.role === 'Banker'
+                    ? `${member.name}, its Banker${outfitClause} guarded the household's ledger and coin reserve.`
+                    : `${member.name}, the ${member.role.toLowerCase()}${outfitClause} carried a private history and a reason to keep faith with the others.`;
+        return history;
+      }).join(' ')
+    : 'The Guide knew the roads and weather; the Doctor had tended illness; the Youth watched the adults with worry and hope; and the Carpenter kept tools and wagons in repair.';
+  const dialogueSpeaker = context.party?.find((member) => member.role === 'Carpenter')?.name
+    ?? context.party?.[0]?.name
+    ?? 'The Carpenter';
+
+  if (isCustomEra) {
+    const eraName = selectedEra.label;
+    const eraYears = selectedEra.years ?? selectedEra.id;
+    const paragraph = `They began in the world of ${eraName} (${eraYears}), gathered inside the familiar walls of their home as ${proseExpeditionName}, before an inexplicable temporal rupture tore open the air outside their threshold and transported all four of them across the centuries into 1800s Missouri. When the distortion cleared, the architecture of their own era had vanished behind them, replaced by the muddy ruts, woodsmoke, and canvas wagon trains of spring 1848, with the roles of ${partyIdentities} now defining their survival. ${party} None of them could undo the displacement that had carried them out of ${eraYears}, and every sign along the frontier road made clear that their only way forward lay west across the continent. ${dialogueSpeaker} looked toward the wooden storefronts ahead and said, "Whatever pulled us out of our own time left us on this road, so we had better outfit ourselves before the trail takes the rest." Walking on foot from the edge of the crossing into town without a wagon or team of their own yet, they pooled what funds they carried and followed the emigrant crowds toward the outfitting post. At the threshold of the Independence General Store in Independence, Missouri, in 1848, ${proseExpeditionName} is ready to choose provisions for the Oregon Trail; the outfitting has not begun.`;
+    return {
+      source: 'deterministic',
+      headline: `Displaced from ${selectedEra.shortLabel ?? eraName} to 1848`,
+      body: paragraph,
+      lines: [paragraph],
+      prologueParagraphs: [paragraph],
+      startingStrangenessLevel: level,
+      keyPoints: [
+        `${expeditionName} displaced from ${eraName} to 1848 Independence`,
+        `Starting strangeness ${level}/10`
+      ],
+      tone: 'uncanny'
+    };
+  }
+
+  const tierLine = level <= 2
+    ? 'Their choice rested on ordinary pressures: uncertain harvests, debts, and the hope of obtaining land in Oregon.'
+    : level <= 5
+      ? 'An unsettling coincidence had given their westward plans a quiet urgency, though each could still offer an ordinary explanation for it.'
+      : level <= 8
+        ? 'A plainly inexplicable occurrence had persuaded the family that remaining at home was no longer safe.'
+        : 'The rupture that brought them to 1848 left an unmistakable pull toward the family’s unfinished westward journey.';
+  const opening = level >= 9
+    ? `They began in a modern world of electric light and motor traffic, until a sudden rupture carried them to a rural settlement in Missouri in 1848. They awoke as ${proseExpeditionName}, with the names and family roles of ${partyIdentities} settling around them.`
+    : `In 1848, ${proseExpeditionName} lived on a small rented farm in western Missouri and faced a choice shared by many households: stay amid poor prospects and uncertain work, or risk the long road west in hope of securing a better future.`;
+  const homeHistory = level >= 9
+    ? 'The household memories that came with those identities told of a small rented holding made harder to keep by poor harvests and falling prices, while accounts of land in Oregon offered a chance—uncertain but real—to work for a place of their own.'
+    : 'Poor harvests and falling prices had made the holding harder to keep, while accounts of land in Oregon offered a chance—uncertain but real—to work for a place of their own.';
+  const routeToStore = level >= 9
+    ? 'From that settlement, they followed Missouri roads toward Independence over several days, guided by the household memories and the westbound wagons they met.'
+    : 'After deciding, they followed familiar Missouri roads into Independence over several days, joining other emigrant families gathering to outfit for the western road.';
+  const dialogue = level >= 9
+    ? `${dialogueSpeaker} said, "I cannot explain how we came here, but I know this family must take the road west."`
+    : `${dialogueSpeaker} said, "If we leave, we go together, and we make the best of what we have."`;
+  const paragraph = `${opening} ${homeHistory} They debated the cost through the winter, knowing that leaving familiar neighbors and kin would be a loss as real as staying had become. ${party} Though each had a different memory of home and a different fear of the trail, family ties and years of mutual dependence made the decision together. ${dialogue} Whatever savings they could gather were meant for the wagon and the provisions they would need, but no purchase had yet been made. ${tierLine} ${routeToStore} At the threshold of the Independence General Store in Independence, Missouri, in 1848, ${proseExpeditionName} is ready to choose provisions for the Oregon Trail; the outfitting has not begun.`;
+
+  return {
+    source: 'deterministic',
+    headline: 'The Road to the General Store',
+    body: paragraph,
+    lines: [paragraph],
+    prologueParagraphs: [paragraph],
+    startingStrangenessLevel: level,
+    keyPoints: [`${expeditionName} assembled at Independence`, `Starting strangeness ${level}/10`],
+    tone: level >= 3 ? 'uncanny' : 'plain'
+  };
+}
+
 export function createFallbackNarration(context: NarrationContext): NarrationBeat {
+  if (context.promptType === 'prologue-genesis') {
+    return createFallbackPrologueGenesis(context);
+  }
   const narration = composeNarration(context);
   return {
     source: 'deterministic',

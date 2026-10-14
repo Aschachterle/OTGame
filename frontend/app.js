@@ -46,10 +46,72 @@ function registerKeyboardControls() {
 
   window.addEventListener('keydown', (event) => {
     const tagName = event.target?.tagName;
+    const key = event.key.toLowerCase();
+    if (!appState.journeyStarted && !appState.journeyLoading && appState.setupStage === 'outfitting') {
+      if (key === 'r' && !['INPUT', 'SELECT', 'TEXTAREA'].includes(tagName)) {
+        event.preventDefault();
+        game.applyRecommendedOutfit();
+        return;
+      }
+      if (event.key === ' ') {
+        event.preventDefault();
+        void game.beginJourney();
+        return;
+      }
+    }
+    if (appState.turnPhase === 'results') {
+      if (['INPUT', 'SELECT', 'TEXTAREA'].includes(tagName)) return;
+      if (tagName === 'BUTTON' && [' ', 'enter'].includes(key)) return;
+      if (key === ' ' || key === 'enter') {
+        event.preventDefault();
+        if (ui.isTeletypeStreaming()) {
+          ui.skipTeletype();
+          return;
+        }
+        void playRetroClick();
+        game.continueToDispatch();
+      }
+      return;
+    }
+    if (appState.pendingMetaDialogue && !['INPUT', 'SELECT', 'TEXTAREA'].includes(tagName)) {
+      if (key === 'enter') {
+        event.preventDefault();
+        if (ui.isTeletypeStreaming()) {
+          ui.skipTeletype();
+          return;
+        }
+        const response = ui.getDecisionInputBuffer().trim();
+        if (!response) {
+          ui.setDecisionInputFeedback('Type a response before sending it to the Operator.');
+          return;
+        }
+        const { choiceId } = appState.pendingMetaDialogue;
+        ui.clearDecisionInputBuffer(appState);
+        void game.resolveDecisionChoice(choiceId, response);
+        return;
+      }
+      if (key === 'backspace' || key === 'delete') {
+        event.preventDefault();
+        ui.setDecisionInputBuffer(ui.getDecisionInputBuffer().slice(0, -1));
+        return;
+      }
+      if (key === 'escape') {
+        event.preventDefault();
+        game.cancelMetaDialogue();
+        return;
+      }
+      if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault();
+        ui.setDecisionInputBuffer(`${ui.getDecisionInputBuffer()}${event.key}`);
+      }
+      return;
+    }
     if (tagName === 'INPUT' || tagName === 'SELECT' || tagName === 'TEXTAREA') {
       return;
     }
-    const key = event.key.toLowerCase();
+    if (tagName === 'BUTTON' && [' ', 'enter'].includes(event.key.toLowerCase())) {
+      return;
+    }
     const decisionOptions = appState.activeDecision?.options ?? [];
     if (decisionOptions.length && !appState.actionInProgress) {
       if (/^[1-9]$/.test(key)) {
@@ -84,6 +146,17 @@ function registerKeyboardControls() {
         void game.resolveDecisionChoice(selectedOption.id);
         return;
       }
+    }
+    if (appState.turnPhase === 'prologue' && (key === ' ' || key === 'enter')) {
+      event.preventDefault();
+      if (ui.isTeletypeStreaming()) {
+        ui.skipTeletype();
+        return;
+      }
+      if (appState.journeyLoading || !appState.prologueReady) return;
+      void playRetroClick();
+      void game.startTrailAfterPrologue();
+      return;
     }
     if ((key === ' ' || key === 'enter') && ui.isTeletypeStreaming()) {
       event.preventDefault();
@@ -131,8 +204,40 @@ game = createGameController({
 
 ui.setHandlers({
   onAction: triggerAction,
+  onContinueDispatch: () => {
+    game.continueToDispatch();
+  },
+  onStartTrail: () => {
+    void game.startTrailAfterPrologue();
+  },
   onBeginJourney: () => {
     void game.beginJourney();
+  },
+  onSetupInteraction: () => {
+    if (!appState.journeyStarted && !appState.journeyLoading) {
+      void audio.playSetupMusic();
+    }
+  },
+  onRegisterParty: (payload) => {
+    game.configureParty(payload);
+  },
+  onSelectPartyEra: (eraId) => {
+    game.setPartyEra(eraId);
+  },
+  onSelectCreatorMember: (memberIndex) => {
+    game.selectCreatorMember(memberIndex);
+  },
+  onUpdateCreatorMember: (payload) => {
+    game.updateCreatorMember(payload);
+  },
+  onOutfittingQuantityChange: (key, quantity) => {
+    game.setOutfittingQuantity(key, quantity);
+  },
+  onRecommendedOutfit: () => {
+    game.applyRecommendedOutfit();
+  },
+  onBackToRegister: () => {
+    game.returnToPartyRegister();
   },
   onRefresh: () => {
     game.resetToJourneySetup();
@@ -171,9 +276,15 @@ ui.setHandlers({
   onReadNarration: () => {
     void audio.playNarration();
   },
+  onReadText: (text) => {
+    audio.speakTextLocally(text);
+  },
   onStorySourceToggle: (enabled) => {
     game.setJourneyLlmPreference(enabled);
     game.renderStoryPanel();
+  },
+  onStrangenessOverrideChange: (value) => {
+    game.setStrangenessOverride(value);
   },
   onVoiceChange: (voiceName) => {
     appState.selectedVoiceName = voiceName;
