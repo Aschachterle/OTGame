@@ -1,6 +1,6 @@
 import { Texture } from 'pixi.js';
 import { canonicalJson } from './canonical-json.js?v=pixi_final_1';
-import { getCharacterFrameGrid, drawCharacterGridAt } from './character-designer.js?v=pixi_final_9';
+import { getCharacterFrameGrid, drawCharacterGridAt } from './character-designer.js?v=pixi_final_11';
 import { drawOxenAndWagonCart } from './scene-sprites.js?v=pixi_final_1';
 
 function createCanvas(width, height, description) {

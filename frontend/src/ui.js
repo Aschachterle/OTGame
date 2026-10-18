@@ -36,7 +36,7 @@ import {
   getPresetsForCategoryAndEra,
   renderCharacterGridToCanvas,
   summarizeMemberOutfit
-} from './character-designer.js?v=pixi_final_9';
+} from './character-designer.js?v=pixi_final_11';
 import {
   getWeatherOverlayMeta,
   renderGameLandscapeStage,

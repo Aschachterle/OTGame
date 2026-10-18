@@ -9,7 +9,7 @@ import {
   getCharacterFrameGrid,
   mapBiomeToBackdropId,
   syncAllPartyAppearancesToEra
-} from './character-designer.js?v=pixi_final_9';
+} from './character-designer.js?v=pixi_final_11';
 import { GRID_SIZE } from './character-presets.js';
 import {
   WEATHER_OVERLAYS,

@@ -162,6 +162,49 @@ function shadeHex(hex, delta) {
   return '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('');
 }
 
+function mixHex(first, second, amount) {
+  if (!first || !second) return first || second || null;
+  const a = parseInt(first.replace('#', ''), 16);
+  const b = parseInt(second.replace('#', ''), 16);
+  const channels = [16, 8, 0].map((shift) => {
+    const av = (a >> shift) & 0xff;
+    const bv = (b >> shift) & 0xff;
+    return Math.round(av * (1 - amount) + bv * amount);
+  });
+  return '#' + channels.map((value) => value.toString(16).padStart(2, '0')).join('');
+}
+
+function coolShadowHex(hex, amount = 0.52) {
+  return mixHex(hex, '#282436', amount);
+}
+
+function localOutlineHex(hex, amount = 0.72) {
+  return mixHex(hex, '#140c1c', amount);
+}
+
+function isOutlineColor(color, fallbackOutline = '#140c1c') {
+  return color && (color.toLowerCase() === '#140c1c' || color.toLowerCase() === fallbackOutline.toLowerCase());
+}
+
+function getSelectiveOutlineColor(grid, x, y, fallbackOutline = '#140c1c') {
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  let samples = 0;
+  for (const [dx, dy] of [[0, -1], [-1, 0], [1, 0], [0, 1]]) {
+    const color = grid[y + dy]?.[x + dx];
+    if (!color || isOutlineColor(color, fallbackOutline)) continue;
+    const value = parseInt(color.replace('#', ''), 16);
+    r += (value >> 16) & 0xff;
+    g += (value >> 8) & 0xff;
+    b += value & 0xff;
+    samples++;
+  }
+  if (!samples) return fallbackOutline;
+  const localColor = '#' + [r, g, b].map((value) => Math.round(value / samples).toString(16).padStart(2, '0')).join('');
+  return localOutlineHex(localColor, 0.76);
+}
+
 function shiftGrid(sourceGrid, dx, dy = 0) {
   if (!dx && !dy) return sourceGrid;
   const shifted = createEmptyGrid();
@@ -501,7 +544,7 @@ export function buildNeutralCompositeGrid(appearance, baseOrientation = 'front')
 }
 
 const SIDE_LEG_POSE_MAPS = {
-  // Frame 0 (Beat 1A — Box 1 in reference strip): Heel Strike A (front heel touches down with toe tilted up; back foot planted behind; torsoBounceY = 1)
+  // FRAME 1 (f=0, Neutral Height torsoBounceY=0): Near (warm) leg forward with heel-strike; Far (cool dark) leg back pushing off on toe
   frame0: [
     '............OOOOOOO.............',
     '............OhhhHHHO............',
@@ -509,29 +552,17 @@ const SIDE_LEG_POSE_MAPS = {
     '...........OppO.OLPO............',
     '..........OppO...OLPO...........',
     '.........ObbO....OBPO...........',
-    '.........OkbO.....OKPO..........',
-    '........OukO......OKUOOO........',
+    '........OukbO.....OKPO..........',
+    '.......OduwO......OKPO..........',
+    '.......OduwO......OKUOOO........',
     '........OuwO.......OUWWWO.......',
-    '........OduwO......ODUOOO.......',
-    '........OOOOO.......OOO.........'
+    '........OuwO.......ODUOOO.......',
+    '........OOOO........OOO.........'
   ],
-  // Frame 1 (Beat 2A — Box 3 in reference strip): Flat Plant & Toe-Off A (front foot slaps flat & glides back to x=16..22; back foot tilts onto toe at x=7..11; torsoBounceY = 0)
+  // FRAME 2 (f=1, Down - Dip 1px torsoBounceY=+1): Near (warm) foot planted flat bearing weight; Far (cool dark) leg bends, lifting knee and foot to pass forward
   frame1: [
-    '............OHHHHHO.............',
-    '............OhhhHHHO............',
-    '............OhhOHHHO............',
-    '...........OppOOLPO.............',
-    '..........OppO..OLPO............',
-    '.........ObbO...OBPO............',
-    '........OukbO....OKPO...........',
-    '.......OduwO.....OKPO...........',
-    '.......OduwO.....OKUOOO.........',
-    '........OuwO.....ODUWWWO........',
-    '........OOOO.....OOOOOOO........'
-  ],
-  // Frame 2 (Beat 3A — Box 2 in reference strip): Vertical Pillar & Knee Lift A (front leg straight vertical at x=15..21; back knee bends & lifts foot at x=8..12, y=26..29; torsoBounceY = 0)
-  frame2: [
-    '............OHHHHHO.............',
+    '............OOOOOOO.............',
+    '............OOOOOOO.............',
     '............OhhhHHHO............',
     '............OhhOHHHO............',
     '...........OppOOLPO.............',
@@ -543,62 +574,80 @@ const SIDE_LEG_POSE_MAPS = {
     '........OOO.....ODUWWWO.........',
     '................OOOOOOO.........'
   ],
-  // Frame 3 (Beat 1B — Box 4 in reference strip): Wide Heel Strike B (far leg strikes forward heel-first with toe tilted up; near leg planted behind; torsoBounceY = 1)
-  frame3: [
-    '............OOOOOOO.............',
-    '............OHHHhhhO............',
-    '...........OHHHOohhhO...........',
-    '...........OLPO..oppO...........',
-    '..........OLPO....oppO..........',
-    '.........OBPO......obbO.........',
-    '........OKPO.......okbO.........',
-    '........OKPO........okuOOO......',
-    '.......ODUWO.........ouwwwO.....',
-    '.......ODUWO.........oduOOO.....',
-    '.......OOOOO..........OOO.......'
-  ],
-  // Frame 4 (Beat 2B — Box 5 in reference strip): Flat Plant & Vertical Toe Push-Off B (far foot slaps flat at x=16..22; near foot rolls onto vertical toe tip at x=7..10; near arm swings forward; torsoBounceY = 0)
-  frame4: [
+  // FRAME 3 (f=2, Up - Rise 1px torsoBounceY=-1): Near (warm) heel lifts pushing off back; Far (cool dark) leg extends forward in air to strike
+  frame2: [
     '............OHHHHHO.............',
     '............OHHHhhhO............',
     '............OHHOohhhO...........',
-    '...........OLPO..oppO...........',
+    '...........OLPO.oppO............',
     '..........OLPO...oppO...........',
     '.........OBPO.....obbO..........',
-    '.......OOKPO......okbO..........',
-    '.......ODUWO......okbO..........',
-    '.......ODUO.......okuOOO........',
-    '.......OUWO.......oduwwwO.......',
-    '.......OOOO.......OOOOOOO.......'
+    '........OOKPO.....okbO..........',
+    '.......ODUWO.......okbO.........',
+    '.......ODUWO.......okuOOO.......',
+    '........OUWO........ouwwwO......',
+    '........OUWO........oduOOO......',
+    '........OOOO....................'
   ],
-  // Frame 5 (Beat 3B — Box 6 in reference strip): Vertical Pillar & High Passing Lift B (far leg straight vertical at x=15..21; near knee bends & lifts foot in air at x=8..12, y=26..29; torsoBounceY = 0)
-  frame5: [
-    '............OHHHHHO.............',
+  // FRAME 4 (f=3, Neutral Height torsoBounceY=0): Far (cool dark) leg forward with heel-strike; Near (warm) leg back pushing off on toe
+  frame3: [
+    '............OOOOOOO.............',
+    '............OHHHhhhO............',
+    '............OHHOohhhO...........',
+    '...........OLPO.oppO............',
+    '..........OLPO...oppO...........',
+    '.........OBPO....obbO...........',
+    '........OOKPO.....okbO..........',
+    '.......ODUWO......okbO..........',
+    '.......ODUWO......okuOOO........',
+    '........OUWO.......ouwwwO.......',
+    '........OUWO.......oduOOO.......',
+    '........OOOO........OOO.........'
+  ],
+  // FRAME 5 (f=4, Down - Dip 1px torsoBounceY=+1): Far (cool dark) foot planted flat bearing weight; Near (warm) leg bends in foreground, lifting knee & foot to pass forward
+  frame4: [
+    '............OOOOOOO.............',
+    '............OOOOOOO.............',
     '............OHHHhhhO............',
     '............OHHOhhO.............',
-    '...........OLPOoppO.............',
-    '...........OLPO.oppO............',
-    '..........OBPO..obbO............',
+    '............OLPOppO.............',
+    '............OLPOoppO............',
+    '...........OBPO.obbO............',
     '........OOKBPO..okbO............',
     '........ODUWO...okbO............',
     '........ODUO....okuOOO..........',
     '........OOO.....oduwwwO.........',
     '................OOOOOOO.........'
+  ],
+  // FRAME 6 (f=5, Up - Rise 1px torsoBounceY=-1): Far (cool dark) heel lifts pushing off back; Near (warm) leg reaches forward in air to prepare for Frame 1 heel-strike
+  frame5: [
+    '............OHHHHHO.............',
+    '............OhhhHHHO............',
+    '............OhhOHHHO............',
+    '...........OppO.OLPO............',
+    '..........OppO...OLPO...........',
+    '.........ObbO.....OBPO..........',
+    '........OukbO.....OKPO..........',
+    '.......OduwO.......OKPO.........',
+    '.......OduwO.......OKUOOO.......',
+    '........OuwO........OUWWWO......',
+    '........OuwO........ODUOOO......',
+    '........OOOO....................'
   ]
 };
 
 const SIDE_ARM_POSE_MAPS = {
-  // Frame 0 (Contact Stride A): Near arm swung back, Far arm swung forward
+  // FRAME 1 (f=0): Near arm pulled slightly back, Far (darker) arm swinging forward
   frame0: {
     near: [
       '...........OSAO.................',
       '..........OSAO..................',
       '..........OSAO..................',
-      '..........OSAO..................',
-      '..........OSAO..................',
-      '..........OBLO..................',
-      '..........OBBO..................',
-      '..........OOOO..................'
+      '.........OSAO...................',
+      '.........OSAO...................',
+      '.........OBLO...................',
+      '.........OBBO...................',
+      '.........OOOO...................'
     ],
     far: [
       '................................',
@@ -611,7 +660,7 @@ const SIDE_ARM_POSE_MAPS = {
       '................................'
     ]
   },
-  // Frame 1 (Passing Lift A): Near arm bent at elbow returning toward hip, Far hand closer to front waist
+  // FRAME 2 (f=1): Near arm begins swinging forward toward hip, Far arm retracting
   frame1: {
     near: [
       '...........OSAO.................',
@@ -634,35 +683,53 @@ const SIDE_ARM_POSE_MAPS = {
       '................................'
     ]
   },
-  // Frame 2 (Crossover Reach A): Near arm swinging forward past hip, Far arm tucked behind
+  // FRAME 3 (f=2): Near arm swinging forward across hip, Far arm swinging back behind torso
   frame2: {
     near: [
       '...........OSAO.................',
       '...........OSAO.................',
       '...........OSAO.................',
-      '...........OSAO.................',
+      '............OSAO................',
       '............OSAO................',
       '............OBLO................',
       '............OBBO................',
       '............OOOO................'
     ],
-    far: []
+    far: [
+      '................................',
+      '................................',
+      '................................',
+      '.........OaO....................',
+      '.........ObbO...................',
+      '.........OOOO...................',
+      '................................',
+      '................................'
+    ]
   },
-  // Frame 3 (Contact Stride B): Near arm swung forward across hip, Far arm behind torso
+  // FRAME 4 (f=3): Near arm swung forward across torso, Far (darker) arm pulled back
   frame3: {
     near: [
       '...........OSAO.................',
       '...........OSAO.................',
       '............OSAO................',
       '............OSAO................',
+      '.............OSAO...............',
       '.............OBLO...............',
       '.............OBBO...............',
-      '.............OOOO...............',
-      '................................'
+      '.............OOOO...............'
     ],
-    far: []
+    far: [
+      '................................',
+      '................................',
+      '.........OaaO...................',
+      '........OaaaO...................',
+      '........ObbO....................',
+      '........OOOO....................',
+      '................................',
+      '................................'
+    ]
   },
-  // Frame 4 (Passing Lift B): Near arm returning from forward swing across hip, Far arm hidden
+  // FRAME 5 (f=4): Near arm returning from forward swing, Far arm counter-swinging behind torso
   frame4: {
     near: [
       '...........OSAO.................',
@@ -676,26 +743,26 @@ const SIDE_ARM_POSE_MAPS = {
     ],
     far: []
   },
-  // Frame 5 (Crossover Reach B): Near arm bent at elbow swinging back, Far hand peeking out in front
+  // FRAME 6 (f=5): Near arm pulled back at elbow, Far (darker) arm reaching forward preparing for Frame 1
   frame5: {
     near: [
       '...........OSAO.................',
       '..........OSAO..................',
       '..........OSAO..................',
       '..........OSAO..................',
-      '...........OSAO.................',
-      '...........OBLO.................',
-      '...........OBBO.................',
-      '...........OOOO.................'
+      '..........OSAO..................',
+      '..........OBLO..................',
+      '..........OBBO..................',
+      '..........OOOO..................'
     ],
     far: [
       '................................',
       '................................',
-      '................................',
-      '.................ObO............',
-      '.................ObO............',
-      '.................OOO............',
-      '................................',
+      '.................OaO............',
+      '.................OaaO...........',
+      '..................ObbO..........',
+      '..................ObbO..........',
+      '..................OOOO..........',
       '................................'
     ]
   },
@@ -736,7 +803,6 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
       pantsPresetId.includes('kilt'));
 
   const sampleSideLegPalette = () => {
-    const outline = skin.outline || '#140c1c';
     const hipPrimary = neutral[21]?.[15] || '#2d2936';
     const thighHighlight = neutral[23]?.[15] || skin.highlight;
     const thighPrimary = neutral[23]?.[16] || skin.base;
@@ -745,11 +811,11 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
     const shoeUpper = neutral[28]?.[16] || skin.base;
     const shoeBright = neutral[28]?.[17] || shoeUpper;
     const shoeSole = neutral[29]?.[15] || shadeHex(shoeUpper, -20);
-    const farDelta = -18;
-    const farShoeDelta = -14;
+    const nearOutline = localOutlineHex(hipPrimary, 0.76);
+    const farOutline = coolShadowHex(nearOutline, 0.35);
     return {
-      O: outline,
-      o: outline,
+      O: nearOutline,
+      o: farOutline,
       H: hipPrimary,
       L: thighHighlight,
       P: thighPrimary,
@@ -758,14 +824,14 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
       U: shoeUpper,
       W: shoeBright,
       D: shoeSole,
-      h: shadeHex(hipPrimary, farDelta),
-      l: shadeHex(thighHighlight, farDelta),
-      p: shadeHex(thighPrimary, farDelta),
-      b: shadeHex(calfPrimary, farDelta),
-      k: shadeHex(anklePrimary, farDelta),
-      u: shadeHex(shoeUpper, farShoeDelta),
-      w: shadeHex(shoeBright, farShoeDelta),
-      d: shadeHex(shoeSole, farShoeDelta)
+      h: coolShadowHex(hipPrimary, 0.55),
+      l: coolShadowHex(thighHighlight, 0.55),
+      p: coolShadowHex(thighPrimary, 0.55),
+      b: coolShadowHex(calfPrimary, 0.55),
+      k: coolShadowHex(anklePrimary, 0.55),
+      u: coolShadowHex(shoeUpper, 0.50),
+      w: coolShadowHex(shoeBright, 0.50),
+      d: coolShadowHex(shoeSole, 0.45)
     };
   };
 
@@ -774,7 +840,7 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
     const rows = SIDE_LEG_POSE_MAPS[poseKey] || SIDE_LEG_POSE_MAPS.frame1;
 
     for (let idx = 0; idx < rows.length; idx++) {
-      const y = 20 + idx;
+      const y = 19 + idx;
       if (isSkirtEquipped && !isShortSkirt && y < 27) continue;
       const rowStr = rows[idx];
       for (let x = 0; x < GRID_SIZE && x < rowStr.length; x++) {
@@ -787,36 +853,67 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
 
     if (isSkirtEquipped) {
       const maxSkirtY = isShortSkirt ? 25 : 27;
-      for (let y = 20; y <= maxSkirtY; y++) {
+      for (let y = 19; y <= maxSkirtY; y++) {
+        const srcY = Math.min(maxSkirtY, Math.max(20, y - torsoBounceY));
         for (let x = 0; x < GRID_SIZE; x++) {
-          const c = neutral[y][x];
+          const c = neutral[srcY][x];
           if (!c) continue;
           const dx = y >= 24 ? swayDx : 0;
           const destX = x + dx;
-          const destY = y + (y <= 22 ? torsoBounceY : 0);
-          if (destX >= 0 && destX < GRID_SIZE && destY >= 20 && destY < GRID_SIZE) {
-            targetGrid[destY][destX] = c;
+          if (destX >= 0 && destX < GRID_SIZE && y >= 19 && y < GRID_SIZE) {
+            targetGrid[y][destX] = c;
           }
         }
       }
     }
   };
 
-  const drawSideUpperBodyAndArms = (targetGrid, armPoseKey = 'standing', torsoBounceY = 0) => {
-    const outline = skin.outline || '#140c1c';
+  const drawSideUpperBodyAndArms = (targetGrid, armPoseKey = 'standing', torsoBounceY = 0, secondarySwayDx = 0) => {
     const armShadow = neutral[15]?.[12] || skin.shadow;
     const armPrimary = neutral[15]?.[13] || skin.base;
     const chestFill = neutral[16]?.[15] || armPrimary;
+    const nearArmOutline = localOutlineHex(armPrimary, 0.76);
+    const chestOutline = localOutlineHex(chestFill, 0.76);
     const armPalette = {
-      O: outline,
+      O: nearArmOutline,
+      o: coolShadowHex(nearArmOutline, 0.35),
       S: armShadow,
       A: armPrimary,
       B: skin.base,
       L: skin.highlight,
-      a: shadeHex(armPrimary, -14),
-      b: skin.shadow
+      a: coolShadowHex(armPrimary, 0.55),
+      b: coolShadowHex(skin.shadow, 0.50)
     };
     const armPose = SIDE_ARM_POSE_MAPS[armPoseKey] || SIDE_ARM_POSE_MAPS.standing;
+    const isScarfPixel = (color, x, y) => {
+      if (y < 11 || y > 17 || !color) return false;
+      const value = parseInt(color.replace('#', ''), 16);
+      const red = (value >> 16) & 0xff;
+      const green = (value >> 8) & 0xff;
+      const blue = value & 0xff;
+      return red > 100 && red > green * 1.25 && red > blue * 1.12 && x >= 11;
+    };
+    const shadeUpperBodyPixel = (color, x, y) => {
+      if (isOutlineColor(color, skin.outline || '#140c1c')) {
+        return getSelectiveOutlineColor(neutral, x, y, skin.outline || '#140c1c');
+      }
+
+      let delta = 0;
+      // Top-front/left light source: highlight crown of hat, top of bedroll/pack, and upper scarf
+      if (y <= 4) delta += 10;
+      // Occlusion shadow beneath hat brim
+      if (y === 7 && x >= 11 && x <= 20) delta -= 12;
+      // Bedroll & backpack top highlight and under-pack occlusion shadow
+      if (x <= 11 && y >= 9 && y <= 19) {
+        if (y <= 11) delta += 9;
+        if (y >= 17) delta -= 12;
+      }
+      // Under-torso occlusion shadow above belt
+      if (x >= 12 && y >= 17 && y <= 18) delta -= 8;
+      // Scarf top highlight vs lower fold shadow
+      if (isScarfPixel(color, x, y)) delta += y <= 13 ? 10 : -8;
+      return delta ? shadeHex(color, delta) : color;
+    };
 
     // 1. Draw Far Arm behind/in front of torso edge (y = 14..21 + torsoBounceY)
     if (armPose.far && armPose.far.length) {
@@ -827,32 +924,49 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
         for (let x = 0; x < GRID_SIZE && x < rowStr.length; x++) {
           const ch = rowStr[x];
           if (ch !== '.' && armPalette[ch]) {
-            targetGrid[destY][x] = armPalette[ch];
+            targetGrid[destY][x] = armPalette[ch === 'O' ? 'o' : ch];
           }
         }
       }
     }
 
     // 2. Copy Head (y = 1..12), Backpack (x <= 11, y = 9..19), and Torso Chest (x = 12..31, y = 13..19)
+    // First pass fills all base pixels at their unshifted x so secondary scarf/pack sway never leaves holes!
     for (let y = 1; y <= 19; y++) {
       const destY = y + torsoBounceY;
       if (destY < 0 || destY >= GRID_SIZE) continue;
       for (let x = 0; x < GRID_SIZE; x++) {
         if (y >= 14 && x >= 11 && x <= 14) {
           if (x === 11) {
-            if (neutral[y]?.[10]) targetGrid[destY][11] = outline;
+            if (neutral[y]?.[10]) targetGrid[destY][11] = chestOutline;
           } else if (x === 12 && y <= 18) {
-            targetGrid[destY][12] = outline;
+            targetGrid[destY][12] = chestOutline;
           } else if ((x === 13 || x === 14) && y <= 18) {
-            targetGrid[destY][x] = chestFill;
+            targetGrid[destY][x] = shadeUpperBodyPixel(chestFill, x, y);
           } else if ((x === 13 || x === 14) && y === 19) {
-            targetGrid[destY][x] = outline;
+            targetGrid[destY][x] = chestOutline;
           }
           continue;
         }
         const c = neutral[y][x];
         if (c) {
-          targetGrid[destY][x] = c;
+          targetGrid[destY][x] = shadeUpperBodyPixel(c, x, y);
+        }
+      }
+    }
+
+    // Secondary motion pass: subtle lag on scarf tail (y = 14..15) and lower backpack strap (y = 16..18, x <= 10)
+    if (secondarySwayDx !== 0) {
+      const lagDy = torsoBounceY > 0 ? -1 : torsoBounceY < 0 ? 1 : 0;
+      for (let y = 14; y <= 18; y++) {
+        const destY = y + torsoBounceY + lagDy;
+        if (destY < 12 || destY >= 20) continue;
+        for (let x = 7; x <= 18; x++) {
+          const c = neutral[y][x];
+          if (!c) continue;
+          if (isScarfPixel(c, x, y) && y >= 14 && y <= 15) {
+            targetGrid[destY][x] = shadeUpperBodyPixel(c, x, y);
+          }
         }
       }
     }
@@ -993,12 +1107,13 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
         }
       }
     } else {
-      // 6-Frame Side Walk Cycle matching the 6 frames of 2D144CE1-D693-4BA9-B7C7-6D76AEE8CC88.png!
+      // Six-frame alternating stride: contact, load, push-off for each leg in turn.
       const poseKey = 'frame' + f;
-      const torsoBounceY = f === 0 || f === 3 ? 1 : 0;
-      const swayDx = f === 0 || f === 3 ? -1 : f === 2 || f === 4 ? 1 : 0;
+      const torsoBounceY = f === 1 || f === 4 ? 1 : f === 2 || f === 5 ? -1 : 0;
+      const secondarySwayDx = f === 1 || f === 4 ? -1 : f === 2 || f === 5 ? 1 : 0;
+      const swayDx = secondarySwayDx;
       drawSidePoseLegs(result, poseKey, torsoBounceY, swayDx);
-      drawSideUpperBodyAndArms(result, poseKey, torsoBounceY);
+      drawSideUpperBodyAndArms(result, poseKey, torsoBounceY, secondarySwayDx);
     }
   }
 

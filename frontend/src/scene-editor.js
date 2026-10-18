@@ -1,4 +1,9 @@
-import { SELECTABLE_ERAS } from './character-designer.js?v=pixi_final_9';
+import {
+  SELECTABLE_ERAS,
+  getCharacterFrameGrid,
+  renderCharacterGridToCanvas,
+  syncAllPartyAppearancesToEra
+} from './character-designer.js?v=pixi_final_11';
 import { trailMilestones } from './state.js';
 import {
   FERRY_BOARDING_END,
@@ -33,12 +38,24 @@ const frameReadout = document.querySelector('#frame-readout');
 const riverDepthField = document.querySelector('#river-depth-field');
 const riverDepthInput = document.querySelector('#river-depth');
 const riverDepthResetButton = document.querySelector('#river-depth-reset');
+const spriteCharacterControl = document.querySelector('#sprite-character');
+const spriteViewControl = document.querySelector('#sprite-view');
+const spriteAnimationControl = document.querySelector('#sprite-animation');
+const spritePlayButton = document.querySelector('#sprite-play');
+const spriteFrameStrip = document.querySelector('#sprite-frame-strip');
+const spriteFrameReadout = document.querySelector('#sprite-frame-readout');
 
 if (
   !(canvas instanceof HTMLCanvasElement)
   || !(riverDepthField instanceof HTMLElement)
   || !(riverDepthInput instanceof HTMLInputElement)
   || !(riverDepthResetButton instanceof HTMLButtonElement)
+  || !(spriteCharacterControl instanceof HTMLSelectElement)
+  || !(spriteViewControl instanceof HTMLSelectElement)
+  || !(spriteAnimationControl instanceof HTMLSelectElement)
+  || !(spritePlayButton instanceof HTMLButtonElement)
+  || !(spriteFrameStrip instanceof HTMLElement)
+  || !(spriteFrameReadout instanceof HTMLOutputElement)
 ) {
   throw new Error('Scene editor controls were not found.');
 }
@@ -174,6 +191,13 @@ for (const era of SELECTABLE_ERAS) {
 }
 eraControl.value = state.selectedEra;
 
+for (const [index, spec] of editorPartySpecs.entries()) {
+  const option = document.createElement('option');
+  option.value = String(index);
+  option.textContent = `${spec.name} · ${spec.role}`;
+  spriteCharacterControl.append(option);
+}
+
 for (const landmark of riverLandmarks) {
   const option = document.createElement('option');
   option.value = landmark.id;
@@ -189,6 +213,58 @@ let lastProgressAt = null;
 let animationTimer = null;
 let previewDepthLandmarkId = null;
 let previewDepthFt = null;
+let spriteAnimationTimer = null;
+let selectedSpriteFrame = 0;
+
+function stopSpritePlayback() {
+  if (spriteAnimationTimer !== null) {
+    window.clearInterval(spriteAnimationTimer);
+    spriteAnimationTimer = null;
+  }
+  spritePlayButton.textContent = 'Play cycle';
+  spritePlayButton.setAttribute('aria-pressed', 'false');
+}
+
+function renderSpriteViewer() {
+  const memberIndex = Number(spriteCharacterControl.value) || 0;
+  const member = party[memberIndex] ?? party[0];
+  if (!member?.appearance) return;
+
+  const view = spriteViewControl.value;
+  const animationMode = spriteAnimationControl.value;
+  const frameCount = animationMode === 'idle' ? 2 : 6;
+  selectedSpriteFrame = ((selectedSpriteFrame % frameCount) + frameCount) % frameCount;
+  spriteFrameStrip.replaceChildren();
+
+  for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
+    const tile = document.createElement('button');
+    tile.type = 'button';
+    tile.className = 'sprite-frame';
+    tile.setAttribute('aria-pressed', String(frameIndex === selectedSpriteFrame));
+    tile.setAttribute('aria-label', `${member.name}, ${view === 'front' ? 'front' : 'side'} ${animationMode} frame ${frameIndex + 1} of ${frameCount}`);
+
+    const frameCanvas = document.createElement('canvas');
+    frameCanvas.width = 32;
+    frameCanvas.height = 32;
+    frameCanvas.setAttribute('aria-hidden', 'true');
+    const grid = getCharacterFrameGrid(member.appearance, view, animationMode, frameIndex);
+    renderCharacterGridToCanvas(frameCanvas, grid, { bgColor: '#020904', includeBackdrop: false });
+
+    const label = document.createElement('span');
+    label.className = 'sprite-frame-label';
+    label.textContent = `FRAME ${frameIndex + 1}`;
+
+    tile.append(frameCanvas, label);
+    tile.addEventListener('click', () => {
+      stopSpritePlayback();
+      selectedSpriteFrame = frameIndex;
+      renderSpriteViewer();
+    });
+    spriteFrameStrip.append(tile);
+  }
+
+  spriteFrameReadout.textContent = `${animationMode.toUpperCase()} · FRAME ${selectedSpriteFrame + 1}/${frameCount} · ${member.name}`;
+}
 
 function syncDepthPreview(landmark, isRiverCrossing) {
   if (!isRiverCrossing || !landmark) {
@@ -229,6 +305,7 @@ function resetDepthPreview() {
 }
 
 function updateState() {
+  const eraChanged = state.selectedEra !== eraControl.value;
   const mode = sceneModeControl.value;
   const isRiverCrossing = mode === 'crossing';
   const isPrologue = mode === 'prologue';
@@ -260,6 +337,8 @@ function updateState() {
       : undefined;
   state.generalStoreApproachProgress = isStoreApproach ? progress : 0;
   state.selectedEra = eraControl.value;
+  syncAllPartyAppearancesToEra(party, state.selectedEra);
+  if (eraChanged) renderSpriteViewer();
   state.weatherOverlay = weatherOverlay;
   state.dialogueOverride = buildEditorDialogueOverride(speakerSelection, mode, method);
   state.milesTraveled = isRiverCrossing ? (selectedRiver?.mile ?? 0) : 570;
@@ -429,8 +508,38 @@ resetButton.addEventListener('click', () => {
   updateState();
 });
 
+spriteCharacterControl.addEventListener('change', () => {
+  stopSpritePlayback();
+  selectedSpriteFrame = 0;
+  renderSpriteViewer();
+});
+spriteViewControl.addEventListener('change', () => {
+  stopSpritePlayback();
+  selectedSpriteFrame = 0;
+  renderSpriteViewer();
+});
+spriteAnimationControl.addEventListener('change', () => {
+  stopSpritePlayback();
+  selectedSpriteFrame = 0;
+  renderSpriteViewer();
+});
+spritePlayButton.addEventListener('click', () => {
+  if (spriteAnimationTimer !== null) {
+    stopSpritePlayback();
+    return;
+  }
+  spritePlayButton.textContent = 'Pause cycle';
+  spritePlayButton.setAttribute('aria-pressed', 'true');
+  spriteAnimationTimer = window.setInterval(() => {
+    const frameCount = spriteAnimationControl.value === 'idle' ? 2 : 6;
+    selectedSpriteFrame = (selectedSpriteFrame + 1) % frameCount;
+    renderSpriteViewer();
+  }, 180);
+});
+
 riverDepthInput.addEventListener('input', handleDepthPreviewInput);
 riverDepthInput.addEventListener('change', handleDepthPreviewInput);
 riverDepthResetButton.addEventListener('click', resetDepthPreview);
 
 updateState();
+renderSpriteViewer();

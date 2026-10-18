@@ -38,6 +38,38 @@
         </div>
       </div>
 
+      <section class="sprite-viewer" aria-label="Character sprite animation viewer">
+        <div class="panel-heading sprite-viewer-heading">
+          <div>
+            <p class="eyebrow">SPRITE VIEWER</p>
+            <h2>Character animation frames</h2>
+          </div>
+          <output id="sprite-frame-readout" aria-live="polite">WALK · FRAME 1/6</output>
+        </div>
+        <div class="sprite-viewer-controls">
+          <label>
+            Character
+            <select id="sprite-character" aria-label="Character"></select>
+          </label>
+          <label>
+            Facing
+            <select id="sprite-view" aria-label="Sprite facing">
+              <option value="side_right" selected>Side</option>
+              <option value="front">Front</option>
+            </select>
+          </label>
+          <label>
+            Animation
+            <select id="sprite-animation" aria-label="Sprite animation">
+              <option value="walk" selected>Walk · 6 frames</option>
+              <option value="idle">Idle · 2 frames</option>
+            </select>
+          </label>
+          <button id="sprite-play" class="secondary-button" type="button" aria-pressed="false">Play cycle</button>
+        </div>
+        <div id="sprite-frame-strip" class="sprite-frame-strip" aria-label="Animation frames"></div>
+      </section>
+
       <aside class="controls-panel" aria-label="Scene controls">
         <p class="eyebrow">SCENE SETUP</p>
         <label>
@@ -132,6 +164,6 @@
       </aside>
     </section>
   </main>
-  <script type="module" src="./src/scene-editor.js?v=pixi_final_3"></script>
+  <script type="module" src="./src/scene-editor.js?v=pixi_final_8"></script>
 </body>
 </html>
