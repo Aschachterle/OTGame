@@ -326,12 +326,7 @@ function createEmptyGrid() {
 }
 
 function isInsideBodyForView(appearance, x, y, baseOrientation = 'front', category = null) {
-  if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return false;
-  if (category === 'hats' || category === 'accessories') return true;
-  const template = getBodyTemplateById(appearance?.bodyTemplateId);
-  const map = baseOrientation === 'side' ? template.side : template.front;
-  const ch = map[y]?.[x];
-  return Boolean(ch && ch !== '.');
+  return x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE;
 }
 
 function getBaseBodyPixel(appearance, x, y, baseOrientation = 'front') {
@@ -450,7 +445,14 @@ export function buildNeutralCompositeGrid(appearance, baseOrientation = 'front')
           );
         }
         if (finalColor) {
-          grid[y][x] = finalColor;
+          const isLowerHair =
+            cat === 'hats' &&
+            preset.subType === 'hair' &&
+            y >= 12 &&
+            !(presetId.includes('beard') && baseOrientation === 'front' && x >= 11 && x <= 20);
+          if (!isLowerHair || !grid[y][x]) {
+            grid[y][x] = finalColor;
+          }
         }
       }
     });
