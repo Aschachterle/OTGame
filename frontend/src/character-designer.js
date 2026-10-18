@@ -162,6 +162,23 @@ function shadeHex(hex, delta) {
   return '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('');
 }
 
+function shiftGrid(sourceGrid, dx, dy = 0) {
+  if (!dx && !dy) return sourceGrid;
+  const shifted = createEmptyGrid();
+  for (let y = 0; y < GRID_SIZE; y++) {
+    for (let x = 0; x < GRID_SIZE; x++) {
+      const color = sourceGrid[y][x];
+      if (!color) continue;
+      const targetX = x + dx;
+      const targetY = y + dy;
+      if (targetX >= 0 && targetX < GRID_SIZE && targetY >= 0 && targetY < GRID_SIZE) {
+        shifted[targetY][targetX] = color;
+      }
+    }
+  }
+  return shifted;
+}
+
 export function getEraById(eraId) {
   return SELECTABLE_ERAS.find((era) => era.id === eraId) || SELECTABLE_ERAS.find((era) => era.id === DEFAULT_PARTY_ERA_ID) || SELECTABLE_ERAS[0];
 }
@@ -237,6 +254,7 @@ export function createMemberAppearance({
       accessories: 'default'
     }
   };
+
   equipMemberEraOutfit(appearance, eraId, headwearType, variantIndex);
   return appearance;
 }
@@ -483,98 +501,98 @@ export function buildNeutralCompositeGrid(appearance, baseOrientation = 'front')
 }
 
 const SIDE_LEG_POSE_MAPS = {
-  // Frame 0 (Box 2 in reference): Medium Contact Stride
+  // Frame 0 (Beat 1A — Box 1 in reference strip): Heel Strike A (front heel touches down with toe tilted up; back foot planted behind; torsoBounceY = 1)
   frame0: [
-    '..............OHHHHHO...........',
-    '.............OhhhHHHHO..........',
-    '............OhhhOHHHHO..........',
-    '...........OpppO.OLPPO..........',
-    '..........OpppO...OLPPO.........',
-    '.........ObbbO....OBBPO.........',
-    '........OkkkO......OKBPO........',
-    '.......OduuO.......OOKUO........',
-    '.......OduwO........OUWWOO......',
-    '........OuwO........ODUUWWO.....',
-    '........OOOO........OOOOOOO.....'
+    '............OOOOOOO.............',
+    '............OhhhHHHO............',
+    '............OhhOHHHO............',
+    '...........OppO.OLPO............',
+    '..........OppO...OLPO...........',
+    '.........ObbO....OBPO...........',
+    '.........OkbO.....OKPO..........',
+    '........OukO......OKUOOO........',
+    '........OuwO.......OUWWWO.......',
+    '........OduwO......ODUOOO.......',
+    '........OOOOO.......OOO.........'
   ],
-  // Frame 1 (Box 3 in reference): Recoil / Passing 1 — back knee bent, front leg straight vertical
+  // Frame 1 (Beat 2A — Box 3 in reference strip): Flat Plant & Toe-Off A (front foot slaps flat & glides back to x=16..22; back foot tilts onto toe at x=7..11; torsoBounceY = 0)
   frame1: [
-    '..............OHHHHHO...........',
-    '.............OhhhHHHHO..........',
-    '.............OhhhHHHHO..........',
-    '............OpppOLPPO...........',
-    '...........OpppO.OLPPO..........',
-    '..........ObbbO..OBBPO..........',
-    '.........OkkkO...OKBPO..........',
-    '........OduuO....OOKUO..........',
-    '........OduwO....OUWWOO.........',
-    '.........OuwO....ODUUWWO........',
-    '.........OOOO....OOOOOOO........'
+    '............OHHHHHO.............',
+    '............OhhhHHHO............',
+    '............OhhOHHHO............',
+    '...........OppOOLPO.............',
+    '..........OppO..OLPO............',
+    '.........ObbO...OBPO............',
+    '........OukbO....OKPO...........',
+    '.......OduwO.....OKPO...........',
+    '.......OduwO.....OKUOOO.........',
+    '........OuwO.....ODUWWWO........',
+    '........OOOO.....OOOOOOO........'
   ],
-  // Frame 2 (Box 4 in reference): Mid-Stride Extension
+  // Frame 2 (Beat 3A — Box 2 in reference strip): Vertical Pillar & Knee Lift A (front leg straight vertical at x=15..21; back knee bends & lifts foot at x=8..12, y=26..29; torsoBounceY = 0)
   frame2: [
-    '..............OHHHHHO...........',
-    '.............OHHHhhhO...........',
-    '............OHHHHOhhhO..........',
-    '...........OLPPO.opppO..........',
-    '..........OLPPO...opppO.........',
-    '.........OBBPO....obbbO.........',
-    '........OKBPO......okkkO........',
-    '.......ODUUO.......ookuo........',
-    '.......ODUWO.......ouwwOO.......',
-    '........OUWO.......oduuwwo......',
-    '........OOOO.......OOOOOOO......'
+    '............OHHHHHO.............',
+    '............OhhhHHHO............',
+    '............OhhOHHHO............',
+    '...........OppOOLPO.............',
+    '...........OppO.OLPO............',
+    '..........ObbO..OBPO............',
+    '........OoukbO..OKPO............',
+    '........OduwO...OKPO............',
+    '........OduO....OKUOOO..........',
+    '........OOO.....ODUWWWO.........',
+    '................OOOOOOO.........'
   ],
-  // Frame 3 (Box 5 in reference): Full Wide Scissor Stride
+  // Frame 3 (Beat 1B — Box 4 in reference strip): Wide Heel Strike B (far leg strikes forward heel-first with toe tilted up; near leg planted behind; torsoBounceY = 1)
   frame3: [
-    '..............OHHHHHO...........',
-    '............OHHHHhhhhO..........',
-    '...........OHHHHOohhhhO.........',
-    '..........OLPPO...opppO.........',
-    '.........OLPPO.....opppO........',
-    '........OBBPO.......obbbO.......',
-    '.......OKBPO.........okkkO......',
-    '......ODUUO..........ookuo......',
-    '......ODUWO...........ouwwOO....',
-    '.......OUWO...........oduuwwo...',
-    '.......OOOO...........OOOOOOO...'
+    '............OOOOOOO.............',
+    '............OHHHhhhO............',
+    '...........OHHHOohhhO...........',
+    '...........OLPO..oppO...........',
+    '..........OLPO....oppO..........',
+    '.........OBPO......obbO.........',
+    '........OKPO.......okbO.........',
+    '........OKPO........okuOOO......',
+    '.......ODUWO.........ouwwwO.....',
+    '.......ODUWO.........oduOOO.....',
+    '.......OOOOO..........OOO.......'
   ],
-  // Frame 4 (Box 6 in reference): Forward Arm Swing & Rear Toe Push-Off
+  // Frame 4 (Beat 2B — Box 5 in reference strip): Flat Plant & Vertical Toe Push-Off B (far foot slaps flat at x=16..22; near foot rolls onto vertical toe tip at x=7..10; near arm swings forward; torsoBounceY = 0)
   frame4: [
-    '..............OHHHHHO...........',
-    '.............OHHHhhhO...........',
-    '............OHHHHOhhhO..........',
-    '...........OLPPO..opppO.........',
-    '..........OLPPO...opppO.........',
-    '.........OBBPO....obbbO.........',
-    '........OKBPO.....okkkO.........',
-    '.......ODUUO......ookuo.........',
-    '.......ODUWO......ouwwOO........',
-    '.......OUWO.......oduuwwo.......',
+    '............OHHHHHO.............',
+    '............OHHHhhhO............',
+    '............OHHOohhhO...........',
+    '...........OLPO..oppO...........',
+    '..........OLPO...oppO...........',
+    '.........OBPO.....obbO..........',
+    '.......OOKPO......okbO..........',
+    '.......ODUWO......okbO..........',
+    '.......ODUO.......okuOOO........',
+    '.......OUWO.......oduwwwO.......',
     '.......OOOO.......OOOOOOO.......'
   ],
-  // Frame 5 (Box 7 in reference): High Passing Lift — supporting leg vertical, passing foot lifted in air
+  // Frame 5 (Beat 3B — Box 6 in reference strip): Vertical Pillar & High Passing Lift B (far leg straight vertical at x=15..21; near knee bends & lifts foot in air at x=8..12, y=26..29; torsoBounceY = 0)
   frame5: [
-    '..............OHHHHHO...........',
-    '.............OHHHhhhO...........',
-    '.............OHHHHhhhO..........',
-    '............OLPPOopppO..........',
-    '...........OLPPO..opppO.........',
-    '..........OBBPO...obbbO.........',
-    '.........ODUUO....okkkO.........',
-    '.........ODUWO....ookuo.........',
-    '.........OUWO.....ouwwOO........',
-    '.........OOOO.....oduuwwo.......',
-    '..................OOOOOOO.......'
+    '............OHHHHHO.............',
+    '............OHHHhhhO............',
+    '............OHHOhhO.............',
+    '...........OLPOoppO.............',
+    '...........OLPO.oppO............',
+    '..........OBPO..obbO............',
+    '........OOKBPO..okbO............',
+    '........ODUWO...okbO............',
+    '........ODUO....okuOOO..........',
+    '........OOO.....oduwwwO.........',
+    '................OOOOOOO.........'
   ]
 };
 
 const SIDE_ARM_POSE_MAPS = {
-  // Frame 0 (Box 2): Near arm angled back, Far arm reaching forward-right (rows y = 14..21)
+  // Frame 0 (Contact Stride A): Near arm swung back, Far arm swung forward
   frame0: {
     near: [
       '...........OSAO.................',
-      '...........OSAO.................',
+      '..........OSAO..................',
       '..........OSAO..................',
       '..........OSAO..................',
       '..........OSAO..................',
@@ -584,20 +602,20 @@ const SIDE_ARM_POSE_MAPS = {
     ],
     far: [
       '................................',
-      '..................OaO...........',
+      '.................OaO............',
+      '.................OaaO...........',
       '..................OaaO..........',
-      '...................OaaO.........',
-      '...................ObbO.........',
-      '...................ObbO.........',
-      '...................OOOO.........',
+      '..................ObbO..........',
+      '..................ObbO..........',
+      '..................OOOO..........',
       '................................'
     ]
   },
-  // Frame 1 (Box 3): Near arm slightly bent, Far hand closer to front waist
+  // Frame 1 (Passing Lift A): Near arm bent at elbow returning toward hip, Far hand closer to front waist
   frame1: {
     near: [
       '...........OSAO.................',
-      '...........OSAO.................',
+      '..........OSAO..................',
       '..........OSAO..................',
       '..........OSAO..................',
       '...........OSAO.................',
@@ -608,93 +626,75 @@ const SIDE_ARM_POSE_MAPS = {
     far: [
       '................................',
       '................................',
-      '..................OaO...........',
-      '..................OaaO..........',
-      '..................ObbO..........',
-      '..................ObbO..........',
-      '..................OOOO..........',
+      '.................OaO............',
+      '.................ObbO...........',
+      '.................ObbO...........',
+      '.................OOOO...........',
+      '................................',
       '................................'
     ]
   },
-  // Frame 2 (Box 4): Near arm curved back, Far arm reaching forward
+  // Frame 2 (Crossover Reach A): Near arm swinging forward past hip, Far arm tucked behind
   frame2: {
     near: [
       '...........OSAO.................',
-      '..........OSAO..................',
-      '..........OSAO..................',
-      '..........OSAO..................',
-      '..........OSAO..................',
-      '..........OBLO..................',
-      '..........OBBO..................',
-      '..........OOOO..................'
-    ],
-    far: [
-      '................................',
-      '..................OaO...........',
-      '..................OaaO..........',
-      '...................OaaO.........',
-      '...................ObbO.........',
-      '...................ObbO.........',
-      '...................OOOO.........',
-      '................................'
-    ]
-  },
-  // Frame 3 (Box 5): Full Wide Stride — Near arm swung furthest back, Far arm extended furthest forward
-  frame3: {
-    near: [
-      '...........OSAO.................',
-      '..........OSAO..................',
-      '.........OSAO...................',
-      '.........OSAO...................',
-      '.........OBLO...................',
-      '.........OBBO...................',
-      '.........OOOO...................',
-      '................................'
-    ],
-    far: [
-      '................................',
-      '..................OaaO..........',
-      '...................OaaO.........',
-      '....................ObbO........',
-      '....................ObbO........',
-      '....................OOOO........',
-      '................................',
-      '................................'
-    ]
-  },
-  // Frame 4 (Box 6): Near arm swinging forward across hip, Far arm hidden behind torso
-  frame4: {
-    near: [
       '...........OSAO.................',
       '...........OSAO.................',
-      '............OSAO................',
-      '............OSAO................',
-      '.............OSAO...............',
-      '.............OBLO...............',
-      '.............OBBO...............',
-      '.............OOOO...............'
-    ],
-    far: []
-  },
-  // Frame 5 (Box 7): Bent passing arm with hand at hip, 1px of far hand peeking
-  frame5: {
-    near: [
-      '...........OSAO.................',
-      '..........OSAO..................',
-      '..........OSAO..................',
       '...........OSAO.................',
       '............OSAO................',
       '............OBLO................',
       '............OBBO................',
       '............OOOO................'
     ],
+    far: []
+  },
+  // Frame 3 (Contact Stride B): Near arm swung forward across hip, Far arm behind torso
+  frame3: {
+    near: [
+      '...........OSAO.................',
+      '...........OSAO.................',
+      '............OSAO................',
+      '............OSAO................',
+      '.............OBLO...............',
+      '.............OBBO...............',
+      '.............OOOO...............',
+      '................................'
+    ],
+    far: []
+  },
+  // Frame 4 (Passing Lift B): Near arm returning from forward swing across hip, Far arm hidden
+  frame4: {
+    near: [
+      '...........OSAO.................',
+      '...........OSAO.................',
+      '...........OSAO.................',
+      '............OSAO................',
+      '............OSAO................',
+      '............OBLO................',
+      '............OBBO................',
+      '............OOOO................'
+    ],
+    far: []
+  },
+  // Frame 5 (Crossover Reach B): Near arm bent at elbow swinging back, Far hand peeking out in front
+  frame5: {
+    near: [
+      '...........OSAO.................',
+      '..........OSAO..................',
+      '..........OSAO..................',
+      '..........OSAO..................',
+      '...........OSAO.................',
+      '...........OBLO.................',
+      '...........OBBO.................',
+      '...........OOOO.................'
+    ],
     far: [
       '................................',
       '................................',
       '................................',
-      '..................ObO...........',
-      '..................ObO...........',
-      '..................OOO...........',
+      '.................ObO............',
+      '.................ObO............',
+      '.................OOO............',
       '................................',
       '................................'
     ]
@@ -898,13 +898,6 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
   } else if (animMode === 'walk') {
     const f = ((frameIndex % 6) + 6) % 6;
     if (!isSide) {
-      // 6-Frame Front Walk Cycle
-      // f=0: Left stride contact (torso +1, R leg back -2, L leg planted)
-      // f=1: Left passing recoil (torso 0, R leg back -1, L leg planted)
-      // f=2: Left passing high lift (torso 0, R leg passing -2, L leg planted)
-      // f=3: Right stride contact (torso +1, L leg back -2, R leg planted)
-      // f=4: Right passing recoil (torso 0, L leg back -1, R leg planted)
-      // f=5: Right passing high lift (torso 0, L leg passing -2, R leg planted)
       const torsoDy = f === 0 || f === 3 ? 1 : 0;
 
       for (let y = 20; y <= 30; y++) {
@@ -1000,9 +993,9 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
         }
       }
     } else {
-      // 6-Frame Side Walk Cycle matching Boxes 2..7 of both reference images!
+      // 6-Frame Side Walk Cycle matching the 6 frames of 2D144CE1-D693-4BA9-B7C7-6D76AEE8CC88.png!
       const poseKey = 'frame' + f;
-      const torsoBounceY = f === 3 ? 1 : 0;
+      const torsoBounceY = f === 0 || f === 3 ? 1 : 0;
       const swayDx = f === 0 || f === 3 ? -1 : f === 2 || f === 4 ? 1 : 0;
       drawSidePoseLegs(result, poseKey, torsoBounceY, swayDx);
       drawSideUpperBodyAndArms(result, poseKey, torsoBounceY);

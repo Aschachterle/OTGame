@@ -1,11 +1,11 @@
-import { SELECTABLE_ERAS } from './character-designer.js';
+import { SELECTABLE_ERAS } from './character-designer.js?v=pixi_final_9';
 import { trailMilestones } from './state.js';
 import {
   FERRY_BOARDING_END,
   FERRY_CROSSING_END,
   getWeatherOverlayMeta,
   renderGameLandscapeStage
-} from './scene-renderer.js?v=pixi_final_3';
+} from './scene-renderer.js?v=pixi_final_9';
 import { DEFAULT_RIVER_DEPTH_FT } from './scene-sprites.js?v=pixi_final_1';
 
 const CROSSING_DURATION_MS = 3600;
@@ -327,7 +327,7 @@ function updateState() {
   progressReadout.textContent = `${Math.round(progress * 100)}%`;
   progressFill.style.width = `${progress * 100}%`;
   partyReadout.textContent = `${state.wagon.party.length} ${state.wagon.party.length === 1 ? 'traveler' : 'travelers'}`;
-  frameReadout.textContent = `FRAME ${frame % 4}`;
+  frameReadout.textContent = `FRAME ${((frame % 6) + 6) % 6 + 1}/6`;
   playButton.disabled = isRiverCrossing && method === 'none' && weatherOverlay === 'none';
   playButton.textContent = isPlaying
     ? 'Pause'

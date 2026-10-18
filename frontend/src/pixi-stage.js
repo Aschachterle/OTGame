@@ -35,7 +35,7 @@ export function presentCanvasWithPixi(
   if (onReady) pendingReadyCallbacks.set(sourceCanvas, onReady);
   if (pendingStages.has(sourceCanvas) || failedStages.has(sourceCanvas)) return;
 
-  const pendingStage = import('./pixi-stage-runtime.bundle.js?v=pixi_final_3')
+  const pendingStage = import('./pixi-stage-runtime.bundle.js?v=pixi_final_9')
     .then(({ mountPixiStage }) => mountPixiStage(sourceCanvas))
     .then((stage) => {
       if (!sourceCanvas.isConnected) {

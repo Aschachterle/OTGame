@@ -58,7 +58,7 @@ import {
   randomizeMemberInEra,
   summarizeMemberOutfit,
   syncAllPartyAppearancesToEra
-} from './character-designer.js';
+} from './character-designer.js?v=pixi_final_9';
 import { getFrameCount } from './wagon-animator.js';
 
 const TRAVEL_ANIMATION_MS = 3600;

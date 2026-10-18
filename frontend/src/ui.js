@@ -36,12 +36,12 @@ import {
   getPresetsForCategoryAndEra,
   renderCharacterGridToCanvas,
   summarizeMemberOutfit
-} from './character-designer.js';
+} from './character-designer.js?v=pixi_final_9';
 import {
   getWeatherOverlayMeta,
   renderGameLandscapeStage,
   resolveActiveWeatherOverlay
-} from './scene-renderer.js?v=pixi_final_3';
+} from './scene-renderer.js?v=pixi_final_9';
 
 function shortHash(value = '', size = 8) {
   const normalized = String(value ?? '');

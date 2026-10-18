@@ -3,7 +3,7 @@ import { getOptionalPlayerIdentity } from './src/crypto.js';
 import { createApiClient } from './src/api.js';
 import { createAudioController } from './src/audio.js';
 import { playHazardAlert, playRetroClick, playWagonClatter } from './src/sfx.js';
-import { createUI } from './src/ui.js?v=pixi_final_3';
+import { createUI } from './src/ui.js?v=pixi_final_9';
 import { createGameController } from './src/game.js';
 
 const ui = createUI();

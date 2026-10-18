@@ -7,7 +7,7 @@ import {
   Texture,
   TilingSprite
 } from 'pixi.js';
-import { PixiTextureFactory } from './pixi-texture-factory.js?v=pixi_final_1';
+import { PixiTextureFactory } from './pixi-texture-factory.js?v=pixi_final_9';
 import { createPixiWeatherLayer } from './pixi-weather-layer.js?v=pixi_final_1';
 import {
   drawRiverChannelRow,

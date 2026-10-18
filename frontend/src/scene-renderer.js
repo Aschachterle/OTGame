@@ -9,7 +9,7 @@ import {
   getCharacterFrameGrid,
   mapBiomeToBackdropId,
   syncAllPartyAppearancesToEra
-} from './character-designer.js?v=pixi_final_1';
+} from './character-designer.js?v=pixi_final_9';
 import { GRID_SIZE } from './character-presets.js';
 import {
   WEATHER_OVERLAYS,
@@ -31,7 +31,7 @@ import {
   hasPixiStage,
   presentCanvasWithPixi,
   shouldUsePixiForCanvas
-} from './pixi-stage.js?v=pixi_final_3';
+} from './pixi-stage.js?v=pixi_final_9';
 
 export {
   WEATHER_OVERLAYS,
