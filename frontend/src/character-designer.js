@@ -386,7 +386,18 @@ export function buildNeutralCompositeGrid(appearance, baseOrientation = 'front')
     }
   }
 
-  for (const cat of LAYER_DRAW_ORDER) {
+  const pantsPresetId = String(appearance?.equippedPresets?.pants || '');
+  const isSkirtEquipped =
+    pantsPresetId.includes('skirt') ||
+    pantsPresetId.includes('kirtle') ||
+    pantsPresetId.includes('kilt');
+  const effectiveDrawOrder = isSkirtEquipped
+    ? ['shoes', 'pants', 'shirts', 'accessories', 'hats']
+    : ['pants', 'shoes', 'shirts', 'accessories', 'hats'];
+
+  const skin = getSkinToneById(appearance?.skinToneId);
+
+  for (const cat of effectiveDrawOrder) {
     const presetId = appearance?.equippedPresets?.[cat];
     const preset = (INITIAL_CLOTHING_BOILERPLATE[cat] || []).find((p) => p.id === presetId);
     if (!preset || preset.isNone) continue;
@@ -401,7 +412,16 @@ export function buildNeutralCompositeGrid(appearance, baseOrientation = 'front')
 
     pixelList.forEach(([x, y, rawColor, role]) => {
       if (isInsideBodyForView(appearance, x, y, baseOrientation, cat)) {
-        const finalColor = resolvePresetPixelColor(rawColor, role, dyeId);
+        let finalColor = resolvePresetPixelColor(rawColor, role, dyeId);
+        if (
+          finalColor &&
+          cat === 'shirts' &&
+          role !== null &&
+          (!isInsideBodyForView(appearance, x - 1, y, baseOrientation, cat) ||
+            !isInsideBodyForView(appearance, x + 1, y, baseOrientation, cat))
+        ) {
+          finalColor = skin?.outline || '#2c1e31';
+        }
         if (finalColor) {
           grid[y][x] = finalColor;
         }
