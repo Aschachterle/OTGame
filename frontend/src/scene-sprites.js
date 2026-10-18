@@ -1331,7 +1331,7 @@ export function drawRiverGuideMarker(ctx, leaderX, groundY, frameIndex, isMoving
     NPC_APPEARANCES.riverGuide,
     'side_right',
     isMoving ? 'walk' : 'idle',
-    frameIndex % 4
+    frameIndex % 6
   );
   drawCharacterGridAt(ctx, guideGrid, drawX, drawY, 1);
 

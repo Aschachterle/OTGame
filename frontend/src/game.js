@@ -131,7 +131,7 @@ export function createGameController({ state, ui, api, audio }) {
     const stepSpeed = Math.max(0.8, (paceCfg?.speed || 1.0) * 1.8);
     ui.refreshLandscapeCanvas?.(state);
     wagonAnimationTimer = window.setInterval(() => {
-      state.wagonAnimationFrame = (state.wagonAnimationFrame + 1) % Math.max(4, getFrameCount());
+      state.wagonAnimationFrame = (state.wagonAnimationFrame + 1) % Math.max(12, getFrameCount());
       state.landscapeScrollX = (state.landscapeScrollX || 0) + stepSpeed;
       ui.refreshLandscapeCanvas?.(state);
     }, 90);
@@ -145,7 +145,7 @@ export function createGameController({ state, ui, api, audio }) {
     const steps = 60;
     for (let i = 1; i <= steps; i += 1) {
       state.generalStoreApproachProgress = i / steps;
-      state.wagonAnimationFrame = Math.floor(i / 3) % 4;
+      state.wagonAnimationFrame = Math.floor(i / 2) % 12;
       ui.refreshLandscapeCanvas?.(state);
       await delay(55);
     }
@@ -166,14 +166,14 @@ export function createGameController({ state, ui, api, audio }) {
     // The store building is positioned at 24 - Math.floor(scrollOffset * 0.8) and is 56px wide.
     // At scrollOffset >= 140, it is at <= -88px, completely off-screen to the left.
     while ((state.landscapeScrollX || 0) < 140) {
-      state.wagonAnimationFrame = (state.wagonAnimationFrame + 1) % Math.max(4, getFrameCount());
+      state.wagonAnimationFrame = (state.wagonAnimationFrame + 1) % Math.max(12, getFrameCount());
       state.landscapeScrollX = (state.landscapeScrollX || 0) + stepSpeed;
       ui.refreshLandscapeCanvas?.(state);
       await delay(55);
     }
     // A brief settle on the open trail so the party is firmly underway
     for (let extra = 0; extra < 10; extra += 1) {
-      state.wagonAnimationFrame = (state.wagonAnimationFrame + 1) % Math.max(4, getFrameCount());
+      state.wagonAnimationFrame = (state.wagonAnimationFrame + 1) % Math.max(12, getFrameCount());
       state.landscapeScrollX = (state.landscapeScrollX || 0) + stepSpeed;
       ui.refreshLandscapeCanvas?.(state);
       await delay(55);
@@ -194,7 +194,7 @@ export function createGameController({ state, ui, api, audio }) {
 
     for (let step = 1; step <= steps; step += 1) {
       state.riverCrossingAnimation.progress = step / steps;
-      state.wagonAnimationFrame = (state.wagonAnimationFrame + 1) % 4;
+      state.wagonAnimationFrame = (state.wagonAnimationFrame + 1) % 12;
       ui.refreshLandscapeCanvas?.(state);
       await delay(60);
     }

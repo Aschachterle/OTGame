@@ -355,9 +355,8 @@ export function renderGameLandscapeStageLegacy(canvas, state, animTick = 0, opti
   const isMoving = Boolean(state.landscapeMoving || state.travelAnimationActive);
   const scrollOffset = state.landscapeScrollX || 0;
   const isWagonAnimationActive = isMoving;
-  const frameIndex = isWagonAnimationActive && Number.isInteger(state.wagonAnimationFrame)
-    ? ((state.wagonAnimationFrame % 4) + 4) % 4
-    : 0;
+  const rawWalkFrame = isWagonAnimationActive && Number.isInteger(state.wagonAnimationFrame) ? Math.max(0, state.wagonAnimationFrame) : 0;
+  const frameIndex = rawWalkFrame % 4;
   const isFerryScene = riverCrossing?.method === 'ferry';
   const isFerryCrossing = isFerryScene && riverCrossing.phase === 'crossing';
   // Apply the depth offset once to the whole scene, keeping the riverbed anchored below.
@@ -646,7 +645,7 @@ export function renderGameLandscapeStageLegacy(canvas, state, animTick = 0, opti
   const partyFootPositions = [];
 
   party.forEach((member, idx) => {
-    const memberFrameIndex = (frameIndex + idx) % 4;
+    const memberFrameIndex = ((typeof rawWalkFrame === "number" ? rawWalkFrame : frameIndex) + idx) % 6;
     const memberGrid = pixiActorLayer
       ? null
       : getCharacterFrameGrid(member.appearance, 'side_right', effectiveAnimMode, memberFrameIndex);

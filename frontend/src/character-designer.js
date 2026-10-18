@@ -245,6 +245,17 @@ export function equipMemberEraOutfit(appearance, eraId, headwearType = appearanc
   if (!appearance) return;
   const targetEra = getEraById(eraId).id;
   appearance.preferredHeadwearType = headwearType;
+  if (targetEra === 'oregon_trail' && appearance.gender === 'male' && variantIndex % 2 === 0 && headwearType === 'hat') {
+    appearance.equippedPresets.hats = 'hat_oregon_frontier_slouch';
+    appearance.equippedPresets.shirts = 'shirt_oregon_buckskin_jacket';
+    appearance.equippedPresets.pants = 'pants_oregon_duck_trousers';
+    appearance.equippedPresets.shoes = 'shoes_oregon_cowhide_boots';
+    appearance.equippedPresets.accessories = 'acc_oregon_trail_bandana';
+    CATEGORIES.forEach(({ id }) => {
+      appearance.categoryDyes[id] = 'default';
+    });
+    return;
+  }
   const pickedHead =
     pickBestPresetForSlot('hats', targetEra, appearance.gender, headwearType, variantIndex) ||
     pickBestPresetForSlot('hats', targetEra, appearance.gender, null, variantIndex);
@@ -356,6 +367,16 @@ function getBaseBodyPixel(appearance, x, y, baseOrientation = 'front') {
       return skin.pupil;
     case 'M':
       return gender === 'female' ? skin.femaleMouth || skin.mouth : skin.mouth;
+    case 'U':
+      return '#2d2936';
+    case 'D':
+      return '#221e29';
+    case 'W':
+      return gender === 'female' ? '#2d2936' : skin.base;
+    case 'V':
+      return gender === 'female' ? '#221e29' : skin.shadow;
+    case 'C':
+      return gender === 'female' ? skin.shadow : skin.base;
     default:
       return null;
   }
@@ -462,62 +483,236 @@ export function buildNeutralCompositeGrid(appearance, baseOrientation = 'front')
 }
 
 const SIDE_LEG_POSE_MAPS = {
-  // Pose 1 (Middle figure in reference): Upright passing / standing pose (y = 20..30)
-  passingA: [
-    '...........OOOOLPPPPO...........',
-    '..........OssoPLLPPPO...........',
-    '..........OssoPLLLPPO...........',
-    '..........OssoOPLLLPPO..........',
-    '..........Osso.OPLLPPO..........',
-    '..........Osbo.OOCBBPO..........',
-    '..........Oskbo.OOKBPO..........',
-    '..........Owwo..OOWWUO..........',
-    '..........OwwwuoOWWWWWOO........',
-    '..........OdwwwuODWWWWWO........',
-    '..........OOOOOOOOOOOOOO........'
+  // Frame 0 (Box 2 in reference): Medium Contact Stride
+  frame0: [
+    '..............OHHHHHO...........',
+    '.............OhhhHHHHO..........',
+    '............OhhhOHHHHO..........',
+    '...........OpppO.OLPPO..........',
+    '..........OpppO...OLPPO.........',
+    '.........ObbbO....OBBPO.........',
+    '........OkkkO......OKBPO........',
+    '.......OduuO.......OOKUO........',
+    '.......OduwO........OUWWOO......',
+    '........OuwO........ODUUWWO.....',
+    '........OOOO........OOOOOOO.....'
   ],
-  // Pose 0 (Left figure in reference): Contact Stride A — back leg diagonal + tilted shoe, front leg vertical + flat shoe (y = 20..30)
-  strideA: [
-    '..........OOOOSSSSSSO...........',
-    '..........OOOOLLPPPPO...........',
-    '.........OsppoPLLPPPO...........',
-    '........OspppoOPLLPPPO..........',
-    '.......Ospppo..OPLPPPO..........',
-    '......OOcbbo...OOCBBPO..........',
-    '.....OwwcbbO....OOKBPO..........',
-    '.....Owwwkbo....OOWWUO..........',
-    '.....Oduwwwo....OWWWWWOO........',
-    '......Oduwwwo...ODWWWWWO........',
-    '.......OOOOOO...OOOOOOOO........'
+  // Frame 1 (Box 3 in reference): Recoil / Passing 1 — back knee bent, front leg straight vertical
+  frame1: [
+    '..............OHHHHHO...........',
+    '.............OhhhHHHHO..........',
+    '.............OhhhHHHHO..........',
+    '............OpppOLPPO...........',
+    '...........OpppO.OLPPO..........',
+    '..........ObbbO..OBBPO..........',
+    '.........OkkkO...OKBPO..........',
+    '........OduuO....OOKUO..........',
+    '........OduwO....OUWWOO.........',
+    '.........OuwO....ODUUWWO........',
+    '.........OOOO....OOOOOOO........'
   ],
-  // Pose 2 (Right figure in reference): Wide Scissor Stride B — near leg stretched back-left + tilted shoe, far leg forward-right + flat shoe (y = 20..30)
-  strideB: [
-    '..........OOOOSSSSSSO...........',
-    '..........OOOPLPPPppo...........',
-    '.........OPLPPPOospppo..........',
-    '........OPLPPPO..ospppo.........',
-    '.......OPLPPPO....ospppo........',
-    '......OOCBBPO......osbbo........',
-    '.....OWWCBBPO.......oskbo.......',
-    '.....OWWWKBO........Oowwuo......',
-    '.....ODUWWWO........OwwwwwOO....',
-    '......ODUWWWO.......OdwwwwwO....',
-    '.......OOOOOO.......OOOOOOOO....'
+  // Frame 2 (Box 4 in reference): Mid-Stride Extension
+  frame2: [
+    '..............OHHHHHO...........',
+    '.............OHHHhhhO...........',
+    '............OHHHHOhhhO..........',
+    '...........OLPPO.opppO..........',
+    '..........OLPPO...opppO.........',
+    '.........OBBPO....obbbO.........',
+    '........OKBPO......okkkO........',
+    '.......ODUUO.......ookuo........',
+    '.......ODUWO.......ouwwOO.......',
+    '........OUWO.......oduuwwo......',
+    '........OOOO.......OOOOOOO......'
   ],
-  // Pose 3: Upright Passing B — far leg planted under body, near leg passing forward with lifted heel (y = 20..30)
-  passingB: [
-    '..........OOOOLLPPPPO...........',
-    '..........OPLLPPPOsso...........',
-    '..........OPLLLPPOsso...........',
-    '..........OOPLLPPOosso..........',
-    '..........OPLLPPO.osso..........',
-    '.........OOCBBPO..osbo..........',
-    '........OWWKBPO...oskbo.........',
-    '........OWWWUOO...Oowwuo........',
-    '........ODUWWWO...OwwwwwOO......',
-    '.........OOOOOO...OdwwwwwO......',
-    '..................OOOOOOOO......'
+  // Frame 3 (Box 5 in reference): Full Wide Scissor Stride
+  frame3: [
+    '..............OHHHHHO...........',
+    '............OHHHHhhhhO..........',
+    '...........OHHHHOohhhhO.........',
+    '..........OLPPO...opppO.........',
+    '.........OLPPO.....opppO........',
+    '........OBBPO.......obbbO.......',
+    '.......OKBPO.........okkkO......',
+    '......ODUUO..........ookuo......',
+    '......ODUWO...........ouwwOO....',
+    '.......OUWO...........oduuwwo...',
+    '.......OOOO...........OOOOOOO...'
+  ],
+  // Frame 4 (Box 6 in reference): Forward Arm Swing & Rear Toe Push-Off
+  frame4: [
+    '..............OHHHHHO...........',
+    '.............OHHHhhhO...........',
+    '............OHHHHOhhhO..........',
+    '...........OLPPO..opppO.........',
+    '..........OLPPO...opppO.........',
+    '.........OBBPO....obbbO.........',
+    '........OKBPO.....okkkO.........',
+    '.......ODUUO......ookuo.........',
+    '.......ODUWO......ouwwOO........',
+    '.......OUWO.......oduuwwo.......',
+    '.......OOOO.......OOOOOOO.......'
+  ],
+  // Frame 5 (Box 7 in reference): High Passing Lift — supporting leg vertical, passing foot lifted in air
+  frame5: [
+    '..............OHHHHHO...........',
+    '.............OHHHhhhO...........',
+    '.............OHHHHhhhO..........',
+    '............OLPPOopppO..........',
+    '...........OLPPO..opppO.........',
+    '..........OBBPO...obbbO.........',
+    '.........ODUUO....okkkO.........',
+    '.........ODUWO....ookuo.........',
+    '.........OUWO.....ouwwOO........',
+    '.........OOOO.....oduuwwo.......',
+    '..................OOOOOOO.......'
   ]
+};
+
+const SIDE_ARM_POSE_MAPS = {
+  // Frame 0 (Box 2): Near arm angled back, Far arm reaching forward-right (rows y = 14..21)
+  frame0: {
+    near: [
+      '...........OSAO.................',
+      '...........OSAO.................',
+      '..........OSAO..................',
+      '..........OSAO..................',
+      '..........OSAO..................',
+      '..........OBLO..................',
+      '..........OBBO..................',
+      '..........OOOO..................'
+    ],
+    far: [
+      '................................',
+      '..................OaO...........',
+      '..................OaaO..........',
+      '...................OaaO.........',
+      '...................ObbO.........',
+      '...................ObbO.........',
+      '...................OOOO.........',
+      '................................'
+    ]
+  },
+  // Frame 1 (Box 3): Near arm slightly bent, Far hand closer to front waist
+  frame1: {
+    near: [
+      '...........OSAO.................',
+      '...........OSAO.................',
+      '..........OSAO..................',
+      '..........OSAO..................',
+      '...........OSAO.................',
+      '...........OBLO.................',
+      '...........OBBO.................',
+      '...........OOOO.................'
+    ],
+    far: [
+      '................................',
+      '................................',
+      '..................OaO...........',
+      '..................OaaO..........',
+      '..................ObbO..........',
+      '..................ObbO..........',
+      '..................OOOO..........',
+      '................................'
+    ]
+  },
+  // Frame 2 (Box 4): Near arm curved back, Far arm reaching forward
+  frame2: {
+    near: [
+      '...........OSAO.................',
+      '..........OSAO..................',
+      '..........OSAO..................',
+      '..........OSAO..................',
+      '..........OSAO..................',
+      '..........OBLO..................',
+      '..........OBBO..................',
+      '..........OOOO..................'
+    ],
+    far: [
+      '................................',
+      '..................OaO...........',
+      '..................OaaO..........',
+      '...................OaaO.........',
+      '...................ObbO.........',
+      '...................ObbO.........',
+      '...................OOOO.........',
+      '................................'
+    ]
+  },
+  // Frame 3 (Box 5): Full Wide Stride — Near arm swung furthest back, Far arm extended furthest forward
+  frame3: {
+    near: [
+      '...........OSAO.................',
+      '..........OSAO..................',
+      '.........OSAO...................',
+      '.........OSAO...................',
+      '.........OBLO...................',
+      '.........OBBO...................',
+      '.........OOOO...................',
+      '................................'
+    ],
+    far: [
+      '................................',
+      '..................OaaO..........',
+      '...................OaaO.........',
+      '....................ObbO........',
+      '....................ObbO........',
+      '....................OOOO........',
+      '................................',
+      '................................'
+    ]
+  },
+  // Frame 4 (Box 6): Near arm swinging forward across hip, Far arm hidden behind torso
+  frame4: {
+    near: [
+      '...........OSAO.................',
+      '...........OSAO.................',
+      '............OSAO................',
+      '............OSAO................',
+      '.............OSAO...............',
+      '.............OBLO...............',
+      '.............OBBO...............',
+      '.............OOOO...............'
+    ],
+    far: []
+  },
+  // Frame 5 (Box 7): Bent passing arm with hand at hip, 1px of far hand peeking
+  frame5: {
+    near: [
+      '...........OSAO.................',
+      '..........OSAO..................',
+      '..........OSAO..................',
+      '...........OSAO.................',
+      '............OSAO................',
+      '............OBLO................',
+      '............OBBO................',
+      '............OOOO................'
+    ],
+    far: [
+      '................................',
+      '................................',
+      '................................',
+      '..................ObO...........',
+      '..................ObO...........',
+      '..................OOO...........',
+      '................................',
+      '................................'
+    ]
+  },
+  // Static / Idle standing arm pose
+  standing: {
+    near: [
+      '...........OSAO.................',
+      '...........OSAO.................',
+      '...........OSAO.................',
+      '...........OSAO.................',
+      '...........OSAO.................',
+      '...........OBLO.................',
+      '...........OBBO.................',
+      '...........OOOO.................'
+    ],
+    far: []
+  }
 };
 
 export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'walk', frameIndex = 0) {
@@ -542,33 +737,30 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
 
   const sampleSideLegPalette = () => {
     const outline = skin.outline || '#140c1c';
-    const pantHighlight = neutral[22]?.[14] || skin.highlight;
-    const pantPrimary = neutral[22]?.[15] || skin.base;
-    const pantSecondary = neutral[24]?.[14] || skin.shadow;
-    const calfHighlight = neutral[25]?.[14] || pantHighlight;
-    const calfPrimary = neutral[25]?.[15] || pantPrimary;
-    const anklePrimary = neutral[27]?.[15] || calfPrimary;
-    const shoeUpper = neutral[28]?.[15] || '#442434';
-    const shoeBright = neutral[28]?.[16] || shoeUpper;
-    const shoeSole = neutral[29]?.[14] || shadeHex(shoeUpper, -24);
-    const farDelta = -22;
-    const farShoeDelta = -16;
+    const hipPrimary = neutral[21]?.[15] || '#2d2936';
+    const thighHighlight = neutral[23]?.[15] || skin.highlight;
+    const thighPrimary = neutral[23]?.[16] || skin.base;
+    const calfPrimary = neutral[25]?.[16] || thighPrimary;
+    const anklePrimary = neutral[27]?.[16] || calfPrimary;
+    const shoeUpper = neutral[28]?.[16] || skin.base;
+    const shoeBright = neutral[28]?.[17] || shoeUpper;
+    const shoeSole = neutral[29]?.[15] || shadeHex(shoeUpper, -20);
+    const farDelta = -18;
+    const farShoeDelta = -14;
     return {
       O: outline,
       o: outline,
-      L: pantHighlight,
-      P: pantPrimary,
-      S: pantSecondary,
-      C: calfHighlight,
+      H: hipPrimary,
+      L: thighHighlight,
+      P: thighPrimary,
       B: calfPrimary,
       K: anklePrimary,
       U: shoeUpper,
       W: shoeBright,
       D: shoeSole,
-      l: shadeHex(pantHighlight, farDelta),
-      p: shadeHex(pantPrimary, farDelta),
-      s: shadeHex(pantSecondary, farDelta),
-      c: shadeHex(calfHighlight, farDelta),
+      h: shadeHex(hipPrimary, farDelta),
+      l: shadeHex(thighHighlight, farDelta),
+      p: shadeHex(thighPrimary, farDelta),
       b: shadeHex(calfPrimary, farDelta),
       k: shadeHex(anklePrimary, farDelta),
       u: shadeHex(shoeUpper, farShoeDelta),
@@ -579,7 +771,7 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
 
   const drawSidePoseLegs = (targetGrid, poseKey, torsoBounceY = 0, swayDx = 0) => {
     const palette = sampleSideLegPalette();
-    const rows = SIDE_LEG_POSE_MAPS[poseKey] || SIDE_LEG_POSE_MAPS.passingA;
+    const rows = SIDE_LEG_POSE_MAPS[poseKey] || SIDE_LEG_POSE_MAPS.frame1;
 
     for (let idx = 0; idx < rows.length; idx++) {
       const y = 20 + idx;
@@ -610,13 +802,54 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
     }
   };
 
-  const drawSideUpperBodyAndArms = (targetGrid, torsoBounceY = 0, nearArmDx = 0, showFarArm = false) => {
-    // 1. Copy Head (y = 1..12) and Torso Chest down to the belt (y = 13..19, x = 14..31)
+  const drawSideUpperBodyAndArms = (targetGrid, armPoseKey = 'standing', torsoBounceY = 0) => {
+    const outline = skin.outline || '#140c1c';
+    const armShadow = neutral[15]?.[12] || skin.shadow;
+    const armPrimary = neutral[15]?.[13] || skin.base;
+    const chestFill = neutral[16]?.[15] || armPrimary;
+    const armPalette = {
+      O: outline,
+      S: armShadow,
+      A: armPrimary,
+      B: skin.base,
+      L: skin.highlight,
+      a: shadeHex(armPrimary, -14),
+      b: skin.shadow
+    };
+    const armPose = SIDE_ARM_POSE_MAPS[armPoseKey] || SIDE_ARM_POSE_MAPS.standing;
+
+    // 1. Draw Far Arm behind/in front of torso edge (y = 14..21 + torsoBounceY)
+    if (armPose.far && armPose.far.length) {
+      for (let idx = 0; idx < armPose.far.length; idx++) {
+        const destY = 14 + idx + torsoBounceY;
+        if (destY < 0 || destY >= GRID_SIZE) continue;
+        const rowStr = armPose.far[idx];
+        for (let x = 0; x < GRID_SIZE && x < rowStr.length; x++) {
+          const ch = rowStr[x];
+          if (ch !== '.' && armPalette[ch]) {
+            targetGrid[destY][x] = armPalette[ch];
+          }
+        }
+      }
+    }
+
+    // 2. Copy Head (y = 1..12), Backpack (x <= 11, y = 9..19), and Torso Chest (x = 12..31, y = 13..19)
     for (let y = 1; y <= 19; y++) {
       const destY = y + torsoBounceY;
       if (destY < 0 || destY >= GRID_SIZE) continue;
       for (let x = 0; x < GRID_SIZE; x++) {
-        if (y >= 13 && x >= 8 && x <= 13) continue;
+        if (y >= 14 && x >= 11 && x <= 14) {
+          if (x === 11) {
+            if (neutral[y]?.[10]) targetGrid[destY][11] = outline;
+          } else if (x === 12 && y <= 18) {
+            targetGrid[destY][12] = outline;
+          } else if ((x === 13 || x === 14) && y <= 18) {
+            targetGrid[destY][x] = chestFill;
+          } else if ((x === 13 || x === 14) && y === 19) {
+            targetGrid[destY][x] = outline;
+          }
+          continue;
+        }
         const c = neutral[y][x];
         if (c) {
           targetGrid[destY][x] = c;
@@ -624,48 +857,18 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
       }
     }
 
-    // 2. If Stride A (Pose 0 in reference), draw the far arm cuff + 2px skin hand peeking out at x = 20..22
-    if (showFarArm) {
-      const sleeveCuffColor = shadeHex(neutral[16]?.[12] || skin.base, -10);
-      const outline = skin.outline || '#140c1c';
-      const baseY = 15 + torsoBounceY;
-      if (baseY + 4 < GRID_SIZE) {
-        targetGrid[baseY][20] = outline;
-        targetGrid[baseY][21] = sleeveCuffColor;
-        targetGrid[baseY][22] = outline;
-        targetGrid[baseY + 1][20] = outline;
-        targetGrid[baseY + 1][21] = outline;
-        targetGrid[baseY + 1][22] = outline;
-        targetGrid[baseY + 2][20] = outline;
-        targetGrid[baseY + 2][21] = skin.base;
-        targetGrid[baseY + 2][22] = outline;
-        targetGrid[baseY + 3][20] = outline;
-        targetGrid[baseY + 3][21] = skin.shadow;
-        targetGrid[baseY + 3][22] = outline;
-        targetGrid[baseY + 4][20] = outline;
-        targetGrid[baseY + 4][21] = outline;
-        targetGrid[baseY + 4][22] = outline;
-      }
-    }
-
-    // 3. Draw Near Arm & 2x2 Hand (x = 9..13, y = 13..20)
-    const outline = skin.outline || '#140c1c';
-    for (let y = 13; y <= 20; y++) {
-      const destY = y + torsoBounceY;
-      if (destY < 0 || destY >= GRID_SIZE) continue;
-      const dx = y >= 16 ? nearArmDx : 0;
-
-      for (let x = 9; x <= 13; x++) {
-        const c = neutral[y][x];
-        if (!c) continue;
-        const destX = x + dx;
-        if (destX >= 0 && destX < GRID_SIZE) {
-          targetGrid[destY][destX] = c;
+    // 3. Draw Near Arm & 2x2 Hand on top of shoulder/hip (y = 14..21 + torsoBounceY)
+    if (armPose.near && armPose.near.length) {
+      for (let idx = 0; idx < armPose.near.length; idx++) {
+        const destY = 14 + idx + torsoBounceY;
+        if (destY < 0 || destY >= GRID_SIZE) continue;
+        const rowStr = armPose.near[idx];
+        for (let x = 0; x < GRID_SIZE && x < rowStr.length; x++) {
+          const ch = rowStr[x];
+          if (ch !== '.' && armPalette[ch]) {
+            targetGrid[destY][x] = armPalette[ch];
+          }
         }
-      }
-
-      if (dx > 0 && y === 16) {
-        targetGrid[destY][9] = outline;
       }
     }
   };
@@ -674,8 +877,8 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
     if (!isSide) {
       result = neutral;
     } else {
-      drawSidePoseLegs(result, 'passingA', 0, 0);
-      drawSideUpperBodyAndArms(result, 0, 0, false);
+      drawSidePoseLegs(result, 'frame1', 0, 0);
+      drawSideUpperBodyAndArms(result, 'standing', 0);
     }
   } else if (animMode === 'idle') {
     const bob = frameIndex % 2 === 1 ? 1 : 0;
@@ -689,19 +892,24 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
         }
       }
     } else {
-      drawSidePoseLegs(result, 'passingA', bob, 0);
-      drawSideUpperBodyAndArms(result, bob, 0, false);
+      drawSidePoseLegs(result, 'frame1', bob, 0);
+      drawSideUpperBodyAndArms(result, 'standing', bob);
     }
   } else if (animMode === 'walk') {
-    const f = ((frameIndex % 4) + 4) % 4;
+    const f = ((frameIndex % 6) + 6) % 6;
     if (!isSide) {
-      const isStride = f === 0 || f === 2;
-      const torsoDy = isStride ? 1 : 0;
+      // 6-Frame Front Walk Cycle
+      // f=0: Left stride contact (torso +1, R leg back -2, L leg planted)
+      // f=1: Left passing recoil (torso 0, R leg back -1, L leg planted)
+      // f=2: Left passing high lift (torso 0, R leg passing -2, L leg planted)
+      // f=3: Right stride contact (torso +1, L leg back -2, R leg planted)
+      // f=4: Right passing recoil (torso 0, L leg back -1, R leg planted)
+      // f=5: Right passing high lift (torso 0, L leg passing -2, R leg planted)
+      const torsoDy = f === 0 || f === 3 ? 1 : 0;
 
-      // 1. Front Walk Legs & Shoes (y = 20..30):
       for (let y = 20; y <= 30; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
-          if (y === 20 && (x <= 11 || x >= 20)) continue;
+          if (y <= 21 && (x <= 11 || x >= 20)) continue;
           const c = neutral[y][x];
           if (!c) continue;
           const isLeftHalf = x < 16;
@@ -711,26 +919,36 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
           if (f === 0) {
             if (!isLeftHalf) {
               legLift = y >= 24 ? -2 : y >= 22 ? -1 : 0;
-              if (y >= 23) shade = -22;
-            } else if (y >= 27) {
+              if (y >= 23) shade = -20;
+            } else if (y >= 28) {
               shade = 8;
             }
           } else if (f === 1) {
             if (!isLeftHalf && y >= 24) {
               legLift = -1;
-              shade = -10;
+              shade = -12;
             }
           } else if (f === 2) {
-            if (isLeftHalf) {
-              legLift = y >= 24 ? -2 : y >= 22 ? -1 : 0;
-              if (y >= 23) shade = -22;
-            } else if (y >= 27) {
-              shade = 8;
+            if (!isLeftHalf && y >= 23) {
+              legLift = -2;
+              shade = -8;
             }
           } else if (f === 3) {
+            if (isLeftHalf) {
+              legLift = y >= 24 ? -2 : y >= 22 ? -1 : 0;
+              if (y >= 23) shade = -20;
+            } else if (y >= 28) {
+              shade = 8;
+            }
+          } else if (f === 4) {
             if (isLeftHalf && y >= 24) {
               legLift = -1;
-              shade = -10;
+              shade = -12;
+            }
+          } else if (f === 5) {
+            if (isLeftHalf && y >= 23) {
+              legLift = -2;
+              shade = -8;
             }
           }
 
@@ -742,35 +960,34 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
         }
       }
 
-      // 2. Front Walk Head, Torso & Swinging Hanging Arms (y = 1..20):
-      for (let y = 1; y <= 20; y++) {
+      for (let y = 1; y <= 21; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
-          if (y === 20 && x >= 12 && x <= 19) continue;
+          if (y >= 20 && x >= 12 && x <= 19) continue;
           const c = neutral[y][x];
           if (!c) continue;
           let dy = torsoDy;
           let shade = 0;
-          const isLeftArm = y >= 14 && x <= 11;
-          const isRightArm = y >= 14 && x >= 20;
+          const isLeftArm = y >= 14 && x <= 12;
+          const isRightArm = y >= 14 && x >= 19;
 
-          if (isLeftArm) {
-            if (f === 0) {
+          if (isLeftArm && x <= 11) {
+            if (f === 0 || f === 1) {
               if (y === 15) continue;
               if (y >= 16) {
                 dy = 0;
-                shade = -18;
+                shade = -16;
               }
-            } else if (f === 2 && y >= 18) {
+            } else if ((f === 3 || f === 4) && y >= 19) {
               shade = 8;
             }
-          } else if (isRightArm) {
-            if (f === 2) {
+          } else if (isRightArm && x >= 20) {
+            if (f === 3 || f === 4) {
               if (y === 15) continue;
               if (y >= 16) {
                 dy = 0;
-                shade = -18;
+                shade = -16;
               }
-            } else if (f === 0 && y >= 18) {
+            } else if ((f === 0 || f === 1) && y >= 19) {
               shade = 8;
             }
           }
@@ -783,24 +1000,12 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
         }
       }
     } else {
-      // Side 4-Frame Walk Cycle directly modeled on the 3-pose reference walk cycle sheet
-      if (f === 0) {
-        // Pose 0 (Left figure in reference): Contact Stride A
-        drawSidePoseLegs(result, 'strideA', 1, 1);
-        drawSideUpperBodyAndArms(result, 1, 0, true);
-      } else if (f === 1) {
-        // Pose 1 (Middle figure in reference): Passing Pose A
-        drawSidePoseLegs(result, 'passingA', 0, 0);
-        drawSideUpperBodyAndArms(result, 0, 1, false);
-      } else if (f === 2) {
-        // Pose 2 (Right figure in reference): Wide Scissor Stride B
-        drawSidePoseLegs(result, 'strideB', 1, -1);
-        drawSideUpperBodyAndArms(result, 1, 0, false);
-      } else {
-        // Pose 3: Passing Pose B
-        drawSidePoseLegs(result, 'passingB', 0, 0);
-        drawSideUpperBodyAndArms(result, 0, 0, false);
-      }
+      // 6-Frame Side Walk Cycle matching Boxes 2..7 of both reference images!
+      const poseKey = 'frame' + f;
+      const torsoBounceY = f === 3 ? 1 : 0;
+      const swayDx = f === 0 || f === 3 ? -1 : f === 2 || f === 4 ? 1 : 0;
+      drawSidePoseLegs(result, poseKey, torsoBounceY, swayDx);
+      drawSideUpperBodyAndArms(result, poseKey, torsoBounceY);
     }
   }
 

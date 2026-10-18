@@ -48,7 +48,7 @@ export class PixiTextureFactory {
     const cachedFrames = this.characterCache.get(cacheKey);
     if (cachedFrames) return cachedFrames;
 
-    const frameCount = animationMode === 'idle' ? 2 : 4;
+    const frameCount = animationMode === 'idle' ? 2 : 6;
     const frames = [];
     try {
       for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {

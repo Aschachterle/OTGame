@@ -848,7 +848,7 @@ export function createUI() {
         member.appearance,
         moving ? 'side_right' : 'front',
         moving ? 'walk' : 'idle',
-        (animTick + idx) % (moving ? 4 : 2)
+        (animTick + idx) % (moving ? 6 : 2)
       );
       renderCharacterGridToCanvas(el, grid, '#030c05');
     });
@@ -876,7 +876,7 @@ export function createUI() {
       }
       const sideCanvas = refs.journeyModalCardEl.querySelector('#creator-side-canvas');
       if (sideCanvas instanceof HTMLCanvasElement) {
-        const sideGrid = getCharacterFrameGrid(activeMember.appearance, 'side_right', 'walk', animTick % 4);
+        const sideGrid = getCharacterFrameGrid(activeMember.appearance, 'side_right', 'walk', animTick % 6);
         renderCharacterGridToCanvas(sideCanvas, sideGrid, { includeBackdrop: true, backdropId: 'prairie', scrollOffset: animTick * 2, drawGridLines: true });
       }
     }
