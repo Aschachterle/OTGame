@@ -473,142 +473,199 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
     pantsPresetId.includes('kirtle') ||
     pantsPresetId.includes('kilt');
 
+  const drawSingleSideLeg = (targetGrid, legDx, legDy, shadeDelta = 0) => {
+    const legFactor = (y) => (y <= 21 ? 0.35 : y <= 23 ? 0.65 : y <= 25 ? 0.85 : 1.0);
+    for (let y = 21; y <= 30; y++) {
+      for (let x = 0; x < GRID_SIZE; x++) {
+        const c = neutral[y][x];
+        if (!c) continue;
+        const factor = legFactor(y);
+        const dx = Math.round(legDx * factor);
+        const dy = y >= 25 ? legDy : legDy < 0 && y >= 23 ? -1 : 0;
+        const destX = x + dx;
+        const destY = y + dy;
+        if (destX >= 0 && destX < GRID_SIZE && destY >= 20 && destY < GRID_SIZE) {
+          targetGrid[destY][destX] = shadeDelta !== 0 ? shadeHex(c, shadeDelta) : c;
+        }
+      }
+    }
+  };
+
+  const drawSideDualLegs = (targetGrid, farDx, farDy, nearDx, nearDy, farShade = -26, torsoBounceY = 0) => {
+    if (isSkirtEquipped) {
+      for (let y = 27; y <= 30; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+          const c = neutral[y][x];
+          if (!c) continue;
+          const destX = x + farDx;
+          const destY = y + farDy;
+          if (destX >= 0 && destX < GRID_SIZE && destY >= 26 && destY < GRID_SIZE) {
+            targetGrid[destY][destX] = shadeHex(c, farShade);
+          }
+        }
+      }
+      for (let y = 21; y <= 30; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+          const c = neutral[y][x];
+          if (!c) continue;
+          const dx = y >= 27 ? nearDx : y >= 25 ? Math.round(nearDx * 0.35) : 0;
+          const dy = y >= 27 ? nearDy : torsoBounceY;
+          const destX = x + dx;
+          const destY = y + dy;
+          if (destX >= 0 && destX < GRID_SIZE && destY >= 20 && destY < GRID_SIZE) {
+            targetGrid[destY][destX] = c;
+          }
+        }
+      }
+      return;
+    }
+
+    // Draw far leg first (shaded in background), then near leg on top (full brightness in foreground)
+    drawSingleSideLeg(targetGrid, farDx, farDy, farShade);
+    drawSingleSideLeg(targetGrid, nearDx, nearDy, 0);
+  };
+
   if (animMode === 'static') {
-    result = neutral;
+    if (!isSide) {
+      result = neutral;
+    } else {
+      for (let y = 0; y <= 20; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+          result[y][x] = neutral[y][x];
+        }
+      }
+      drawSideDualLegs(result, -2, -1, 1, 0, -24, 0);
+    }
   } else if (animMode === 'idle') {
     const bob = frameIndex % 2 === 1 ? 1 : 0;
-    for (let y = 0; y < GRID_SIZE; y++) {
-      for (let x = 0; x < GRID_SIZE; x++) {
-        const srcY = bob === 1 && y <= 20 ? y - 1 : y;
-        if (srcY >= 0 && srcY < GRID_SIZE) {
-          result[y][x] = neutral[srcY][x];
+    if (!isSide) {
+      for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+          const srcY = bob === 1 && y <= 20 ? y - 1 : y;
+          if (srcY >= 0 && srcY < GRID_SIZE) {
+            result[y][x] = neutral[srcY][x];
+          }
+        }
+      }
+    } else {
+      drawSideDualLegs(result, -2, -1, 1, 0, -24, bob);
+      for (let y = 0; y <= 20; y++) {
+        const srcY = y - bob;
+        if (srcY >= 0 && srcY <= 20) {
+          for (let x = 0; x < GRID_SIZE; x++) {
+            if (neutral[srcY][x]) {
+              result[y][x] = neutral[srcY][x];
+            }
+          }
         }
       }
     }
   } else if (animMode === 'walk') {
     const f = ((frameIndex % 4) + 4) % 4;
     if (!isSide) {
-      const isBounce = f === 0 || f === 2;
-      const torsoDy = isBounce ? 1 : 0;
+      const isStride = f === 0 || f === 2;
+      const torsoDy = isStride ? 1 : 0;
 
+      // 1. Front Walk Legs (y = 21..30):
+      // Frame 0 lifts right leg (-2, shaded slightly darker as it steps back), Frame 2 lifts left leg (-2, shaded darker)
       for (let y = 21; y <= 30; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
+          const c = neutral[y][x];
+          if (!c) continue;
           const isLeftHalf = x < 16;
           let legLift = 0;
-          if (f === 0 && !isLeftHalf && y >= 22) legLift = -2;
-          if (f === 2 && isLeftHalf && y >= 22) legLift = -2;
-          if (f === 1 && !isLeftHalf && y >= 25) legLift = -1;
-          if (f === 3 && isLeftHalf && y >= 25) legLift = -1;
-
+          let shade = 0;
+          if (f === 0 && !isLeftHalf) {
+            legLift = y >= 25 ? -2 : y >= 22 ? -1 : 0;
+            if (y >= 23) shade = -16;
+          } else if (f === 2 && isLeftHalf) {
+            legLift = y >= 25 ? -2 : y >= 22 ? -1 : 0;
+            if (y >= 23) shade = -16;
+          }
           const destY = y + legLift;
-          if (destY >= 20 && destY < GRID_SIZE && neutral[y][x]) {
-            result[destY][x] = neutral[y][x];
+          if (destY >= 20 && destY < GRID_SIZE) {
+            result[destY][x] = shade !== 0 ? shadeHex(c, shade) : c;
           }
         }
       }
 
+      // 2. Front Walk Head, Torso & Pumping Arms (y = 1..20):
       for (let y = 1; y <= 20; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
           const c = neutral[y][x];
           if (!c) continue;
           let dy = torsoDy;
-          if (y >= 14 && y <= 19) {
+          let shade = 0;
+          // Opposite arm pump: when right leg steps back (f=0), right arm swings forward/up (dy=0) and left arm swings back/down (dy=1, shaded)
+          if (y >= 15 && y <= 19) {
             if (x <= 9) {
-              dy = f === 0 ? 1 : f === 2 ? -1 : 0;
+              if (f === 2) {
+                if (y === 15) continue;
+                dy = 0;
+              } else if (f === 0) {
+                shade = -12;
+              }
             } else if (x >= 22) {
-              dy = f === 2 ? 1 : f === 0 ? -1 : 0;
+              if (f === 0) {
+                if (y === 15) continue;
+                dy = 0;
+              } else if (f === 2) {
+                shade = -12;
+              }
             }
           }
           const destY = y + dy;
           if (destY >= 0 && destY < GRID_SIZE) {
-            result[destY][x] = c;
+            result[destY][x] = shade !== 0 ? shadeHex(c, shade) : c;
           }
         }
       }
     } else {
+      // Side 4-Frame SNES Walk Cycle (Chrono Trigger Row 3 Scissor Stride)
       const isStride = f === 0 || f === 2;
       const torsoBounceY = isStride ? 1 : 0;
-      let backLegDx = 0;
-      let backLegDy = 0;
-      let frontLegDx = 0;
-      let frontLegDy = 0;
+      let farDx = 0;
+      let farDy = 0;
+      let nearDx = 0;
+      let nearDy = 0;
       let armSwingDx = 0;
 
       if (f === 0) {
-        backLegDx = -1;
-        backLegDy = -1;
-        frontLegDx = 1;
-        armSwingDx = -1;
+        // Stride 1: Near leg steps forward (+3, planted y=30), Far leg kicks back (-3, lifted y=29), Near arm swings back (-2)
+        farDx = -3;
+        farDy = -1;
+        nearDx = 3;
+        nearDy = 0;
+        armSwingDx = -2;
       } else if (f === 1) {
-        backLegDx = 1;
-        frontLegDx = -1;
-        frontLegDy = -1;
+        // Passing 1: Near leg planted (0, y=30), Far leg passing behind (-1, lifted y=29), Arm centered (0)
+        farDx = -1;
+        farDy = -1;
+        nearDx = 0;
+        nearDy = 0;
         armSwingDx = 0;
       } else if (f === 2) {
-        backLegDx = 3;
-        frontLegDx = -3;
-        frontLegDy = -1;
+        // Stride 2: Far leg steps forward (+3, planted y=30), Near leg kicks back (-3, lifted y=29), Near arm swings forward (+1)
+        farDx = 3;
+        farDy = 0;
+        nearDx = -3;
+        nearDy = -1;
         armSwingDx = 1;
       } else if (f === 3) {
-        backLegDx = 1;
-        backLegDy = -1;
-        frontLegDx = -1;
+        // Passing 2: Far leg planted (0, y=30), Near leg lifts knee passing forward (+1, lifted y=28), Arm centered (0)
+        farDx = 0;
+        farDy = 0;
+        nearDx = 1;
+        nearDy = -2;
         armSwingDx = 0;
       }
 
-      if (isSkirtEquipped) {
-        for (let y = 21; y <= 30; y++) {
-          for (let x = 0; x < GRID_SIZE; x++) {
-            const c = neutral[y][x];
-            if (!c) continue;
-            const isBackBoot = y >= 27 && x <= 14;
-            const dx = isBackBoot ? backLegDx : y >= 27 ? frontLegDx : 0;
-            const dy = isBackBoot ? backLegDy : y >= 27 ? frontLegDy : torsoBounceY;
-            const destX = x + dx;
-            const destY = y + dy;
-            if (destX >= 0 && destX < GRID_SIZE && destY >= 20 && destY < GRID_SIZE) {
-              result[destY][destX] = c;
-            }
-          }
-        }
-      } else {
-        const legStrideFactor = (y) => (y <= 21 ? 0 : y <= 23 ? 0.35 : y <= 25 ? 0.65 : 1);
+      drawSideDualLegs(result, farDx, farDy, nearDx, nearDy, -26, torsoBounceY);
 
-        // Draw back leg (x <= 13 in neutral)
-        for (let y = 21; y <= 30; y++) {
-          for (let x = 0; x <= 13; x++) {
-            const c = neutral[y][x];
-            if (!c) continue;
-            const factor = legStrideFactor(y);
-            const dx = Math.round(backLegDx * factor);
-            const dy = y >= 27 ? backLegDy : 0;
-            const destX = x + dx;
-            const destY = y + dy;
-            if (destX >= 0 && destX < GRID_SIZE && destY >= 20 && destY < GRID_SIZE) {
-              result[destY][destX] = c;
-            }
-          }
-        }
-
-        // Draw front leg (x >= 14 in neutral)
-        for (let y = 21; y <= 30; y++) {
-          for (let x = 14; x < GRID_SIZE; x++) {
-            const c = neutral[y][x];
-            if (!c) continue;
-            const factor = legStrideFactor(y);
-            const dx = Math.round(frontLegDx * factor);
-            const dy = y >= 27 ? frontLegDy : 0;
-            const destX = x + dx;
-            const destY = y + dy;
-            if (destX >= 0 && destX < GRID_SIZE && destY >= 20 && destY < GRID_SIZE) {
-              result[destY][destX] = c;
-            }
-          }
-        }
-      }
-
+      // Draw Head & Torso (excluding the swinging forward fist region y=16..18, x=17..22)
       for (let y = 1; y <= 20; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
+          if (y >= 16 && y <= 18 && x >= 17 && x <= 22) continue;
           const c = neutral[y][x];
           if (!c) continue;
           const destY = y + torsoBounceY;
@@ -618,14 +675,19 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
         }
       }
 
-      for (let y = 15; y <= 17; y++) {
-        for (let x = 14; x <= 21; x++) {
+      // Draw the swinging forward clenched fist (y=16..18, x=17..22) cleanly without ghosting
+      for (let y = 16; y <= 18; y++) {
+        const destY = y + torsoBounceY;
+        if (destY < 0 || destY >= GRID_SIZE) continue;
+        if (armSwingDx > 0 && neutral[y][16]) {
+          result[destY][17] = neutral[y][16];
+        }
+        for (let x = 17; x <= 22; x++) {
           const c = neutral[y][x];
           if (!c) continue;
           const destX = x + armSwingDx;
-          const destY = y + torsoBounceY;
-          if (destX >= 0 && destX < GRID_SIZE && destY >= 0 && destY < GRID_SIZE) {
-            result[destY][destX] = shadeHex(c, 10);
+          if (destX >= 0 && destX < GRID_SIZE) {
+            result[destY][destX] = c;
           }
         }
       }
