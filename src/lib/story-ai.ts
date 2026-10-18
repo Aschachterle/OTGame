@@ -46,11 +46,60 @@ const obstacleSchema = z.object({
   choices: z.array(obstacleChoiceSchema).min(2).max(3)
 });
 
+const dialogueBeatSchema = z.object({
+  speakerId: z.string().min(1).max(64).optional(),
+  speakerName: z.string().min(1).max(80),
+  speakerRole: z.string().min(1).max(80).optional(),
+  text: z.string().min(1).max(320)
+});
+
+export const WEATHER_WEIRDNESS_RATINGS: Record<string, number> = {
+  none: 0,
+  fog: 1,
+  rain: 2,
+  snow_storm: 3,
+  thunderstorm: 4,
+  electrical_storm: 7,
+  fire_storm: 8,
+  wormhole_storm: 10
+};
+
+export function sanitizeWeatherOverlay(weather: string | undefined, strangenessLevel: number): string {
+  const normalized = String(weather ?? 'none').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  const validWeathers = ['none', 'fog', 'rain', 'snow_storm', 'thunderstorm', 'electrical_storm', 'fire_storm', 'wormhole_storm'];
+  const resolved = validWeathers.includes(normalized) ? normalized : 'none';
+  const weirdness = WEATHER_WEIRDNESS_RATINGS[resolved] ?? 0;
+
+  // Maximum allowed weirdness based on strangeness level (0 to 10):
+  let maxWeirdness = 2; // Strangeness 0-2: only normal (clear, fog, rain)
+  if (strangenessLevel >= 9) {
+    maxWeirdness = 10;
+  } else if (strangenessLevel >= 6) {
+    maxWeirdness = 8;
+  } else if (strangenessLevel >= 3) {
+    maxWeirdness = 4;
+  }
+
+  if (weirdness <= maxWeirdness) {
+    return resolved;
+  }
+
+  if (maxWeirdness <= 2) {
+    return ['none', 'fog', 'rain'][Math.abs(strangenessLevel) % 3];
+  }
+  if (maxWeirdness <= 4) {
+    return 'thunderstorm';
+  }
+  return 'electrical_storm';
+}
+
 const narrationBeatSchema = z.object({
   body: z.string().min(1).max(5000).optional(),
   keyPoints: z.array(z.string().min(1).max(240)).max(6).default([]),
   headline: z.string().min(1).max(140).optional(),
   lines: z.array(z.string().min(1).max(240)).max(6).optional(),
+  weatherOverlay: z.string().optional(),
+  dialogue: dialogueBeatSchema.nullable().optional(),
   startingStrangenessLevel: z.number().int().min(0).max(10).optional(),
   prologueParagraphs: z.array(z.string().min(1).max(4000)).length(1).optional(),
   obstacle: obstacleSchema.nullable().optional(),
@@ -64,11 +113,14 @@ const narrationBeatSchema = z.object({
 
 export type SurrealMutation = z.infer<typeof surrealMutationSchema>;
 export type Obstacle = z.infer<typeof obstacleSchema>;
+export type DialogueBeat = z.infer<typeof dialogueBeatSchema>;
 export type NarrationBeat = {
   source: 'llm' | 'deterministic';
   headline: string;
   body: string;
   lines?: string[];
+  dialogue?: DialogueBeat | null;
+  weatherOverlay?: string;
   startingStrangenessLevel?: number;
   prologueParagraphs?: string[];
   keyPoints?: string[];
@@ -187,11 +239,17 @@ function buildNarrationInstructions(context: NarrationContext): string {
     'Return strict JSON only in this exact shape:',
     '{',
     '  "headline": "<Short 3-8 word title of the beat>",',
+    '  "weatherOverlay": "<none | fog | rain | snow_storm | thunderstorm | electrical_storm | fire_storm | wormhole_storm (MUST obey strangeness meter constraint below)>",',
     '  "lines": [',
     '    "<Line 1: Current landscape, weather, or light; do not recap the move>",',
     '    "<Line 2: Sensory detail or character dialogue; do not repeat who performed the move>",',
     '    "<Line 3: Atmospheric tension or a fresh anomaly; do not summarize consequences, resources, or waypoints>"',
     '  ],',
+    '  "dialogue": {',
+    '    "speakerName": "<Exact first name of the character speaking the quoted line>",',
+    '    "speakerRole": "<Role of the speaking character>",',
+    '    "text": "<The exact spoken dialogue text without outer quotation marks>"',
+    '  },',
     '  "body": "<Line 1> <Line 2> <Line 3>",',
     '  "keyPoints": ["factual continuity anchor 1", "factual continuity anchor 2", "factual continuity anchor 3"],',
     '  "obstacle": null,',
@@ -199,9 +257,25 @@ function buildNarrationInstructions(context: NarrationContext): string {
     '  "dmDossierUpdate": { "sentimentDelta": "<brief evolving crew or entity memory>" }',
     '}',
     '',
+    '### Weather System & Weirdness Meter:',
+    '- Select an active weather overlay for the scene via "weatherOverlay". Each weather type has a strict Weirdness Rating:',
+    '  * "none" (Clear skies) [Weirdness 0: Normal]',
+    '  * "fog" (Dense rolling mist) [Weirdness 1: Normal]',
+    '  * "rain" (Steady prairie rain) [Weirdness 2: Normal]',
+    '  * "snow_storm" (Trail blizzard) [Weirdness 3: Unusual frontier weather]',
+    '  * "thunderstorm" (Severe lightning squall) [Weirdness 4: Unusual storm]',
+    '  * "electrical_storm" (Unnatural static auroral discharges) [Weirdness 7: Overt anomaly]',
+    '  * "fire_storm" (Blazing cinder squall and fiery skies) [Weirdness 8: Severe anomaly]',
+    '  * "wormhole_storm" (Dimensional space-time vortex rift) [Weirdness 10: Cosmic temporal rupture]',
+    `- CRITICAL STRANGENESS CONSTRAINT: Current Strangeness Level is ${context.strangenessLevel ?? 0}/10.`,
+    '  * Strangeness 0-2: ONLY normal weather allowed ("none", "fog", "rain"). Maximum weirdness is 2. Storms with weirdness > 2 are strictly forbidden.',
+    '  * Strangeness 3-5: Normal weather plus occasional "snow_storm" or "thunderstorm". Weirdness > 4 is strictly forbidden.',
+    '  * Strangeness 6-8: Normal weather, thunderstorms, plus unusual storms ("electrical_storm", "fire_storm"). "wormhole_storm" is strictly forbidden.',
+    '  * Strangeness 9-10: Maximum cosmic weirdness permitted. "wormhole_storm" may now appear alongside other weather types.',
+    '',
     '### Core Narrative Rules:',
     '- The game shows move outcomes, named participants, and exact stat deltas on a separate results screen before this dispatch. This output is only the Phase 2 story beat.',
-    '- Deliver exactly 3 distinct, complete atmospheric sentences corresponding to the 3 lines; include at least one brief, quoted line of character dialogue in the dispatch.',
+    '- Deliver exactly 3 distinct, complete atmospheric sentences corresponding to the 3 lines; include at least one brief, quoted line of character dialogue in the dispatch and populate the "dialogue" object with the exact speakerName, speakerRole, and spoken text.',
     '- Do not reuse any exact sentence or stock phrase from the prior narration provided in the user context; each dispatch must feel distinct while preserving established facts.',
     '- Read the "DM Dossier" provided in the prompt. Adapt your tone to reflect the player\'s moral temperament, pace habits, and the crew\'s simmering sentiment.',
     '- Never recount or paraphrase the last action, chosen dilemma response, participant, outcome, gain, loss, stat change, travel distance, or supply total. These belong exclusively to the results screen.',
@@ -282,7 +356,12 @@ function buildPrologueGenesisInstructions(context: NarrationContext): string {
     '{',
     `  "startingStrangenessLevel": ${level},`,
     '  "headline": "<short prologue title>",',
-    '  "prologueParagraphs": ["<one substantial family backstory paragraph ending at the Independence General Store before purchases>"]',
+    '  "prologueParagraphs": ["<one substantial family backstory paragraph ending at the Independence General Store before purchases>"],',
+    '  "dialogue": {',
+    '    "speakerName": "<Exact first name of the traveler speaking the quoted line>",',
+    '    "speakerRole": "<Role of the speaking traveler>",',
+    '    "text": "<The exact spoken dialogue text without outer quotation marks>"',
+    '  }',
     '}'
   ].join('\n');
 }
@@ -305,7 +384,95 @@ function containsQuotedDialogue(text: string): boolean {
   return /(?:"[^"\n]{2,}"|“[^”\n]{2,}”)/.test(text);
 }
 
-function parseNarrationBeat(content: string): NarrationBeat {
+function resolveBeatDialogue(beat: NarrationBeat, context: NarrationContext): DialogueBeat | null {
+  const party = context.party ?? [];
+  const livingParty = party.filter(
+    (member) => member.status !== 'Dead' && member.status !== 'Deceased' && (member.health ?? 100) > 0
+  );
+  const candidatePool = livingParty.length ? livingParty : party;
+
+  const matchSpeakerFromHint = (hintText: string) => {
+    const normalizedHint = hintText.toLowerCase();
+    for (const member of candidatePool) {
+      const escapedName = member.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (escapedName && new RegExp(`\\b${escapedName}\\b`, 'i').test(hintText)) {
+        return member;
+      }
+    }
+    for (const member of candidatePool) {
+      const roleLower = member.role.toLowerCase();
+      if (roleLower && new RegExp(`\\b${roleLower}\\b`, 'i').test(normalizedHint)) {
+        return member;
+      }
+      if (roleLower === 'youth' && /\byoungest\b/i.test(normalizedHint)) {
+        return member;
+      }
+    }
+    return null;
+  };
+
+  if (beat.dialogue?.text?.trim()) {
+    const cleanedText = beat.dialogue.text.trim().replace(/^["“]+|["”]+$/g, '').trim();
+    if (cleanedText) {
+      const matched =
+        candidatePool.find((m) => beat.dialogue?.speakerId && m.id === beat.dialogue.speakerId) ||
+        matchSpeakerFromHint(`${beat.dialogue.speakerName ?? ''} ${beat.dialogue.speakerRole ?? ''}`);
+      if (matched) {
+        return {
+          speakerId: matched.id,
+          speakerName: matched.name,
+          speakerRole: matched.role,
+          text: cleanedText
+        };
+      }
+      return {
+        speakerId: beat.dialogue.speakerId,
+        speakerName: beat.dialogue.speakerName.trim() || (candidatePool[0]?.name ?? 'Traveler'),
+        speakerRole: beat.dialogue.speakerRole?.trim() || candidatePool[0]?.role,
+        text: cleanedText
+      };
+    }
+  }
+
+  // Extract quoted dialogue from lines, prologueParagraphs, or body
+  const sourceSegments = [
+    ...(beat.lines ?? []),
+    ...(beat.prologueParagraphs ?? []),
+    beat.body ?? ''
+  ].filter(Boolean);
+
+  for (const segment of sourceSegments) {
+    const sentences = segment.match(/[^.!?]+[.!?]+(?:\s*["”])?|[^.!?]+$/g) ?? [segment];
+    for (let idx = 0; idx < sentences.length; idx += 1) {
+      const sentence = sentences[idx];
+      const matches = [...sentence.matchAll(/"([^"\n]{2,})"|“([^”\n]{2,})”/g)];
+      if (!matches.length) continue;
+
+      const quoteParts = matches.map((m) => (m[1] ?? m[2] ?? '').trim()).filter(Boolean);
+      const quoteText = quoteParts.join(' ').replace(/\s+/g, ' ').trim();
+      if (!quoteText) continue;
+
+      const unquotedAttribution = sentence.replace(/"[^"\n]*"|“[^”\n]*”/g, ' ');
+      const prevSentence = idx > 0 ? sentences[idx - 1].replace(/"[^"\n]*"|“[^”\n]*”/g, ' ') : '';
+      const matched =
+        matchSpeakerFromHint(unquotedAttribution) ||
+        matchSpeakerFromHint(prevSentence) ||
+        matchSpeakerFromHint(segment.replace(/"[^"\n]*"|“[^”\n]*”/g, ' ')) ||
+        candidatePool[0];
+
+      return {
+        speakerId: matched?.id,
+        speakerName: matched?.name ?? 'Traveler',
+        speakerRole: matched?.role,
+        text: quoteText
+      };
+    }
+  }
+
+  return null;
+}
+
+function parseNarrationBeat(content: string, strangenessLevel = 0): NarrationBeat {
   const trimmed = content.trim();
   const toBeat = (parsed: z.infer<typeof narrationBeatSchema>): NarrationBeat => {
     const prologueParagraphs = parsed.prologueParagraphs?.map((line) => line.trim().replace(/\s+/g, ' ')).filter(Boolean);
@@ -329,6 +496,8 @@ function parseNarrationBeat(content: string): NarrationBeat {
       headline,
       body,
       lines,
+      dialogue: parsed.dialogue ?? null,
+      weatherOverlay: sanitizeWeatherOverlay(parsed.weatherOverlay, strangenessLevel),
       startingStrangenessLevel: parsed.startingStrangenessLevel,
       prologueParagraphs,
       keyPoints: parsed.keyPoints,
@@ -869,7 +1038,7 @@ async function requestGeminiNarration(context: NarrationContext): Promise<Narrat
     console.log('[llm-narration] cleaned text', { model, text: cleaned });
 
     try {
-      const beat = parseNarrationBeat(cleaned);
+      const beat = parseNarrationBeat(cleaned, context.strangenessLevel ?? 0);
       if (isGenesis) {
         const wordCount = beat.body.split(/\s+/).filter(Boolean).length;
         const prologueText = beat.prologueParagraphs?.[0] ?? '';
@@ -884,6 +1053,7 @@ async function requestGeminiNarration(context: NarrationContext): Promise<Narrat
         }
         return {
           ...beat,
+          dialogue: resolveBeatDialogue(beat, context),
           startingStrangenessLevel: context.startingStrangenessRoll ?? context.strangenessLevel ?? 0,
           obstacle: undefined,
           surrealMutation: undefined,
@@ -901,6 +1071,7 @@ async function requestGeminiNarration(context: NarrationContext): Promise<Narrat
       }
       return {
         ...beat,
+        dialogue: resolveBeatDialogue(beat, context),
         obstacle: beat.obstacle && isRecentlyUsedObstacle(beat.obstacle, context)
           ? (beat.obstacle.dilemmaType === 'surreal'
             ? undefined
@@ -949,20 +1120,26 @@ function createFallbackPrologueGenesis(context: NarrationContext): NarrationBeat
         return history;
       }).join(' ')
     : 'The Guide knew the roads and weather; the Doctor had tended illness; the Youth watched the adults with worry and hope; and the Carpenter kept tools and wagons in repair.';
-  const dialogueSpeaker = context.party?.find((member) => member.role === 'Carpenter')?.name
-    ?? context.party?.[0]?.name
-    ?? 'The Carpenter';
+  const speakerMember = context.party?.find((member) => member.role === 'Carpenter') ?? context.party?.[0];
+  const dialogueSpeaker = speakerMember?.name ?? 'The Carpenter';
 
   if (isCustomEra) {
     const eraName = selectedEra.label;
     const eraYears = selectedEra.years ?? selectedEra.id;
-    const paragraph = `They began in the world of ${eraName} (${eraYears}), gathered inside the familiar walls of their home as ${proseExpeditionName}, before an inexplicable temporal rupture tore open the air outside their threshold and transported all four of them across the centuries into 1800s Missouri. When the distortion cleared, the architecture of their own era had vanished behind them, replaced by the muddy ruts, woodsmoke, and canvas wagon trains of spring 1848, with the roles of ${partyIdentities} now defining their survival. ${party} None of them could undo the displacement that had carried them out of ${eraYears}, and every sign along the frontier road made clear that their only way forward lay west across the continent. ${dialogueSpeaker} looked toward the wooden storefronts ahead and said, "Whatever pulled us out of our own time left us on this road, so we had better outfit ourselves before the trail takes the rest." Walking on foot from the edge of the crossing into town without a wagon or team of their own yet, they pooled what funds they carried and followed the emigrant crowds toward the outfitting post. At the threshold of the Independence General Store in Independence, Missouri, in 1848, ${proseExpeditionName} is ready to choose provisions for the Oregon Trail; the outfitting has not begun.`;
+    const spokenText = 'Whatever pulled us out of our own time left us on this road, so we had better outfit ourselves before the trail takes the rest.';
+    const paragraph = `They began in the world of ${eraName} (${eraYears}), gathered inside the familiar walls of their home as ${proseExpeditionName}, before an inexplicable temporal rupture tore open the air outside their threshold and transported all four of them across the centuries into 1800s Missouri. When the distortion cleared, the architecture of their own era had vanished behind them, replaced by the muddy ruts, woodsmoke, and canvas wagon trains of spring 1848, with the roles of ${partyIdentities} now defining their survival. ${party} None of them could undo the displacement that had carried them out of ${eraYears}, and every sign along the frontier road made clear that their only way forward lay west across the continent. ${dialogueSpeaker} looked toward the wooden storefronts ahead and said, "${spokenText}" Walking on foot from the edge of the crossing into town without a wagon or team of their own yet, they pooled what funds they carried and followed the emigrant crowds toward the outfitting post. At the threshold of the Independence General Store in Independence, Missouri, in 1848, ${proseExpeditionName} is ready to choose provisions for the Oregon Trail; the outfitting has not begun.`;
     return {
       source: 'deterministic',
       headline: `Displaced from ${selectedEra.shortLabel ?? eraName} to 1848`,
       body: paragraph,
       lines: [paragraph],
       prologueParagraphs: [paragraph],
+      dialogue: {
+        speakerId: speakerMember?.id,
+        speakerName: dialogueSpeaker,
+        speakerRole: speakerMember?.role ?? 'Carpenter',
+        text: spokenText
+      },
       startingStrangenessLevel: level,
       keyPoints: [
         `${expeditionName} displaced from ${eraName} to 1848 Independence`,
@@ -988,9 +1165,10 @@ function createFallbackPrologueGenesis(context: NarrationContext): NarrationBeat
   const routeToStore = level >= 9
     ? 'From that settlement, they followed Missouri roads toward Independence over several days, guided by the household memories and the westbound wagons they met.'
     : 'After deciding, they followed familiar Missouri roads into Independence over several days, joining other emigrant families gathering to outfit for the western road.';
-  const dialogue = level >= 9
-    ? `${dialogueSpeaker} said, "I cannot explain how we came here, but I know this family must take the road west."`
-    : `${dialogueSpeaker} said, "If we leave, we go together, and we make the best of what we have."`;
+  const spokenText = level >= 9
+    ? 'I cannot explain how we came here, but I know this family must take the road west.'
+    : 'If we leave, we go together, and we make the best of what we have.';
+  const dialogue = `${dialogueSpeaker} said, "${spokenText}"`;
   const paragraph = `${opening} ${homeHistory} They debated the cost through the winter, knowing that leaving familiar neighbors and kin would be a loss as real as staying had become. ${party} Though each had a different memory of home and a different fear of the trail, family ties and years of mutual dependence made the decision together. ${dialogue} Whatever savings they could gather were meant for the wagon and the provisions they would need, but no purchase had yet been made. ${tierLine} ${routeToStore} At the threshold of the Independence General Store in Independence, Missouri, in 1848, ${proseExpeditionName} is ready to choose provisions for the Oregon Trail; the outfitting has not begun.`;
 
   return {
@@ -999,6 +1177,12 @@ function createFallbackPrologueGenesis(context: NarrationContext): NarrationBeat
     body: paragraph,
     lines: [paragraph],
     prologueParagraphs: [paragraph],
+    dialogue: {
+      speakerId: speakerMember?.id,
+      speakerName: dialogueSpeaker,
+      speakerRole: speakerMember?.role ?? 'Carpenter',
+      text: spokenText
+    },
     startingStrangenessLevel: level,
     keyPoints: [`${expeditionName} assembled at Independence`, `Starting strangeness ${level}/10`],
     tone: level >= 3 ? 'uncanny' : 'plain'
@@ -1010,14 +1194,20 @@ export function createFallbackNarration(context: NarrationContext): NarrationBea
     return createFallbackPrologueGenesis(context);
   }
   const narration = composeNarration(context);
-  return {
+  const beat: NarrationBeat = {
     source: 'deterministic',
     headline: narration.headline,
     body: narration.body,
     lines: narration.lines,
+    weatherOverlay: sanitizeWeatherOverlay(narration.weatherOverlay, context.strangenessLevel ?? 0),
+    dialogue: narration.dialogue ?? null,
     keyPoints: deriveFallbackKeyPoints(context),
     obstacle: shouldCreateFallbackObstacle(context) ? chooseFallbackObstacle(context) : undefined,
     tone: 'plain'
+  };
+  return {
+    ...beat,
+    dialogue: resolveBeatDialogue(beat, context)
   };
 }
 

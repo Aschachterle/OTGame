@@ -8,20 +8,15 @@
   </head>
   <body>
     <div id="journey-modal" class="journey-overlay" hidden>
-      <div class="journey-card">
-        <p class="eyebrow">Trail setup</p>
-        <h2>Begin your journey</h2>
-        <p class="journey-copy">The trail starts at Independence and ends in Willamette Valley. Configure story and audio in the menu bar, then start your expedition.</p>
-        <button id="begin-journey-btn" class="primary-btn journey-begin-btn" type="button">Begin your journey</button>
-      </div>
+      <div id="journey-modal-card" class="journey-card"></div>
     </div>
 
     <div id="journey-loader" class="journey-overlay" hidden>
       <div class="journey-loader-card" aria-live="polite">
         <div class="journey-spinner" aria-hidden="true"></div>
-        <p class="eyebrow">Loading trail</p>
-        <h2>Preparing the wagon</h2>
-        <p>Reading the world, waking the narration, and laying out the frontier.</p>
+        <p class="eyebrow" data-journey-loader-eyebrow>Loading trail</p>
+        <h2 data-journey-loader-title>Preparing the wagon</h2>
+        <p data-journey-loader-description>Reading the world, waking the narration, and laying out the frontier.</p>
       </div>
     </div>
 
@@ -90,12 +85,52 @@
               <input id="menu-story-source-toggle" type="checkbox" />
               <span>Story source: Gemini</span>
             </label>
+            <label class="menu-item menu-item-select" for="menu-strangeness-override">
+              <span>Test strangeness override</span>
+              <select id="menu-strangeness-override" aria-label="Test strangeness override">
+                <option value="">Natural progression</option>
+                <option value="0">Level 0</option>
+                <option value="1">Level 1</option>
+                <option value="2">Level 2</option>
+                <option value="3">Level 3</option>
+                <option value="4">Level 4</option>
+                <option value="5">Level 5</option>
+                <option value="6">Level 6</option>
+                <option value="7">Level 7</option>
+                <option value="8">Level 8</option>
+                <option value="9">Level 9</option>
+                <option value="10">Level 10</option>
+              </select>
+            </label>
+            <label class="menu-item menu-item-select" for="menu-weather-overlay">
+              <span>Weather overlay</span>
+              <select id="menu-weather-overlay" aria-label="Weather overlay">
+                <option value="none">Clear Skies (Weirdness 0)</option>
+                <option value="fog">Rolling Fog (Weirdness 1)</option>
+                <option value="rain">Rain (Weirdness 2)</option>
+                <option value="snow_storm">Snow Storm (Weirdness 3)</option>
+                <option value="thunderstorm">Thunderstorm (Weirdness 4)</option>
+                <option value="electrical_storm">Electrical Storm (Weirdness 7)</option>
+                <option value="fire_storm">Fire Storm (Weirdness 8)</option>
+                <option value="wormhole_storm">Wormhole Storm (Weirdness 10)</option>
+              </select>
+            </label>
+            <label class="menu-item menu-item-select" for="menu-landmark-warp-select">
+              <span>Warp to just before landmark</span>
+              <select id="menu-landmark-warp-select" aria-label="Landmark to warp before">
+                <option value="">Choose a landmark</option>
+              </select>
+            </label>
+            <button id="menu-warp-before-landmark" class="menu-item" type="button" disabled>Warp to one mile before</button>
+            <div class="menu-item menu-item-copy">Test-only local warp: keeps day, party, and supplies unchanged; does not write to the ledger.</div>
+            <div class="menu-item menu-item-copy">The strangeness override clears on refresh or New Game.</div>
           </div>
         </div>
 
         <div class="menu-group">
           <button class="menu-btn" type="button" data-menu-trigger="help" aria-expanded="false">Help</button>
           <div class="menu-dropdown" data-menu="help" hidden>
+            <div class="menu-item menu-item-copy">Setup: Tab moves fields, Enter confirms, R loads the standard outfit</div>
             <div class="menu-item menu-item-copy">Space / Enter: Press On</div>
             <div class="menu-item menu-item-copy">1-7: trail actions</div>
             <div class="menu-item menu-item-copy">During dilemmas: type 1-4, then Enter</div>
@@ -121,6 +156,6 @@
       </div>
     </div>
 
-    <script type="module" src="./app.js"></script>
+    <script type="module" src="./app.js?v=pixi_final_3"></script>
   </body>
 </html>

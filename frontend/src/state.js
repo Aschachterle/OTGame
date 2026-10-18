@@ -1,3 +1,4 @@
+import { normalizeWeatherOverlayId } from './scene-sprites.js';
 import {
   DEFAULT_PARTY_ERA_ID,
   SKIN_TONES,
@@ -430,8 +431,10 @@ export function createAppState() {
     creatorCategory: 'hats',
     creatorHeadwearSubFilter: 'all',
     landscapeCharX: 116,
+    generalStoreApproachProgress: 0,
     landscapeScrollX: 0,
     landscapeMoving: false,
+    riverCrossingAnimation: null,
     setupStage: 'register',
     setupError: '',
     outfittingProfile: '',
@@ -479,6 +482,11 @@ export function createAppState() {
     storyKeyPoints: [],
     strangenessLevel: 0,
     strangenessLevelOverride: null,
+    weatherOverlay: 'none',
+    weatherOverlayOverride: null,
+    weatherSeed: Math.floor(Math.random() * 1000000),
+    activeDialogue: null,
+    prologueDialogue: null,
     pendingSurrealEffect: null,
     pendingMetaDialogue: null,
     justResolvedDecision: null,
@@ -508,8 +516,10 @@ export function resetExpedition(state = appState) {
   state.creatorCategory = 'hats';
   state.creatorHeadwearSubFilter = 'all';
   state.landscapeCharX = 116;
+  state.generalStoreApproachProgress = 0;
   state.landscapeScrollX = 0;
   state.landscapeMoving = false;
+  state.riverCrossingAnimation = null;
   state.setupStage = 'register';
   state.setupError = '';
   state.outfittingProfile = '';
@@ -547,12 +557,17 @@ export function resetExpedition(state = appState) {
   state.wagonAnimationFrame = 0;
   state.lastActionSummary = null;
   state.lastActionContext = null;
-  state.actionHistory = [];
-  state.narrationHistory = [];
-  state.recentObstacleHistory = [];
-  state.storyKeyPoints = [];
+  state.actionHistory = [],
+  state.narrationHistory = [],
+  state.recentObstacleHistory = [],
+  state.storyKeyPoints = [],
   state.strangenessLevel = 0;
   state.strangenessLevelOverride = null;
+  state.weatherOverlay = 'none';
+  state.weatherOverlayOverride = null;
+  state.weatherSeed = Math.floor(Math.random() * 1000000);
+  state.activeDialogue = null;
+  state.prologueDialogue = null;
   state.pendingSurrealEffect = null;
   state.pendingMetaDialogue = null;
   state.justResolvedDecision = null;
@@ -741,9 +756,123 @@ export function normalizeSurrealMutation(mutation) {
   };
 }
 
+export function extractDialogueFromNarration(narration, state) {
+  if (!narration) return null;
+  const party = state?.wagon?.party ?? [];
+  const livingParty = party.filter((member) => (member.health ?? 100) > 0 && member.status !== 'Deceased');
+  const candidatePool = livingParty.length ? livingParty : party;
+
+  const matchSpeakerFromHint = (hintText = '') => {
+    const normalizedHint = String(hintText).toLowerCase();
+    if (!normalizedHint.trim()) return null;
+
+    if (/\b(matt|shopkeeper|storekeeper|merchant|outfitter)\b/i.test(normalizedHint)) {
+      return { id: 'shopkeeper', name: 'Matt', role: 'Shopkeeper', targetType: 'npc' };
+    }
+    if (/\b(ferryman|ferry\s+operator|ferry\s+attendant|boatman)\b/i.test(normalizedHint)) {
+      return { id: 'ferryOperator', name: 'Ferryman', role: 'Ferry Attendant', targetType: 'npc' };
+    }
+    if (/\b(river\s+guide|shoshone\s+guide|pawnee\s+guide|local\s+guide)\b/i.test(normalizedHint)) {
+      return { id: 'riverGuide', name: 'River Guide', role: 'Guide', targetType: 'npc' };
+    }
+
+    for (const member of candidatePool) {
+      const escapedName = String(member.name || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (escapedName && new RegExp(`\\b${escapedName}\\b`, 'i').test(hintText)) {
+        return { id: member.id, name: member.name, role: member.role, targetType: 'party' };
+      }
+    }
+    for (const member of candidatePool) {
+      const roleLower = String(member.role || '').toLowerCase();
+      if (roleLower && new RegExp(`\\b${roleLower}\\b`, 'i').test(normalizedHint)) {
+        return { id: member.id, name: member.name, role: member.role, targetType: 'party' };
+      }
+      if (roleLower === 'youth' && /\b(youngest|child|boy|girl)\b/i.test(normalizedHint)) {
+        return { id: member.id, name: member.name, role: member.role, targetType: 'party' };
+      }
+    }
+    return null;
+  };
+
+  if (narration.dialogue && typeof narration.dialogue === 'object' && typeof narration.dialogue.text === 'string') {
+    const cleanedText = narration.dialogue.text.trim().replace(/^["“]+|["”]+$/g, '').trim();
+    if (cleanedText) {
+      const byId = candidatePool.find((m) => narration.dialogue.speakerId && m.id === narration.dialogue.speakerId);
+      const matched = byId
+        ? { id: byId.id, name: byId.name, role: byId.role, targetType: 'party' }
+        : matchSpeakerFromHint(`${narration.dialogue.speakerName ?? ''} ${narration.dialogue.speakerRole ?? ''}`);
+      if (matched) {
+        return {
+          speakerId: matched.id,
+          speakerName: matched.name,
+          speakerRole: matched.role,
+          targetType: matched.targetType ?? 'party',
+          text: cleanedText
+        };
+      }
+      const fallback = candidatePool[0];
+      return {
+        speakerId: narration.dialogue.speakerId || fallback?.id || 'leader',
+        speakerName: narration.dialogue.speakerName?.trim() || fallback?.name || 'Traveler',
+        speakerRole: narration.dialogue.speakerRole?.trim() || fallback?.role || '',
+        targetType: 'party',
+        text: cleanedText
+      };
+    }
+  }
+
+  const segments = [
+    ...(Array.isArray(narration.lines) ? narration.lines : []),
+    ...(Array.isArray(narration.prologueParagraphs) ? narration.prologueParagraphs : []),
+    typeof narration.body === 'string' ? narration.body : ''
+  ].filter(Boolean);
+
+  for (const segment of segments) {
+    const sentences = String(segment).match(/[^.!?]+[.!?]+(?:\s*["”])?|[^.!?]+$/g) ?? [String(segment)];
+    for (let idx = 0; idx < sentences.length; idx += 1) {
+      const sentence = sentences[idx];
+      const matches = [...sentence.matchAll(/"([^"\n]{2,})"|“([^”\n]{2,})”/g)];
+      if (!matches.length) continue;
+
+      const quoteParts = matches.map((m) => (m[1] ?? m[2] ?? '').trim()).filter(Boolean);
+      const quoteText = quoteParts.join(' ').replace(/\s+/g, ' ').trim();
+      if (!quoteText) continue;
+
+      const unquotedSentence = sentence.replace(/"[^"\n]*"|“[^”\n]*”/g, ' ');
+      const prevSentence = idx > 0 ? sentences[idx - 1].replace(/"[^"\n]*"|“[^”\n]*”/g, ' ') : '';
+      const matched =
+        matchSpeakerFromHint(unquotedSentence) ||
+        matchSpeakerFromHint(prevSentence) ||
+        matchSpeakerFromHint(String(segment).replace(/"[^"\n]*"|“[^”\n]*”/g, ' ')) ||
+        (candidatePool[0]
+          ? { id: candidatePool[0].id, name: candidatePool[0].name, role: candidatePool[0].role, targetType: 'party' }
+          : null);
+
+      return {
+        speakerId: matched?.id ?? 'leader',
+        speakerName: matched?.name ?? 'Traveler',
+        speakerRole: matched?.role ?? '',
+        targetType: matched?.targetType ?? 'party',
+        text: quoteText
+      };
+    }
+  }
+
+  return null;
+}
+
 export function applyNarrationBeat(state, narration) {
   const surrealMutation = normalizeSurrealMutation(narration?.surrealMutation);
-  state.latestNarration = narration ? { ...narration, surrealMutation: surrealMutation ?? undefined } : narration;
+  const resolvedDialogue = extractDialogueFromNarration(narration, state);
+  state.latestNarration = narration
+    ? {
+        ...narration,
+        surrealMutation: surrealMutation ?? undefined,
+        dialogue: resolvedDialogue ?? narration.dialogue ?? undefined
+      }
+    : narration;
+  state.activeDialogue = resolvedDialogue;
+  state.activeDialogueShownAt = resolvedDialogue ? Date.now() : 0;
   state.activeObstacle = normalizeObstacleCandidate(narration?.obstacle);
   if (surrealMutation) {
     state.pendingSurrealEffect = surrealMutation;
@@ -754,6 +883,13 @@ export function applyNarrationBeat(state, narration) {
   }
   if (Array.isArray(narration?.keyPoints)) {
     rememberNarrationKeyPoints(state, narration.keyPoints);
+  }
+  if (typeof narration?.weatherOverlay === 'string' && narration.weatherOverlay) {
+    const nextWeather = normalizeWeatherOverlayId(narration.weatherOverlay);
+    if (nextWeather !== state.weatherOverlay) {
+      state.weatherSeed = Math.floor(Math.random() * 1000000);
+    }
+    state.weatherOverlay = nextWeather;
   }
 }
 

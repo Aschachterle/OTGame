@@ -21,12 +21,15 @@
 
 * {
   box-sizing: border-box;
+  overflow-anchor: none !important;
 }
 
 html,
 body {
   margin: 0;
   min-height: 100%;
+  overflow-anchor: none !important;
+  scroll-behavior: auto !important;
 }
 
 body {
@@ -1954,7 +1957,7 @@ body.journey-loading .shell {
   width: 100%;
   border: 1px solid #2b6838;
   background: #020804;
-  overflow: hidden;
+  overflow: visible;
   line-height: 0;
 }
 
@@ -1966,6 +1969,88 @@ body.journey-loading .shell {
   aspect-ratio: 320 / 96;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
+}
+
+.pixi-renderer-source {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.pixi-renderer-canvas {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.character-speech-anchor {
+  position: absolute;
+  z-index: 6;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  transition: left 90ms linear, top 90ms linear;
+}
+
+.character-speech-anchor[hidden] {
+  display: none !important;
+}
+
+.character-speech-box {
+  position: absolute;
+  left: 0;
+  bottom: 9px;
+  transform: translateX(var(--bubble-shift, -50%));
+  width: max-content;
+  max-width: min(360px, 78vw);
+  padding: 6px 10px;
+  background: rgba(3, 14, 7, 0.94);
+  border: 2px solid #00ff66;
+  box-shadow:
+    0 0 0 1px #020804,
+    0 6px 18px rgba(0, 0, 0, 0.72),
+    0 0 12px rgba(0, 255, 102, 0.22);
+  color: #e8fff0;
+  font-family: "Courier New", monospace;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  white-space: normal;
+  text-align: left;
+}
+
+.character-speech-speaker {
+  display: block;
+  margin-bottom: 2px;
+  color: #f7e26b;
+  font-size: 0.67rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-shadow: 0 0 6px rgba(247, 226, 107, 0.35);
+}
+
+.character-speech-text {
+  display: block;
+  color: #d4ffe2;
+  font-weight: 600;
+  text-shadow: 0 0 6px rgba(0, 255, 102, 0.22);
+}
+
+.character-speech-tail {
+  position: absolute;
+  left: 0;
+  bottom: 2px;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 7px solid #00ff66;
+  filter: drop-shadow(0 1px 0 #020804);
 }
 
 .party-manifest-row {
@@ -2397,4 +2482,3 @@ body.journey-loading .shell {
     grid-template-columns: 1fr;
   }
 }
-

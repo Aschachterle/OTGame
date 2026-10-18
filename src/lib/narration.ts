@@ -1,3 +1,38 @@
+export function chooseWeatherForContext(
+  strangenessLevel: number,
+  day: number,
+  biome: string,
+  rainPercent = 0,
+  tempC = 20
+): string {
+  const strangeness = Math.max(0, Math.min(10, Math.round(strangenessLevel)));
+
+  if (strangeness >= 9) {
+    const pool = ['wormhole_storm', 'electrical_storm', 'fire_storm', 'thunderstorm', 'fog', 'rain', 'none'];
+    return pool[(day + strangeness * 3) % pool.length];
+  }
+
+  if (strangeness >= 6) {
+    const pool = ['electrical_storm', 'fire_storm', 'thunderstorm', 'rain', 'fog', 'none'];
+    return pool[(day + strangeness * 2) % pool.length];
+  }
+
+  if (strangeness >= 3) {
+    const coldOrWinter = tempC <= 2 || biome === 'mountain';
+    const pool = coldOrWinter
+      ? ['snow_storm', 'rain', 'fog', 'none', 'thunderstorm']
+      : ['thunderstorm', 'rain', 'fog', 'none', 'thunderstorm'];
+    return pool[(day + strangeness) % pool.length];
+  }
+
+  // Strangeness 0 to 2: ONLY normal weather (clear, fog, rain)
+  if (rainPercent > 50) return 'rain';
+  const normalPool = biome === 'river'
+    ? ['fog', 'none', 'rain', 'fog', 'none']
+    : ['none', 'rain', 'none', 'fog', 'none'];
+  return normalPool[(day + 1) % normalPool.length];
+}
+
 export type NarrationEvent = {
   eventType: string;
   payload?: Record<string, unknown>;
@@ -295,7 +330,12 @@ export function composeNarration(context: NarrationContext) {
               'The party keeps a cautious rhythm, finding comfort in familiar chores.',
               'No one mistakes the road for kindness, but the crew has not yet lost its resolve.'
             ], 8);
-  const speaker = context.party?.find((member) => member.status !== 'Dead');
+  const livingParty = (context.party ?? []).filter(
+    (member) => member.status !== 'Dead' && member.status !== 'Deceased' && (member.health ?? 100) > 0
+  );
+  const speaker = livingParty.length
+    ? livingParty[Math.abs(context.day ?? 0) % livingParty.length]
+    : context.party?.find((member) => member.status !== 'Dead');
   const dialogueOptions = speaker?.role === 'Guide'
     ? ['The western sky is changing; keep watch on the ridge.', 'The ruts are telling us more than the map ever could.', 'We will have to read the weather one mile at a time.']
     : speaker?.role === 'Doctor'
@@ -317,10 +357,27 @@ export function composeNarration(context: NarrationContext) {
       : `Beyond ${location}, the road runs through ${context.biome} beneath a sky with no promise in it.`;
   const lines = [landscapeLine, sensesLine, characterLine];
 
+  const weatherOverlay = chooseWeatherForContext(
+    context.strangenessLevel ?? 0,
+    context.day,
+    context.biome,
+    context.weather?.rain ?? 0,
+    context.weather?.tempC ?? 20
+  );
+
   return {
     source: 'deterministic',
     headline: lines[0].replace(/[.!?]+$/, ''),
     body: lines.join(' '),
-    lines
+    lines,
+    weatherOverlay,
+    dialogue: speaker
+      ? {
+          speakerId: speaker.id,
+          speakerName: speaker.name,
+          speakerRole: speaker.role,
+          text: dialogue
+        }
+      : null
   };
 }

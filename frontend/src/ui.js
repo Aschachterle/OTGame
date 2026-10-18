@@ -35,9 +35,13 @@ import {
   getEraById,
   getPresetsForCategoryAndEra,
   renderCharacterGridToCanvas,
-  renderGameLandscapeStage,
   summarizeMemberOutfit
 } from './character-designer.js';
+import {
+  getWeatherOverlayMeta,
+  renderGameLandscapeStage,
+  resolveActiveWeatherOverlay
+} from './scene-renderer.js?v=pixi_final_3';
 
 function shortHash(value = '', size = 8) {
   const normalized = String(value ?? '');
@@ -293,21 +297,44 @@ function trailRibbonMarkup(state) {
 
 function landscapeStageStatusLabel(state) {
   const eraMeta = getEraById(state.selectedEra);
+  const weatherMeta = getWeatherOverlayMeta(resolveActiveWeatherOverlay(state));
+  const weatherTag = weatherMeta.id !== 'none' ? ` // ${weatherMeta.shortLabel}` : '';
+  const crossingMethodLabels = {
+    ford: 'FORD',
+    caulk: 'CAULK & FLOAT',
+    ferry: 'FERRY',
+    guide: 'GUIDED FORD'
+  };
+  if (state.riverCrossingAnimation) {
+    const method = crossingMethodLabels[state.riverCrossingAnimation.method] ?? 'RIVER CROSSING';
+    const base = state.riverCrossingAnimation.phase === 'departed'
+      ? `FAR BANK // ${method} COMPLETE`
+      : `RIVER CROSSING // ${getCurrentMilestone(state).shortName.toUpperCase()} // ${method}`;
+    return `${base}${weatherTag}`;
+  }
+  if (state.activeDecision?.type === 'river-crossing') {
+    const optionLabels = { ford: 'FORD', caulk: 'CAULK & FLOAT', ferry: 'FERRY', guide: 'RIVER GUIDE', wait: 'WAIT' };
+    const availableOptions = state.activeDecision.options
+      .map((option) => optionLabels[option.id])
+      .filter(Boolean)
+      .join(' · ');
+    return `RIVERBANK // ${getCurrentMilestone(state).shortName.toUpperCase()} // ${availableOptions}${weatherTag}`;
+  }
   if (!state.journeyStarted) {
     if (state.setupStage === 'outfitting') {
       const hasOxen = (state.outfittingCart?.oxenYokes ?? 0) > 0;
-      return `STAGE: INDEPENDENCE GENERAL STORE // ${hasOxen ? 'OXEN & SCHOONER HITCHED' : 'SELECT OXEN YOKES TO HITCH WAGON'}`;
+      return `STAGE: INDEPENDENCE GENERAL STORE // ${hasOxen ? 'OXEN & SCHOONER HITCHED' : 'SELECT OXEN YOKES TO HITCH WAGON'}${weatherTag}`;
     }
     if (state.landscapeMoving) {
-      return `STAGE: WALKING FROM ${eraMeta.label.toUpperCase()} HOME TO INDEPENDENCE GENERAL STORE...`;
+      return `STAGE: WALKING FROM ${eraMeta.label.toUpperCase()} HOME TO INDEPENDENCE GENERAL STORE...${weatherTag}`;
     }
-    return `STAGE: ${eraMeta.label.toUpperCase()} HOME -> INDEPENDENCE GENERAL STORE (ON FOOT)`;
+    return `STAGE: ${eraMeta.label.toUpperCase()} HOME -> INDEPENDENCE GENERAL STORE (ON FOOT)${weatherTag}`;
   }
   const currentMilestone = getCurrentMilestone(state);
   if (state.landscapeMoving || state.travelAnimationActive) {
-    return `CARAVAN IN MOTION // ${currentMilestone.shortName.toUpperCase()} // ${state.wagon.oxenYokes} YOKES HITCHED`;
+    return `CARAVAN IN MOTION // ${currentMilestone.shortName.toUpperCase()} // ${state.wagon.oxenYokes} YOKES HITCHED${weatherTag}`;
   }
-  return `CARAVAN STAGE // ${currentMilestone.shortName.toUpperCase()} // ${eraMeta.label.toUpperCase()} CREW + OXEN CART`;
+  return `CARAVAN STAGE // ${currentMilestone.shortName.toUpperCase()} // ${eraMeta.label.toUpperCase()} CREW + OXEN CART${weatherTag}`;
 }
 
 function landscapeStageMarkup(state) {
@@ -436,6 +463,9 @@ export function createUI() {
     menuAutoReadToggle: document.querySelector('#menu-auto-read-toggle'),
     menuStorySourceToggle: document.querySelector('#menu-story-source-toggle'),
     menuStrangenessOverride: document.querySelector('#menu-strangeness-override'),
+    menuWeatherOverlay: document.querySelector('#menu-weather-overlay'),
+    menuLandmarkWarpSelect: document.querySelector('#menu-landmark-warp-select'),
+    menuLandmarkWarpButton: document.querySelector('#menu-warp-before-landmark'),
     menuVoiceSelect: document.querySelector('#menu-voice-select')
   };
 
@@ -463,6 +493,8 @@ export function createUI() {
     onReadText: () => {},
     onStorySourceToggle: () => {},
     onStrangenessOverrideChange: () => {},
+    onWeatherOverlayChange: () => {},
+    onWarpBeforeLandmark: () => {},
     onVoiceChange: () => {},
     onPaceChange: () => {},
     onRationsChange: () => {},
@@ -533,7 +565,7 @@ export function createUI() {
       loaderEl.hidden = !showLoader;
       loaderEl.innerHTML = showLoader ? renderLoaderMarkup() : '';
       if (showLoader && screenEl instanceof HTMLElement) {
-        loaderEl.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+        screenEl.scrollTop = screenEl.scrollHeight;
       }
     }
   }
@@ -563,10 +595,7 @@ export function createUI() {
       promptShellEl.innerHTML = renderTerminalPromptMarkup();
     }
     if (autoScroll && screenEl instanceof HTMLElement) {
-      const cursorEl = screenEl.querySelector('.teletype-cursor');
-      if (cursorEl instanceof HTMLElement) {
-        cursorEl.scrollIntoView({ block: 'nearest', behavior: 'auto' });
-      }
+      screenEl.scrollTop = screenEl.scrollHeight;
     }
   }
 
@@ -1223,6 +1252,21 @@ export function createUI() {
     refs.menuStrangenessOverride?.addEventListener('change', () => {
       handlers.onStrangenessOverrideChange(refs.menuStrangenessOverride.value);
     });
+    refs.menuWeatherOverlay?.addEventListener('change', () => {
+      handlers.onWeatherOverlayChange(refs.menuWeatherOverlay.value);
+    });
+    refs.menuLandmarkWarpSelect?.addEventListener('change', () => {
+      if (refs.menuLandmarkWarpButton) {
+        refs.menuLandmarkWarpButton.disabled = refs.menuLandmarkWarpSelect.disabled || !refs.menuLandmarkWarpSelect.value;
+      }
+    });
+    refs.menuLandmarkWarpButton?.addEventListener('click', () => {
+      const landmarkId = refs.menuLandmarkWarpSelect?.value;
+      if (!landmarkId || refs.menuLandmarkWarpButton.disabled) return;
+      invokeUiClick('warp-before-landmark');
+      closeMenus();
+      handlers.onWarpBeforeLandmark(landmarkId);
+    });
     refs.menuVoiceSelect?.addEventListener('change', () => {
       handlers.onVoiceChange(refs.menuVoiceSelect.value);
     });
@@ -1265,7 +1309,7 @@ export function createUI() {
           <header class="store-viewer-header">
             <p class="eyebrow">Independence General Store // May 1848 // Party Era: ${escapeHtml(eraMeta.label)}</p>
             <h2 id="store-viewer-title">Pack the prairie schooner</h2>
-            <p class="crt-setup-copy">${escapeHtml(state.expeditionName)} has $${startingCash.toFixed(2)} in starting funds. Your party has walked from their ${escapeHtml(eraMeta.label)} home to the Independence General Store—purchase oxen yokes and provisions to hitch your wagon cart.</p>
+            <p class="crt-setup-copy">${escapeHtml(state.expeditionName)} has $${startingCash.toFixed(2)} in starting funds. Your party has entered the Independence General Store and gathered at the outfitting counter—purchase oxen yokes and provisions to hitch your wagon cart.</p>
           </header>
           ${landscapeStageMarkup(state)}
           <form id="outfitting-form" class="outfitting-form">
@@ -1576,13 +1620,13 @@ export function createUI() {
     if (state.setupStage === 'outfitting') {
       updateOutfittingCart(state, true);
       refreshLandscapeCanvas(state);
-      refs.journeyModalCardEl.querySelector('[data-cart-input="oxenYokes"]')?.focus();
+      refs.journeyModalCardEl.querySelector('[data-cart-input="oxenYokes"]')?.focus({ preventScroll: true });
     } else {
       refreshCreatorCanvases(state);
       if (focusedNameAttr) {
         const restored = refs.journeyModalCardEl.querySelector(`input[name="${focusedNameAttr}"]`);
         if (restored instanceof HTMLInputElement) {
-          restored.focus();
+          restored.focus({ preventScroll: true });
           if (typeof selectionStart === 'number') {
             restored.setSelectionRange(selectionStart, selectionStart);
           }
@@ -1662,6 +1706,33 @@ export function createUI() {
         || state.setupStage === 'prologue'
         || state.setupStage === 'outfitting'
         || state.journeyStarted;
+    }
+    if (refs.menuWeatherOverlay) {
+      refs.menuWeatherOverlay.value = resolveActiveWeatherOverlay(state);
+    }
+    if (refs.menuLandmarkWarpSelect) {
+      const landmarks = trailMilestones.filter((milestone) => milestone.mile > 0);
+      if (refs.menuLandmarkWarpSelect.options.length !== landmarks.length + 1) {
+        const selectedId = refs.menuLandmarkWarpSelect.value;
+        refs.menuLandmarkWarpSelect.innerHTML = [
+          '<option value="">Choose a landmark</option>',
+          ...landmarks.map((milestone) =>
+            `<option value="${escapeHtml(milestone.id)}">${escapeHtml(milestone.name)} (Mile ${milestone.mile - 1})</option>`
+          )
+        ].join('');
+        refs.menuLandmarkWarpSelect.value = landmarks.some((milestone) => milestone.id === selectedId) ? selectedId : '';
+      }
+      if (!state.journeyStarted) refs.menuLandmarkWarpSelect.value = '';
+      refs.menuLandmarkWarpSelect.disabled = !state.journeyStarted
+        || state.gameOver
+        || state.journeyLoading
+        || state.actionInProgress
+        || state.narrationLoading
+        || state.turnPhase === 'results'
+        || state.turnPhase === 'resolving';
+      if (refs.menuLandmarkWarpButton) {
+        refs.menuLandmarkWarpButton.disabled = refs.menuLandmarkWarpSelect.disabled || !refs.menuLandmarkWarpSelect.value;
+      }
     }
     if (refs.menuBeginJourneyBtn) {
       refs.menuBeginJourneyBtn.disabled = state.journeyStarted && !state.journeyLoading;
@@ -1925,12 +1996,14 @@ export function createUI() {
 
   function renderMap(state) {
     if (!refs.mapEl) return;
+    const prevScrollY = typeof window !== 'undefined' ? window.scrollY : 0;
+    const prevScrollX = typeof window !== 'undefined' ? window.scrollX : 0;
     lastRenderedState = state;
     if (state.setupStage === 'outfitting' && !state.journeyStarted) {
       refs.mapEl.innerHTML = setupStageMarkup(state);
       updateOutfittingCart(state, true);
       refreshLandscapeCanvas(state);
-      refs.mapEl.querySelector('[data-cart-input="oxenYokes"]')?.focus();
+      refs.mapEl.querySelector('[data-cart-input="oxenYokes"]')?.focus({ preventScroll: true });
       return;
     }
 
@@ -2087,9 +2160,13 @@ export function createUI() {
     refreshLandscapeCanvas(state);
     syncChronicle(state, locationName, weather, supplies);
     if (isResultsPhase || isResolvingPhase || isProloguePhase || state.narrationLoading) updateActionState(state);
+    if (typeof window !== 'undefined' && (window.scrollY !== prevScrollY || window.scrollX !== prevScrollX)) {
+      window.scrollTo({ left: prevScrollX, top: prevScrollY, behavior: 'instant' });
+    }
   }
 
   function updateActionState(state) {
+    updateMenuControls(state);
     document.querySelectorAll('[data-action]').forEach((button) => {
       const action = button.dataset.action;
       button.title = actionProjection(action, state);

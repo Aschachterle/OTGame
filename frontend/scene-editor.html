@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trail Scene Editor</title>
+  <link rel="stylesheet" href="./scene-editor.css">
+</head>
+<body>
+  <main class="editor">
+    <header class="editor-header">
+      <div>
+        <p class="eyebrow">IMMUTABLE TRAIL / DEV TOOL</p>
+        <h1>Trail Scene Editor</h1>
+        <p class="subtitle">Preview the live game renderer without loading a journey or changing game state.</p>
+      </div>
+      <a class="back-link" href="./index.html">Return to game</a>
+    </header>
+
+    <section class="workspace" aria-label="Scene preview and controls">
+      <div class="preview-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">LIVE PREVIEW</p>
+            <h2 id="scene-title">Trail scene</h2>
+          </div>
+          <output id="frame-readout" for="progress">FRAME 0</output>
+        </div>
+        <div class="canvas-frame">
+          <canvas id="scene-canvas" width="320" height="96" aria-label="Pixel-art trail scene preview"></canvas>
+        </div>
+        <div class="scene-readout">
+          <span id="scene-description">Steady trail travel</span>
+          <span id="progress-readout">0%</span>
+        </div>
+        <div class="progress-track" aria-hidden="true">
+          <div id="progress-fill"></div>
+        </div>
+      </div>
+
+      <aside class="controls-panel" aria-label="Scene controls">
+        <p class="eyebrow">SCENE SETUP</p>
+        <label>
+          Scene
+          <select id="scene-mode">
+            <option value="crossing" selected>River crossing</option>
+            <option value="trail">Trail travel</option>
+            <option value="prologue">Prologue / home</option>
+            <option value="store-approach">Home to General Store</option>
+            <option value="store-interior">General store interior</option>
+          </select>
+        </label>
+        <label>
+          Trail biome
+          <select id="biome">
+            <option value="plains">Prairie</option>
+            <option value="mountain">Mountains</option>
+            <option value="badlands">Badlands</option>
+            <option value="snow">Snow</option>
+          </select>
+        </label>
+        <label id="river-landmark-field" hidden>
+          River landmark
+          <select id="river-landmark"></select>
+        </label>
+        <label>
+          Era
+          <select id="era"></select>
+        </label>
+        <label>
+          Weather overlay
+          <select id="weather-overlay">
+            <option value="none" selected>Clear Skies (Weirdness 0)</option>
+            <option value="fog">Rolling Fog (Weirdness 1)</option>
+            <option value="rain">Rain (Weirdness 2)</option>
+            <option value="snow_storm">Snow Storm (Weirdness 3)</option>
+            <option value="thunderstorm">Thunderstorm (Weirdness 4)</option>
+            <option value="electrical_storm">Electrical Storm (Weirdness 7)</option>
+            <option value="fire_storm">Fire Storm (Weirdness 8)</option>
+            <option value="wormhole_storm">Wormhole Storm (Weirdness 10)</option>
+          </select>
+        </label>
+        <label id="method-field">
+          Crossing method
+          <select id="method">
+            <option value="ford">Ford</option>
+            <option value="caulk">Caulk and Float</option>
+            <option value="ferry">Ferry</option>
+            <option value="guide">River guide</option>
+            <option value="none">Waiting at the bank</option>
+          </select>
+        </label>
+        <label class="slider-label" id="progress-field">
+          <span id="progress-title">Crossing progress</span>
+          <input id="progress" type="range" min="0" max="1" step="0.01" value="0">
+          <span class="range-ends"><span id="progress-start-label">Near bank</span><span id="progress-end-label">Far bank</span></span>
+        </label>
+        <label class="slider-label">
+          <span>Party size</span>
+          <input id="party-size" type="range" min="1" max="4" step="1" value="4">
+          <span id="party-readout" class="range-ends">4 travelers</span>
+        </label>
+        <div id="river-depth-field" class="river-depth-control" hidden>
+          <label for="river-depth">
+            Preview water depth (ft)
+            <input id="river-depth" type="number" min="0.1" step="0.1" inputmode="decimal">
+            <span class="depth-note">Preview only; resets when switching landmarks.</span>
+          </label>
+          <button id="river-depth-reset" class="secondary-button" type="button">Use landmark depth</button>
+        </div>
+        <label>
+          Dialogue bubble preview
+          <select id="dialogue-speaker">
+            <option value="none" selected>Hidden / Silent</option>
+            <option value="auto">Auto (scene speaker)</option>
+            <option value="traveler-0">Jedediah (Guide)</option>
+            <option value="traveler-1">Abigail (Doctor)</option>
+            <option value="traveler-2">Sarah (Carpenter)</option>
+            <option value="traveler-3">Caleb (Farmer)</option>
+            <option value="npc">Scene NPC (Shopkeeper / Ferry / Guide)</option>
+          </select>
+        </label>
+        <label class="checkbox-label">
+          <input id="moving" type="checkbox">
+          Animate walking and wheel movement
+        </label>
+        <div class="button-row">
+          <button id="play" type="button">Play</button>
+          <button id="reset" class="secondary-button" type="button">Reset crossing</button>
+        </div>
+        <p class="hint">This page uses the same pixel-art renderer as the game. Edit scene composition in <code>src/scene-renderer.js</code>, character and store art in <code>src/character-designer.js</code>, and wagon / river sprites in <code>src/scene-sprites.js</code>.</p>
+      </aside>
+    </section>
+  </main>
+  <script type="module" src="./src/scene-editor.js?v=pixi_final_3"></script>
+</body>
+</html>

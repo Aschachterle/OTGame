@@ -8,6 +8,28 @@ import {
   BASE_BODY_TEMPLATES,
   INITIAL_CLOTHING_BOILERPLATE
 } from './character-presets.js';
+import {
+  drawRiverChannelRow,
+  getRiverVisualProfile,
+  riverBounds,
+  riverBoundsAtY
+} from './scene-sprites.js?v=pixi_final_1';
+
+export {
+  WEATHER_OVERLAYS,
+  drawFerryOperator,
+  drawFerryPlatform,
+  drawOxenAndWagonCart,
+  drawRiverChannelRow,
+  drawRiverCrossingSplashes,
+  drawRiverGuideMarker,
+  drawRiverWaterline,
+  drawWeatherOverlay,
+  getWeatherOverlayMeta,
+  normalizeWeatherOverlayId,
+  riverBounds,
+  riverBoundsAtY
+} from './scene-sprites.js?v=pixi_final_1';
 
 export {
   GRID_SIZE,
@@ -112,7 +134,7 @@ export const BACKDROPS = {
     pathTop: '#31a2f2',
     pathMain: '#0098dc',
     pathRut: '#1e579c',
-    fgColor: '#1e579c',
+    fgColor: '#b86f50',
     dustColor: '#ffffff'
   }
 };
@@ -605,51 +627,54 @@ export function mapBiomeToBackdropId(biome = 'plains', weather = {}) {
   return 'prairie';
 }
 
-export function drawPixelBackdropScene(ctx, W, H, backdropId, scrollOffset, charFootY = 55) {
-  const bd = BACKDROPS[backdropId] || BACKDROPS.prairie;
+export function drawPixelBackdropParallaxLayer(ctx, width, backdropId, charFootY, layer, scrollOffset = 0) {
+  const backdrop = BACKDROPS[backdropId] || BACKDROPS.prairie;
   const horizonY = Math.max(12, charFootY - 20);
-  const pathStartY = Math.max(18, charFootY - 6);
-  const pathEndY = Math.min(H - 2, charFootY + 4);
 
-  // 1. Sky Bands
-  const skyBand1 = Math.floor(horizonY * 0.38);
-  const skyBand2 = Math.floor(horizonY * 0.72);
-  ctx.fillStyle = bd.skyTop;
-  ctx.fillRect(0, 0, W, skyBand1);
-  ctx.fillStyle = bd.skyMid;
-  ctx.fillRect(0, skyBand1, W, skyBand2 - skyBand1);
-  ctx.fillStyle = bd.skyHorizon;
-  ctx.fillRect(0, skyBand2, W, horizonY - skyBand2);
+  if (layer === 'sky') {
+    const skyBand1 = Math.floor(horizonY * 0.38);
+    const skyBand2 = Math.floor(horizonY * 0.72);
+    ctx.fillStyle = backdrop.skyTop;
+    ctx.fillRect(0, 0, width, skyBand1);
+    ctx.fillStyle = backdrop.skyMid;
+    ctx.fillRect(0, skyBand1, width, skyBand2 - skyBand1);
+    ctx.fillStyle = backdrop.skyHorizon;
+    ctx.fillRect(0, skyBand2, width, horizonY - skyBand2);
 
-  // 2. Sun / Moon Disc
-  const sunX = Math.floor(W * 0.78);
-  const sunY = Math.max(4, Math.floor(horizonY * 0.25));
-  ctx.fillStyle = bd.sunColor;
-  ctx.fillRect(sunX - 2, sunY - 3, 5, 7);
-  ctx.fillRect(sunX - 3, sunY - 2, 7, 5);
-
-  // 3. Drifting 8-Bit Clouds
-  const cloudScroll = Math.floor(scrollOffset * 0.15);
-  ctx.fillStyle = backdropId === 'desert' ? '#f6d6bd' : '#ffffff';
-  for (let c = 0; c < 4; c++) {
-    const cx = (((c * 47 + 12 - cloudScroll) % (W + 24)) + (W + 24)) % (W + 24) - 12;
-    const cy = 4 + (c % 2) * 5;
-    if (cy + 3 < horizonY) {
-      ctx.fillRect(cx, cy + 1, 10, 2);
-      ctx.fillRect(cx + 2, cy, 6, 1);
-    }
+    const sunX = Math.floor(width * 0.78);
+    const sunY = Math.max(4, Math.floor(horizonY * 0.25));
+    ctx.fillStyle = backdrop.sunColor;
+    ctx.fillRect(sunX - 2, sunY - 3, 5, 7);
+    ctx.fillRect(sunX - 3, sunY - 2, 7, 5);
+    return;
   }
 
-  // 4. Distant Horizon Silhouettes
+  if (layer === 'clouds') {
+    const cloudScroll = Math.floor(scrollOffset * 0.15);
+    ctx.fillStyle = backdropId === 'desert' ? '#f6d6bd' : '#ffffff';
+    for (let cloud = 0; cloud < 4; cloud += 1) {
+      const cloudX = (((cloud * 47 + 12 - cloudScroll) % (width + 24)) + (width + 24)) % (width + 24) - 12;
+      const cloudY = 4 + (cloud % 2) * 5;
+      if (cloudY + 3 >= horizonY) continue;
+      ctx.fillRect(cloudX, cloudY + 1, 10, 2);
+      ctx.fillRect(cloudX + 2, cloudY, 6, 1);
+    }
+    return;
+  }
+
+  if (layer !== 'horizon') {
+    throw new RangeError(`Unknown pixel backdrop parallax layer: ${layer}`);
+  }
+
   const farScroll = Math.floor(scrollOffset * 0.3);
-  for (let x = 0; x < W; x++) {
+  for (let x = 0; x < width; x += 1) {
     const worldX = x + farScroll;
     if (backdropId === 'mountains' || backdropId === 'snow') {
       const peakWave =
-        Math.abs(((worldX * 0.7) % 36) - 18) * 0.8 +
-        Math.abs(((worldX * 0.35 + 11) % 24) - 12) * 0.5;
+        Math.abs(((worldX * 0.7) % 36) - 18) * 0.8
+        + Math.abs(((worldX * 0.35 + 11) % 24) - 12) * 0.5;
       const peakTop = Math.max(3, Math.floor(horizonY - 18 + peakWave));
-      ctx.fillStyle = bd.distantColor;
+      ctx.fillStyle = backdrop.distantColor;
       ctx.fillRect(x, peakTop, 1, horizonY - peakTop);
       const snowLine = peakTop + Math.min(5, Math.floor((horizonY - peakTop) * 0.38));
       ctx.fillStyle = '#ffffff';
@@ -661,7 +686,7 @@ export function drawPixelBackdropScene(ctx, W, H, backdropId, scrollOffset, char
       else if (mod === 6 || mod === 7 || mod === 29 || mod === 30) mesaHeight = 9;
       else if (mod === 4 || mod === 5 || mod === 31 || mod === 32) mesaHeight = 5;
       const topY = horizonY - mesaHeight;
-      ctx.fillStyle = bd.distantColor;
+      ctx.fillStyle = backdrop.distantColor;
       ctx.fillRect(x, topY, 1, mesaHeight);
       if (mesaHeight >= 9) {
         ctx.fillStyle = '#de5d3a';
@@ -670,14 +695,45 @@ export function drawPixelBackdropScene(ctx, W, H, backdropId, scrollOffset, char
       }
     } else {
       const hillH = Math.floor(4 + Math.sin(worldX * 0.08) * 2.5 + Math.cos(worldX * 0.035) * 2);
-      ctx.fillStyle = bd.distantColor;
+      ctx.fillStyle = backdrop.distantColor;
       ctx.fillRect(x, horizonY - hillH, 1, hillH);
     }
   }
+}
+
+export function drawPixelBackdropScene(
+  ctx,
+  W,
+  H,
+  backdropId,
+  scrollOffset,
+  charFootY = 55,
+  river,
+  landmarkId,
+  waterlineOffsetPx,
+  drawBackgroundLayers = true,
+  drawRiverWater = true
+) {
+  const bd = BACKDROPS[backdropId] || BACKDROPS.prairie;
+  const horizonY = Math.max(12, charFootY - 20);
+  const pathStartY = Math.max(18, charFootY - 6);
+  const pathEndY = Math.min(H - 2, charFootY + 4);
+  const riverProfile = getRiverVisualProfile(river);
+  const effectiveWaterlineOffsetPx = Number.isFinite(waterlineOffsetPx)
+    ? waterlineOffsetPx
+    : riverProfile.waterlineOffsetPx;
+
+  if (drawBackgroundLayers) {
+    drawPixelBackdropParallaxLayer(ctx, W, backdropId, charFootY, 'sky');
+    drawPixelBackdropParallaxLayer(ctx, W, backdropId, charFootY, 'clouds', scrollOffset);
+    drawPixelBackdropParallaxLayer(ctx, W, backdropId, charFootY, 'horizon', scrollOffset);
+  }
 
   // 5. Mid-ground Band
-  ctx.fillStyle = bd.midHillColor;
-  ctx.fillRect(0, horizonY, W, pathStartY - horizonY);
+  if (backdropId !== 'river' || drawRiverWater) {
+    ctx.fillStyle = bd.midHillColor;
+    ctx.fillRect(0, horizonY, W, pathStartY - horizonY);
+  }
 
   const midScroll = Math.floor(scrollOffset * 0.65);
   if (backdropId === 'prairie') {
@@ -737,41 +793,42 @@ export function drawPixelBackdropScene(ctx, W, H, backdropId, scrollOffset, char
       }
     }
   } else if (backdropId === 'river') {
-    ctx.fillStyle = '#e4a672';
-    ctx.fillRect(0, horizonY + 2, W, 2);
-    ctx.fillStyle = '#1e579c';
-    ctx.fillRect(0, horizonY + 4, W, pathStartY - (horizonY + 4));
-    const waterShift = Math.floor(Date.now() / 120);
-    ctx.fillStyle = '#b2dce8';
-    for (let ry = horizonY + 5; ry < pathStartY; ry += 2) {
-      for (let rx = 0; rx < W; rx += 11) {
-        const wx = (rx + waterShift + ry * 3) % W;
-        ctx.fillRect(wx, ry, 3, 1);
+    const firstBankRow = drawRiverWater ? horizonY + 2 : horizonY;
+    for (let y = firstBankRow; y < pathStartY; y += 1) {
+      const bounds = riverBoundsAtY(W, y, horizonY, pathEndY, H, landmarkId);
+      ctx.fillStyle = y >= pathStartY - 3 ? '#a3ce27' : bd.midHillColor;
+      ctx.fillRect(0, y, bounds.start, 1);
+      ctx.fillRect(bounds.end, y, W - bounds.end, 1);
+      if (drawRiverWater) {
+        drawRiverChannelRow(ctx, W, y, horizonY, pathStartY, pathEndY, H, riverProfile.depthScale, effectiveWaterlineOffsetPx, landmarkId);
       }
     }
   }
 
   // 6. Trail Path Surface
   const pathScroll = Math.floor(scrollOffset);
-  ctx.fillStyle = bd.pathTop;
-  ctx.fillRect(0, pathStartY, W, 1);
-  ctx.fillStyle = bd.pathMain;
-  ctx.fillRect(0, pathStartY + 1, W, pathEndY - pathStartY - 1);
-  ctx.fillStyle = bd.pathRut;
-  ctx.fillRect(0, pathEndY - 1, W, 1);
+  if (backdropId === 'river') {
+    for (let y = pathStartY; y < pathEndY; y += 1) {
+      const bounds = riverBoundsAtY(W, y, horizonY, pathEndY, H, landmarkId);
+      ctx.fillStyle = y === pathStartY ? '#e4a672' : y === pathEndY - 1 ? '#8f563b' : '#b86f50';
+      ctx.fillRect(0, y, bounds.start, 1);
+      ctx.fillRect(bounds.end, y, W - bounds.end, 1);
+      if (drawRiverWater) {
+        drawRiverChannelRow(ctx, W, y, horizonY, pathStartY, pathEndY, H, riverProfile.depthScale, effectiveWaterlineOffsetPx, landmarkId);
+      }
+    }
+  } else {
+    ctx.fillStyle = bd.pathTop;
+    ctx.fillRect(0, pathStartY, W, 1);
+    ctx.fillStyle = bd.pathMain;
+    ctx.fillRect(0, pathStartY + 1, W, pathEndY - pathStartY - 1);
+    ctx.fillStyle = bd.pathRut;
+    ctx.fillRect(0, pathEndY - 1, W, 1);
+  }
 
   for (let x = 0; x < W; x++) {
     const wx = x + pathScroll;
-    if (backdropId === 'river') {
-      if (hashInt(wx * 3) > 0.72) {
-        ctx.fillStyle = '#1e579c';
-        ctx.fillRect(x, pathStartY + 2 + (Math.abs(wx) % 5), 2, 1);
-      }
-      if ((wx + Math.floor(Date.now() / 90)) % 14 === 0) {
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(x, pathStartY + 3 + (Math.abs(wx) % 4), 3, 1);
-      }
-    } else {
+    if (backdropId !== 'river') {
       if (wx % 7 === 0) {
         ctx.fillStyle = bd.pathRut;
         ctx.fillRect(x, pathStartY + 2, 2, 1);
@@ -785,10 +842,57 @@ export function drawPixelBackdropScene(ctx, W, H, backdropId, scrollOffset, char
     }
   }
 
-  // 7. Foreground Verge
-  ctx.fillStyle = bd.fgColor;
-  ctx.fillRect(0, pathEndY, W, H - pathEndY);
+  // 7. Foreground Verge (with inward-angling foreground banks for 'river')
+  if (backdropId === 'river') {
+    for (let y = pathEndY; y < H; y += 1) {
+      const bounds = riverBoundsAtY(W, y, horizonY, pathEndY, H, landmarkId);
+      ctx.fillStyle = y >= H - 4 ? '#8f563b' : bd.fgColor;
+      ctx.fillRect(0, y, bounds.start, 1);
+      ctx.fillRect(bounds.end, y, W - bounds.end, 1);
+      if (drawRiverWater) {
+        drawRiverChannelRow(ctx, W, y, horizonY, pathStartY, pathEndY, H, riverProfile.depthScale, effectiveWaterlineOffsetPx, landmarkId);
+      }
+    }
+
+    // Current flecks flowing from the foreground (bottom) toward the horizon (top) along perspective lanes
+    const flowStep = Math.floor(scrollOffset * 0.6 * riverProfile.flowScale)
+      + Math.floor(Date.now() / (130 / riverProfile.flowScale));
+    const totalRiverHeight = Math.max(1, (H - 2) - (horizonY + 3));
+    const laneCount = riverProfile.isFast ? 16 : 11;
+    const pulseCount = riverProfile.isFast ? 4 : 3;
+    for (let lane = 0; lane < laneCount; lane += 1) {
+      const u = 0.10 + (lane / (laneCount - 1)) * 0.80;
+      for (let pulse = 0; pulse < pulseCount; pulse += 1) {
+        const travel = (flowStep + lane * 5 + pulse * Math.floor(totalRiverHeight / 3)) % totalRiverHeight;
+        const y = (H - 2) - travel;
+        if (y > pathEndY) continue;
+        const bounds = riverBoundsAtY(W, y, horizonY, pathEndY, H, landmarkId);
+        const span = bounds.end - bounds.start;
+        const fleckX = Math.round(bounds.start + u * span);
+        const fleckLen = y < pathStartY ? 2 : riverProfile.isFast ? 4 : 3;
+        if (fleckX >= bounds.start + 3 && fleckX + fleckLen <= bounds.end - 3) {
+          const isWhitecap = riverProfile.isFast
+            ? (flowStep + lane + pulse) % 3 === 0
+            : y >= pathStartY && pulse === 0;
+          ctx.fillStyle = isWhitecap ? '#ffffff' : '#b2dce8';
+          ctx.fillRect(fleckX, y, fleckLen, 1);
+        }
+      }
+    }
+  } else {
+    ctx.fillStyle = bd.fgColor;
+    ctx.fillRect(0, pathEndY, W, H - pathEndY);
+  }
+
+  const foregroundRiverBounds = backdropId === 'river'
+    ? riverBoundsAtY(W, pathEndY, horizonY, pathEndY, H, landmarkId)
+    : null;
   for (let x = 0; x < W; x += 3) {
+    if (
+      foregroundRiverBounds
+      && x + 2 > foregroundRiverBounds.start - 3
+      && x < foregroundRiverBounds.end + 3
+    ) continue;
     const wx = x + pathScroll;
     if (hashInt(wx * 2) > 0.5) {
       ctx.fillStyle = bd.midHillColor;
@@ -916,15 +1020,109 @@ export function drawEraHomeBuilding(ctx, eraId, baseX, groundY) {
   }
 }
 
+export const NPC_APPEARANCES = Object.freeze({
+  shopkeeper: {
+    gender: 'male',
+    bodyTemplateId: 'broad_guardian',
+    skinToneId: 'warm_ivory',
+    preferredHeadwearType: 'hair',
+    equippedPresets: {
+      hats: 'hair_1800s_side_part',
+      shirts: 'shirt_1800s_frock_coat',
+      pants: 'pants_oregon_duck_trousers',
+      shoes: 'shoes_oregon_cowhide_boots',
+      accessories: 'acc_oregon_prairie_apron'
+    },
+    categoryDyes: {
+      hats: 'espresso',
+      shirts: 'emerald',
+      pants: 'default',
+      shoes: 'default',
+      accessories: 'default'
+    }
+  },
+  ferryOperator: {
+    gender: 'male',
+    bodyTemplateId: 'broad_guardian',
+    skinToneId: 'golden_tan',
+    preferredHeadwearType: 'hat',
+    equippedPresets: {
+      hats: 'hat_oregon_frontier_slouch',
+      shirts: 'shirt_oregon_red_flannel',
+      pants: 'pants_oregon_denim_dungarees',
+      shoes: 'shoes_oregon_cowhide_boots',
+      accessories: 'acc_oregon_leather_braces'
+    },
+    categoryDyes: {
+      hats: 'espresso',
+      shirts: 'cobalt',
+      pants: 'default',
+      shoes: 'default',
+      accessories: 'default'
+    }
+  },
+  riverGuide: {
+    gender: 'male',
+    bodyTemplateId: 'nimble_scout',
+    skinToneId: 'olive_bronze',
+    preferredHeadwearType: 'hair',
+    equippedPresets: {
+      hats: 'hair_oregon_scout_long_locks',
+      shirts: 'shirt_oregon_buckskin_jacket',
+      pants: 'pants_oregon_duck_trousers',
+      shoes: 'shoes_oregon_buckskin_moccasins',
+      accessories: 'acc_oregon_powder_horn'
+    },
+    categoryDyes: {
+      hats: 'default',
+      shirts: 'default',
+      pants: 'espresso',
+      shoes: 'default',
+      accessories: 'default'
+    }
+  }
+});
+
+export function drawCharacterGridAt(ctx, grid, baseX, baseY, scale = 1) {
+  const originX = Math.round(baseX);
+  const originY = Math.round(baseY);
+  if (scale === 1) {
+    for (let y = 0; y < GRID_SIZE; y += 1) {
+      for (let x = 0; x < GRID_SIZE; x += 1) {
+        const color = grid[y][x];
+        if (color) {
+          ctx.fillStyle = color;
+          ctx.fillRect(originX + x, originY + y, 1, 1);
+        }
+      }
+    }
+    return;
+  }
+
+  const outputSize = Math.max(1, Math.round(GRID_SIZE * scale));
+  for (let y = 0; y < outputSize; y += 1) {
+    const sourceY = Math.min(GRID_SIZE - 1, Math.floor(y / scale));
+    for (let x = 0; x < outputSize; x += 1) {
+      const color = grid[sourceY][Math.min(GRID_SIZE - 1, Math.floor(x / scale))];
+      if (!color) continue;
+      ctx.fillStyle = color;
+      ctx.fillRect(originX + x, originY + y, 1, 1);
+    }
+  }
+}
+
 /**
  * Draws the 1848 Independence General Store ("MATT'S OUTFITTING POST")
  */
-export function drawGeneralStoreBuilding(ctx, baseX, groundY) {
+export function drawGeneralStoreBuilding(ctx, baseX, groundY, animTick = 0) {
   const x = Math.round(baseX);
   const y = Math.round(groundY);
   if (x + 56 < 0 || x > 640) return;
 
-  // False-front timber facade
+  // Stepped false-front western timber facade
+  ctx.fillStyle = '#442434';
+  ctx.fillRect(x + 3, y - 29, 36, 2);
+  ctx.fillRect(x + 7, y - 31, 28, 2);
   ctx.fillStyle = '#8f563b';
   ctx.fillRect(x + 4, y - 27, 34, 27);
   ctx.fillStyle = '#663931';
@@ -935,243 +1133,299 @@ export function drawGeneralStoreBuilding(ctx, baseX, groundY) {
   }
 
   // Signboard banner on false front
+  ctx.fillStyle = '#442434';
+  ctx.fillRect(x + 6, y - 26, 30, 7);
   ctx.fillStyle = '#f6d6bd';
   ctx.fillRect(x + 7, y - 25, 28, 5);
   ctx.fillStyle = '#442434';
   // Pixel-art "STORE" lettering blocks
-  ctx.fillRect(x + 10, y - 24, 3, 3);
-  ctx.fillRect(x + 15, y - 24, 3, 3);
-  ctx.fillRect(x + 20, y - 24, 3, 3);
-  ctx.fillRect(x + 25, y - 24, 3, 3);
-  ctx.fillRect(x + 30, y - 24, 3, 3);
+  ctx.fillRect(x + 9, y - 24, 3, 3);
+  ctx.fillRect(x + 14, y - 24, 3, 3);
+  ctx.fillRect(x + 19, y - 24, 3, 3);
+  ctx.fillRect(x + 24, y - 24, 3, 3);
+  ctx.fillRect(x + 29, y - 24, 3, 3);
 
-  // Porch overhang & support posts
+  // Porch overhang, shingled awning & support posts
   ctx.fillStyle = '#442434';
-  ctx.fillRect(x, y - 13, 40, 2);
+  ctx.fillRect(x - 1, y - 14, 42, 2);
+  ctx.fillStyle = '#663931';
+  ctx.fillRect(x, y - 12, 40, 1);
   ctx.fillStyle = '#e4a672';
   ctx.fillRect(x + 1, y - 11, 2, 11);
-  ctx.fillRect(x + 36, y - 11, 2, 11);
+  ctx.fillRect(x + 37, y - 11, 2, 11);
 
-  // Storefront windows & open double door
-  ctx.fillStyle = '#f7e26b';
-  ctx.fillRect(x + 8, y - 10, 6, 5);
-  ctx.fillRect(x + 28, y - 10, 6, 5);
-  ctx.fillStyle = '#262b44';
-  ctx.fillRect(x + 17, y - 10, 8, 10);
-
-  // Supply barrels & hitching rail out front
+  // Raised wooden boardwalk porch deck
+  ctx.fillStyle = '#442434';
+  ctx.fillRect(x - 2, y - 1, 44, 2);
   ctx.fillStyle = '#b86f50';
-  ctx.fillRect(x + 4, y - 5, 4, 5);
+  ctx.fillRect(x - 1, y - 2, 42, 1);
+
+  // Storefront paned display windows & open doorway
   ctx.fillStyle = '#442434';
-  ctx.fillRect(x + 4, y - 4, 4, 1);
-  ctx.fillRect(x - 6, y - 5, 6, 1);
-  ctx.fillRect(x - 5, y - 5, 1, 5);
-}
+  ctx.fillRect(x + 6, y - 10, 8, 6);
+  ctx.fillRect(x + 27, y - 10, 8, 6);
+  ctx.fillStyle = '#f7e26b';
+  ctx.fillRect(x + 7, y - 9, 6, 4);
+  ctx.fillRect(x + 28, y - 9, 6, 4);
+  ctx.fillStyle = '#b86f50';
+  ctx.fillRect(x + 10, y - 9, 1, 4);
+  ctx.fillRect(x + 31, y - 9, 1, 4);
 
-/**
- * Draws the Pixel-Art Oxen Team & Covered Prairie Schooner Wagon Cart
- */
-export function drawOxenAndWagonCart(ctx, baseX, groundY, frameIndex = 0, isMoving = false, oxenYokes = 2) {
-  const x = Math.round(baseX);
-  const y = Math.round(groundY);
-  const bounce = isMoving && frameIndex % 2 === 1 ? 1 : 0;
+  ctx.fillStyle = '#262b44';
+  ctx.fillRect(x + 16, y - 10, 9, 9);
+  ctx.fillStyle = '#663931';
+  ctx.fillRect(x + 15, y - 10, 1, 9);
+  ctx.fillRect(x + 25, y - 10, 1, 9);
 
-  // Ground shadow under wagon & oxen
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
-  ctx.fillRect(x - 2, y, 52, 2);
+  // Shopkeeper standing on the porch welcoming travelers (scaled to match doorway)
+  const porchKeeperGrid = getCharacterFrameGrid(
+    NPC_APPEARANCES.shopkeeper,
+    'front',
+    'idle',
+    animTick % 2
+  );
+  drawCharacterGridAt(ctx, porchKeeperGrid, x + 13, y - 17, 0.52);
 
-  // 1. Covered Wagon White Canvas Bonnet (with ribbed hoops)
-  const canvasTopY = y - 22 + bounce;
+  // Supply barrels, flour sacks & hitching rail out front
+  ctx.fillStyle = '#b86f50';
+  ctx.fillRect(x + 3, y - 6, 4, 5);
+  ctx.fillStyle = '#442434';
+  ctx.fillRect(x + 3, y - 5, 4, 1);
+  ctx.fillRect(x + 3, y - 3, 4, 1);
   ctx.fillStyle = '#f6d6bd';
-  ctx.fillRect(x + 2, canvasTopY + 2, 24, 10);
-  ctx.fillRect(x + 4, canvasTopY, 20, 2);
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(x + 4, canvasTopY + 1, 20, 3);
-  // Canvas hoop ribs
-  ctx.fillStyle = '#c2c3c7';
-  ctx.fillRect(x + 7, canvasTopY + 1, 1, 11);
-  ctx.fillRect(x + 14, canvasTopY + 1, 1, 11);
-  ctx.fillRect(x + 21, canvasTopY + 1, 1, 11);
-
-  // 2. Wooden Schooner Box / Bed
-  const bedTopY = y - 10 + bounce;
-  ctx.fillStyle = '#8f563b';
-  ctx.fillRect(x, bedTopY, 28, 5);
-  ctx.fillStyle = '#663931';
-  ctx.fillRect(x, bedTopY + 2, 28, 1);
-  ctx.fillRect(x, bedTopY + 4, 28, 1);
+  ctx.fillRect(x + 33, y - 5, 4, 4);
   ctx.fillStyle = '#e4a672';
-  ctx.fillRect(x + 2, bedTopY + 1, 24, 1);
-
-  // 3. Spoked Wagon Wheels (Rear & Front)
-  const drawWheel = (wx, wy, radius) => {
-    ctx.fillStyle = '#442434';
-    ctx.fillRect(wx - radius, wy - 1, radius * 2 + 1, 3);
-    ctx.fillRect(wx - 1, wy - radius, 3, radius * 2 + 1);
-    ctx.fillRect(wx - radius + 1, wy - radius + 1, radius * 2 - 1, radius * 2 - 1);
-    ctx.fillStyle = '#b86f50';
-    ctx.fillRect(wx - radius + 2, wy - radius + 2, radius * 2 - 3, radius * 2 - 3);
-    // Rotating spokes
-    ctx.fillStyle = '#f7e26b';
-    if (!isMoving || frameIndex % 2 === 0) {
-      ctx.fillRect(wx, wy - radius + 1, 1, radius * 2 - 1);
-      ctx.fillRect(wx - radius + 1, wy, radius * 2 - 1, 1);
-    } else {
-      ctx.fillRect(wx - 2, wy - 2, 1, 1);
-      ctx.fillRect(wx + 2, wy + 2, 1, 1);
-      ctx.fillRect(wx + 2, wy - 2, 1, 1);
-      ctx.fillRect(wx - 2, wy + 2, 1, 1);
-    }
-    ctx.fillStyle = '#442434';
-    ctx.fillRect(wx, wy, 1, 1);
-  };
-  drawWheel(x + 6, y - 4, 4);
-  drawWheel(x + 22, y - 4, 3);
-
-  // 4. Wagon Tongue & Hitch
-  ctx.fillStyle = '#663931';
-  ctx.fillRect(x + 27, y - 6 + bounce, 18, 1);
-
-  // 5. Draft Oxen Team (in front of wagon to the right)
-  const oxX = x + 32;
-  const oxY = y - 12;
-  const strideA = isMoving ? (frameIndex % 2 === 0 ? -1 : 1) : 0;
-  const strideB = isMoving ? (frameIndex % 2 === 0 ? 1 : -1) : 0;
-
-  // Back ox silhouette (second ox in yoke)
-  ctx.fillStyle = '#663931';
-  ctx.fillRect(oxX + 2, oxY - 1 + bounce, 12, 6);
-  ctx.fillRect(oxX + 13, oxY - 2 + bounce, 4, 5);
-
-  // Lead ox body
-  ctx.fillStyle = '#8f563b';
-  ctx.fillRect(oxX, oxY + bounce, 13, 6);
-  ctx.fillStyle = '#e4a672';
-  ctx.fillRect(oxX + 1, oxY + 1 + bounce, 9, 2);
-  // Ox head & horns
-  ctx.fillStyle = '#8f563b';
-  ctx.fillRect(oxX + 12, oxY - 1 + bounce, 5, 5);
-  ctx.fillStyle = '#ffffff'; // Horns
-  ctx.fillRect(oxX + 14, oxY - 3 + bounce, 3, 1);
-  ctx.fillRect(oxX + 16, oxY - 4 + bounce, 1, 2);
-  // Wooden yoke
-  ctx.fillStyle = '#f3a833';
-  ctx.fillRect(oxX + 11, oxY - 1 + bounce, 2, 6);
-  // Animated ox legs
+  ctx.fillRect(x + 33, y - 3, 4, 2);
   ctx.fillStyle = '#442434';
-  ctx.fillRect(oxX + 2 + strideA, oxY + 6, 2, 6);
-  ctx.fillRect(oxX + 5 + strideB, oxY + 6, 2, 6);
-  ctx.fillRect(oxX + 9 + strideB, oxY + 6, 2, 6);
-  ctx.fillRect(oxX + 11 + strideA, oxY + 6, 2, 6);
+  ctx.fillRect(x - 7, y - 5, 6, 1);
+  ctx.fillRect(x - 6, y - 5, 1, 5);
 }
 
-/**
- * Draws the complete 320x96 Widescreen Interactive Landscape & Caravan Stage for OTGame
- */
-export function renderGameLandscapeStage(canvas, state, animTick = 0) {
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-  const W = canvas.width;  // 320
-  const H = canvas.height; // 96
-  const charFootY = Math.max(55, H - 14); // 82 on 320x96
+export function drawGeneralStoreInterior(ctx, width, height, animTick = 0) {
+  const floorY = Math.floor(height * 0.71);
 
-  const isPreTrail = !state.journeyStarted;
-  const selectedTile = state.currentTrailSnapshot || {};
-  const backdropId = isPreTrail
-    ? 'prairie'
-    : mapBiomeToBackdropId(selectedTile.biome, selectedTile.weather);
-
-  const isMoving = Boolean(state.landscapeMoving || state.travelAnimationActive || state.actionInProgress);
-  const scrollOffset = state.landscapeScrollX || 0;
-  const frameIndex = animTick % 4;
-
-  // 1. Draw the 8-bit backdrop
-  drawPixelBackdropScene(ctx, W, H, backdropId, scrollOffset, charFootY);
-
-  // 2. Draw Era Home & General Store when in Pre-Trail Setup or departing Independence (Mile 0)
-  const eraId = state.selectedEra || DEFAULT_PARTY_ERA_ID;
-  const storeX = W - 54;
-  if (isPreTrail) {
-    // Era-appropriate home on the left, General Store on the right
-    drawEraHomeBuilding(ctx, eraId, 12, charFootY - 4);
-    drawGeneralStoreBuilding(ctx, storeX, charFootY - 4);
-
-    // Subtle temporal shimmer portal when a non-Oregon-Trail era is selected
-    if (eraId !== 'oregon_trail') {
-      const shimmerY = charFootY - 28;
-      ctx.fillStyle = animTick % 2 === 0 ? 'rgba(0, 255, 102, 0.55)' : 'rgba(49, 162, 242, 0.55)';
-      ctx.fillRect(54, shimmerY, 2, 24);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(54, shimmerY + ((animTick * 3) % 21), 2, 3);
-    }
-  } else if ((state.milesTraveled || 0) === 0 && scrollOffset < 180) {
-    // General Store scrolling behind the party as they depart Independence with their oxen cart
-    drawGeneralStoreBuilding(ctx, 24 - Math.floor(scrollOffset * 0.8), charFootY - 4);
+  // 1. Timber wall & ceiling rafters
+  ctx.fillStyle = '#442434';
+  ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = '#743f39';
+  ctx.fillRect(0, 6, width, floorY - 6);
+  ctx.fillStyle = '#8f563b';
+  for (let y = 8; y < floorY - 4; y += 8) {
+    ctx.fillRect(0, y, width, 6);
   }
-
-  // 3. Draw Campfire when halted at camp on the trail
-  if (!isPreTrail && !isMoving && state.lastActionContext?.actionType === 'camp') {
-    const fireX = W - 46;
-    const fireY = charFootY - 2;
+  ctx.fillStyle = '#663931';
+  for (let y = 14; y < floorY; y += 8) {
+    ctx.fillRect(0, y, width, 1);
+  }
+  for (const postX of [4, 58, 146, 212, width - 8]) {
+    ctx.fillStyle = '#442434';
+    ctx.fillRect(postX, 5, 4, floorY - 5);
     ctx.fillStyle = '#663931';
-    ctx.fillRect(fireX - 3, fireY, 7, 2);
-    ctx.fillStyle = animTick % 2 === 0 ? '#ec273f' : '#e98537';
-    ctx.fillRect(fireX - 2, fireY - 3, 5, 3);
-    ctx.fillStyle = '#f7e26b';
-    ctx.fillRect(fireX - 1, fireY - 4 - (animTick % 2), 3, 3);
+    ctx.fillRect(postX + 1, 5, 2, floorY - 5);
+  }
+  ctx.fillStyle = '#442434';
+  ctx.fillRect(0, floorY - 3, width, 3);
+
+  // 2. Left storefront paned window looking out onto the sunny prairie
+  const winX = 14;
+  const winY = 15;
+  const winW = 36;
+  const winH = 30;
+  ctx.fillStyle = '#442434';
+  ctx.fillRect(winX - 2, winY - 2, winW + 4, winH + 4);
+  ctx.fillStyle = '#31a2f2';
+  ctx.fillRect(winX, winY, winW, 12);
+  ctx.fillStyle = '#b2dce8';
+  ctx.fillRect(winX, winY + 12, winW, 8);
+  ctx.fillStyle = '#44891a';
+  ctx.fillRect(winX, winY + 20, winW, 6);
+  ctx.fillStyle = '#e4a672';
+  ctx.fillRect(winX, winY + 26, winW, 4);
+  ctx.fillStyle = '#442434';
+  ctx.fillRect(winX + Math.floor(winW / 2) - 1, winY, 2, winH);
+  ctx.fillRect(winX, winY + Math.floor(winH / 2) - 1, winW, 2);
+  ctx.fillStyle = '#e4a672';
+  ctx.fillRect(winX - 3, winY + winH + 1, winW + 6, 2);
+
+  // 3. Hanging brass oil lanterns with warm flicker
+  for (const lampX of [102, 252]) {
+    ctx.fillStyle = 'rgba(247, 226, 107, 0.12)';
+    ctx.fillRect(lampX - 8, 10, 17, 14);
+    ctx.fillStyle = '#442434';
+    ctx.fillRect(lampX, 5, 1, 6);
+    ctx.fillStyle = '#f3a833';
+    ctx.fillRect(lampX - 3, 11, 7, 2);
+    ctx.fillRect(lampX - 2, 16, 5, 2);
+    ctx.fillStyle = animTick % 2 === 0 ? '#ffffff' : '#f7e26b';
+    ctx.fillRect(lampX - 1, 13, 3, 3);
   }
 
-  // 4. Draw Oxen Cart (only once at or departing the General Store!)
-  const hasOxenCart = state.journeyStarted || (state.setupStage === 'outfitting' && (state.outfittingCart?.oxenYokes ?? 0) > 0);
-  if (hasOxenCart) {
-    const cartX = isPreTrail ? storeX - 64 : Math.floor(W * 0.58);
-    const yokes = state.journeyStarted ? (state.wagon?.oxenYokes || 2) : (state.outfittingCart?.oxenYokes || 2);
-    drawOxenAndWagonCart(ctx, cartX, charFootY - 1, frameIndex, isMoving && state.journeyStarted, yokes);
+  // 4. Store signboard ("MATT'S OUTFITTING")
+  const signX = 70;
+  const signY = 8;
+  const signW = 68;
+  ctx.fillStyle = '#442434';
+  ctx.fillRect(signX, signY, signW, 10);
+  ctx.fillStyle = '#f6d6bd';
+  ctx.fillRect(signX + 2, signY + 2, signW - 4, 6);
+  ctx.fillStyle = '#442434';
+  for (let lx = signX + 6; lx < signX + signW - 7; lx += 5) {
+    ctx.fillRect(lx, signY + 3, 3, 4);
   }
 
-  // 5. Draw the 4 Custom 32x32 Party Members with generous 20px spacing
-  const party = (state.wagon?.party || []).filter((member) => (member.health ?? 100) > 0);
-  syncAllPartyAppearancesToEra(party, eraId);
-
-  const memberSpacing = 20;
-  const baseLeaderX = isPreTrail
-    ? (state.landscapeCharX ?? (state.setupStage === 'outfitting' ? storeX - 78 : 116))
-    : Math.floor(W * 0.46);
-
-  const effectiveAnimMode = isMoving ? 'walk' : 'idle';
-  party.forEach((member, idx) => {
-    const memberGrid = getCharacterFrameGrid(
-      member.appearance,
-      'side_right',
-      effectiveAnimMode,
-      (frameIndex + idx) % 4
-    );
-    const drawX = Math.round(baseLeaderX - idx * memberSpacing);
-    const drawY = charFootY - 30 + (idx % 2 === 0 ? 0 : -1);
-
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.30)';
-    ctx.fillRect(drawX + 10, charFootY, 12, 2);
-
-    for (let y = 0; y < GRID_SIZE; y++) {
-      for (let x = 0; x < GRID_SIZE; x++) {
-        const color = memberGrid[y][x];
-        if (color) {
-          if (backdropId === 'river' && y >= 29) {
-            ctx.fillStyle = y === 30 ? '#1e579c' : '#31a2f2';
-          } else {
-            ctx.fillStyle = color;
-          }
-          ctx.fillRect(drawX + x, drawY + y, 1, 1);
-        }
+  // 5. Stocked dry-goods & apothecary shelves along the back wall
+  const drawShelfBay = (x, bayW, variant) => {
+    for (const shelfY of [31, 46, 60]) {
+      ctx.fillStyle = '#442434';
+      ctx.fillRect(x, shelfY, bayW, 2);
+      ctx.fillStyle = '#b86f50';
+      ctx.fillRect(x + 1, shelfY + 2, bayW - 2, 1);
+    }
+    if (variant === 'drygoods') {
+      const tins = ['#ac2847', '#31a2f2', '#f7e26b', '#44891a', '#e98537', '#3a4466'];
+      for (let i = 0; i < 6; i += 1) {
+        const ix = x + 4 + i * 11;
+        ctx.fillStyle = tins[i];
+        ctx.fillRect(ix, 24, 7, 7);
+        ctx.fillStyle = '#f6d6bd';
+        ctx.fillRect(ix + 1, 26, 5, 2);
       }
+      for (let i = 0; i < 5; i += 1) {
+        const ix = x + 5 + i * 13;
+        ctx.fillStyle = i % 2 === 0 ? '#3a4466' : '#ac2847';
+        ctx.fillRect(ix, 39, 9, 4);
+        ctx.fillStyle = '#f7e26b';
+        ctx.fillRect(ix, 43, 9, 3);
+      }
+      for (let i = 0; i < 5; i += 1) {
+        const ix = x + 4 + i * 13;
+        ctx.fillStyle = i % 2 === 0 ? '#f6d6bd' : '#e4a672';
+        ctx.fillRect(ix, 51, 9, 9);
+        ctx.fillStyle = '#ac2847';
+        ctx.fillRect(ix + 2, 53, 5, 1);
+      }
+    } else {
+      const bottles = ['#0098dc', '#b2dce8', '#a3ce27', '#31a2f2', '#ec273f'];
+      for (let i = 0; i < 5; i += 1) {
+        const ix = x + 4 + i * 10;
+        ctx.fillStyle = '#e4a672';
+        ctx.fillRect(ix + 2, 22, 2, 2);
+        ctx.fillStyle = bottles[i];
+        ctx.fillRect(ix, 24, 6, 7);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(ix + 1, 25, 1, 4);
+      }
+      for (let i = 0; i < 4; i += 1) {
+        const ix = x + 5 + i * 12;
+        ctx.fillStyle = i % 2 === 0 ? '#663931' : '#e4a672';
+        ctx.fillRect(ix, 39, 8, 7);
+        ctx.fillStyle = '#f6d6bd';
+        ctx.fillRect(ix + 2, 41, 4, 3);
+      }
+      const wx = x + bayW - 14;
+      const wy = 55;
+      ctx.fillStyle = '#442434';
+      ctx.fillRect(wx - 5, wy - 5, 11, 11);
+      ctx.fillStyle = '#b86f50';
+      ctx.fillRect(wx - 3, wy - 3, 7, 7);
+      ctx.fillStyle = '#f7e26b';
+      ctx.fillRect(wx, wy - 4, 1, 9);
+      ctx.fillRect(wx - 4, wy, 9, 1);
     }
+  };
 
-    if (isMoving) {
-      const bd = BACKDROPS[backdropId] || BACKDROPS.prairie;
-      ctx.fillStyle = bd.dustColor;
-      const puffOffset = (frameIndex + idx) % 2;
-      ctx.fillRect(drawX + 8 - puffOffset, charFootY - 1 - puffOffset, 2, 1);
-    }
-  });
+  drawShelfBay(66, 76, 'drygoods');
+  drawShelfBay(154, 54, 'hardware');
+
+  // 6. Planked hardwood floor & braided frontier rug
+  ctx.fillStyle = '#b86f50';
+  ctx.fillRect(0, floorY, width, height - floorY);
+  ctx.fillStyle = '#8f563b';
+  for (let y = floorY + 2; y < height; y += 8) {
+    ctx.fillRect(0, y, width, 3);
+  }
+  ctx.fillStyle = '#663931';
+  for (let y = floorY + 5; y < height; y += 6) {
+    ctx.fillRect(0, y, width, 1);
+  }
+  for (let x = 14; x < width; x += 28) {
+    ctx.fillRect(x, floorY, 1, height - floorY);
+  }
+
+  const rugX = 82;
+  const rugY = floorY + 8;
+  ctx.fillStyle = '#442434';
+  ctx.fillRect(rugX, rugY, 112, 11);
+  ctx.fillStyle = '#ac2847';
+  ctx.fillRect(rugX + 2, rugY + 1, 108, 9);
+  ctx.fillStyle = '#f7e26b';
+  ctx.fillRect(rugX + 5, rugY + 3, 102, 1);
+  ctx.fillRect(rugX + 5, rugY + 7, 102, 1);
+  ctx.fillStyle = '#3a4466';
+  ctx.fillRect(rugX + 8, rugY + 4, 96, 3);
+
+  // 7. Shopkeeper Matt (rendered using the 32x32 CharacterDesigner engine behind the counter)
+  const shopkeeperDrawX = width - 82;
+  const shopkeeperFootY = floorY + 13;
+  const shopkeeperGrid = getCharacterFrameGrid(
+    NPC_APPEARANCES.shopkeeper,
+    'side_left',
+    'idle',
+    animTick % 2
+  );
+  drawCharacterGridAt(ctx, shopkeeperGrid, shopkeeperDrawX, shopkeeperFootY - 30, 1);
+
+  // 8. Foreground Outfitting Counter (drawn over the shopkeeper's lower body)
+  const counterX = 214;
+  const counterY = floorY - 3;
+  const counterW = 82;
+  const counterH = 19;
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.30)';
+  ctx.fillRect(counterX - 2, counterY + counterH, counterW + 4, 2);
+
+  ctx.fillStyle = '#442434';
+  ctx.fillRect(counterX - 1, counterY, counterW + 2, 3);
+  ctx.fillStyle = '#e4a672';
+  ctx.fillRect(counterX, counterY + 1, counterW, 1);
+
+  ctx.fillStyle = '#8f563b';
+  ctx.fillRect(counterX + 1, counterY + 3, counterW - 2, counterH - 3);
+  ctx.fillStyle = '#663931';
+  ctx.fillRect(counterX + 1, counterY + counterH - 2, counterW - 2, 2);
+  for (let px = counterX + 5; px < counterX + counterW - 14; px += 24) {
+    ctx.fillStyle = '#442434';
+    ctx.fillRect(px, counterY + 5, 18, 11);
+    ctx.fillStyle = '#743f39';
+    ctx.fillRect(px + 1, counterY + 6, 16, 9);
+  }
+
+  // Brass balance scale
+  ctx.fillStyle = '#f3a833';
+  ctx.fillRect(counterX + 8, counterY - 5, 7, 1);
+  ctx.fillRect(counterX + 11, counterY - 6, 1, 6);
+  ctx.fillStyle = '#f7e26b';
+  ctx.fillRect(counterX + 7, counterY - 3, 3, 2);
+  ctx.fillRect(counterX + 13, counterY - 3, 3, 2);
+  ctx.fillRect(counterX + 9, counterY - 1, 5, 1);
+
+  // Open ledger & white quill next to shopkeeper
+  ctx.fillStyle = '#f6d6bd';
+  ctx.fillRect(counterX + 24, counterY - 2, 9, 2);
+  ctx.fillStyle = '#442434';
+  ctx.fillRect(counterX + 28, counterY - 2, 1, 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(counterX + 31, counterY - 5, 1, 3);
+  ctx.fillRect(counterX + 32, counterY - 6, 1, 2);
+
+  // Stacked provisions & barrel at right end of counter
+  ctx.fillStyle = '#31a2f2';
+  ctx.fillRect(counterX + 60, counterY - 4, 6, 4);
+  ctx.fillStyle = '#e4a672';
+  ctx.fillRect(counterX + 67, counterY - 5, 8, 5);
+  ctx.fillStyle = '#b86f50';
+  ctx.fillRect(counterX + counterW + 2, floorY + 2, 12, 14);
+  ctx.fillStyle = '#442434';
+  ctx.fillRect(counterX + counterW + 2, floorY + 5, 12, 1);
+  ctx.fillRect(counterX + counterW + 2, floorY + 12, 12, 1);
 }

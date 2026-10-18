@@ -3,7 +3,7 @@ import { getOptionalPlayerIdentity } from './src/crypto.js';
 import { createApiClient } from './src/api.js';
 import { createAudioController } from './src/audio.js';
 import { playHazardAlert, playRetroClick, playWagonClatter } from './src/sfx.js';
-import { createUI } from './src/ui.js';
+import { createUI } from './src/ui.js?v=pixi_final_3';
 import { createGameController } from './src/game.js';
 
 const ui = createUI();
@@ -285,6 +285,12 @@ ui.setHandlers({
   },
   onStrangenessOverrideChange: (value) => {
     game.setStrangenessOverride(value);
+  },
+  onWeatherOverlayChange: (value) => {
+    game.setWeatherOverlay(value);
+  },
+  onWarpBeforeLandmark: (landmarkId) => {
+    game.warpBeforeLandmark(landmarkId);
   },
   onVoiceChange: (voiceName) => {
     appState.selectedVoiceName = voiceName;

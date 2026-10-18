@@ -9,6 +9,7 @@ import {
   TOTAL_TRAIL_MILES,
   WAGON_CAPACITY,
   applyNarrationBeat,
+  extractDialogueFromNarration,
   getCargoWeightTier,
   getCurrentMilestone,
   getCurrentMilestoneIndexForMiles,
@@ -53,13 +54,14 @@ import {
   PACE_PRESETS,
   equipMemberEraOutfit,
   getEraById,
+  normalizeWeatherOverlayId,
   randomizeMemberInEra,
   summarizeMemberOutfit,
   syncAllPartyAppearancesToEra
 } from './character-designer.js';
 import { getFrameCount } from './wagon-animator.js';
 
-const TRAVEL_ANIMATION_MS = 1200;
+const TRAVEL_ANIMATION_MS = 3600;
 
 export function createGameController({ state, ui, api, audio }) {
   let wagonAnimationTimer = null;
@@ -140,17 +142,66 @@ export function createGameController({ state, ui, api, audio }) {
   async function animateWalkToGeneralStore() {
     stopWagonAnimation();
     state.landscapeMoving = true;
-    const startX = state.landscapeCharX ?? 116;
-    const targetX = 188;
-    const steps = 16;
+    const steps = 60;
     for (let i = 1; i <= steps; i += 1) {
-      state.landscapeCharX = startX + ((targetX - startX) * i) / steps;
-      state.wagonAnimationFrame = (state.wagonAnimationFrame + 1) % 4;
+      state.generalStoreApproachProgress = i / steps;
+      state.wagonAnimationFrame = Math.floor(i / 3) % 4;
       ui.refreshLandscapeCanvas?.(state);
       await delay(55);
     }
-    state.landscapeCharX = targetX;
+    state.generalStoreApproachProgress = 1;
     state.landscapeMoving = false;
+    ui.refreshLandscapeCanvas?.(state);
+  }
+
+  async function animateWalkFromGeneralStore() {
+    stopWagonAnimation();
+    state.travelAnimationActive = true;
+    state.landscapeMoving = true;
+    const paceCfg = PACE_PRESETS[state.wagon?.pace] || PACE_PRESETS.steady;
+    const stepSpeed = Math.max(1.0, (paceCfg?.speed || 1.0) * 1.8);
+    ui.refreshLandscapeCanvas?.(state);
+
+    // Keep walking until the General Store is completely out of the viewer.
+    // The store building is positioned at 24 - Math.floor(scrollOffset * 0.8) and is 56px wide.
+    // At scrollOffset >= 140, it is at <= -88px, completely off-screen to the left.
+    while ((state.landscapeScrollX || 0) < 140) {
+      state.wagonAnimationFrame = (state.wagonAnimationFrame + 1) % Math.max(4, getFrameCount());
+      state.landscapeScrollX = (state.landscapeScrollX || 0) + stepSpeed;
+      ui.refreshLandscapeCanvas?.(state);
+      await delay(55);
+    }
+    // A brief settle on the open trail so the party is firmly underway
+    for (let extra = 0; extra < 10; extra += 1) {
+      state.wagonAnimationFrame = (state.wagonAnimationFrame + 1) % Math.max(4, getFrameCount());
+      state.landscapeScrollX = (state.landscapeScrollX || 0) + stepSpeed;
+      ui.refreshLandscapeCanvas?.(state);
+      await delay(55);
+    }
+    stopWagonAnimation();
+  }
+
+  async function animateRiverCrossing(method) {
+    const durationByMethod = { ford: 1050, caulk: 1350, ferry: 1800, guide: 1250 };
+    const duration = Object.hasOwn(durationByMethod, method) ? durationByMethod[method] : undefined;
+    if (typeof duration !== 'number') throw new Error(`Unsupported river crossing method: ${method}`);
+
+    const steps = Math.ceil(duration / 60);
+    state.riverCrossingAnimation = { method, phase: 'crossing', progress: 0 };
+    state.travelAnimationActive = true;
+    state.landscapeMoving = true;
+    ui.refreshLandscapeCanvas?.(state);
+
+    for (let step = 1; step <= steps; step += 1) {
+      state.riverCrossingAnimation.progress = step / steps;
+      state.wagonAnimationFrame = (state.wagonAnimationFrame + 1) % 4;
+      ui.refreshLandscapeCanvas?.(state);
+      await delay(60);
+    }
+
+    state.travelAnimationActive = false;
+    state.landscapeMoving = false;
+    state.riverCrossingAnimation = { method, phase: 'departed', progress: 1 };
     ui.refreshLandscapeCanvas?.(state);
   }
 
@@ -1018,8 +1069,12 @@ export function createGameController({ state, ui, api, audio }) {
       if (state.turnPhase === 'resolving') {
         state.dispatchAutoPlayPending = shouldAutoPlay && state.narrationAutoPlay;
         state.turnPhase = 'results';
+        if (state.activeDialogue) {
+          state.activeDialogueShownAt = Date.now();
+        }
         ui.setNarrationLoading(false, state);
         ui.renderMap(state);
+        ui.refreshLandscapeCanvas?.(state);
         ui.updateActionState(state);
       }
     }
@@ -1587,6 +1642,9 @@ export function createGameController({ state, ui, api, audio }) {
     if (state.gameOver || !state.journeyStarted || state.journeyLoading || state.actionInProgress || state.turnPhase === 'results' || state.turnPhase === 'resolving') return;
     if (state.journeyCompleted && actionType === 'press-on') return;
     if (state.activeDecision && !context.fromDecision) return;
+    if (actionType === 'press-on' && !context.riverChoice && state.riverCrossingAnimation?.phase === 'departed') {
+      state.riverCrossingAnimation = null;
+    }
     if (actionType === 'press-on' && state.wagon.oxenYokes < 2) {
       state.statusMessage = 'The wagon needs at least 2 yokes (4 oxen) before it can move.';
       ui.renderStatusBanner(state);
@@ -1601,6 +1659,8 @@ export function createGameController({ state, ui, api, audio }) {
     }
 
     state.actionInProgress = true;
+    state.activeDialogue = null;
+    state.activeDialogueShownAt = 0;
     const shouldAutoPlayNarration = actionType === 'press-on';
     ui.updateActionState(state);
 
@@ -1622,6 +1682,17 @@ export function createGameController({ state, ui, api, audio }) {
       }
 
       if (wagon.wagonParts.brokenPart && actionType === 'press-on') {
+        const repairSpeaker = getRoleHolder(state, 'Carpenter') ?? randomLivingMember();
+        state.activeDialogue = repairSpeaker
+          ? {
+              speakerId: repairSpeaker.id,
+              speakerName: repairSpeaker.name,
+              speakerRole: repairSpeaker.role,
+              targetType: 'party',
+              text: `Hold the team! That ${wagon.wagonParts.brokenPart.toLowerCase()} needs mending before we roll another mile.`
+            }
+          : null;
+        state.activeDialogueShownAt = state.activeDialogue ? Date.now() : 0;
         state.statusMessage = `The wagon cannot move until the ${wagon.wagonParts.brokenPart.toLowerCase()} is repaired.`;
         setDecision(buildBreakdownDecision(wagon.wagonParts.brokenPart));
         ui.renderStatusBanner(state);
@@ -1642,6 +1713,17 @@ export function createGameController({ state, ui, api, audio }) {
         const previousMiles = state.milesTraveled;
         const previousMilestone = getCurrentMilestone(state);
         if (previousMilestone.id === 'the-dalles' && !state.dallesRouteChoice) {
+          const forkSpeaker = getRoleHolder(state, 'Guide') ?? randomLivingMember();
+          state.activeDialogue = forkSpeaker
+            ? {
+                speakerId: forkSpeaker.id,
+                speakerName: forkSpeaker.name,
+                speakerRole: forkSpeaker.role,
+                targetType: 'party',
+                text: 'The Dalles lies right ahead—we must choose between the Barlow toll road and the Columbia raft.'
+              }
+            : null;
+          state.activeDialogueShownAt = state.activeDialogue ? Date.now() : 0;
           setDecision(buildDallesRouteDecision());
           state.statusMessage = 'The Dalles presents the final fork: pay for the Barlow Road or risk the Columbia River.';
           ui.renderStatusBanner(state);
@@ -1676,6 +1758,17 @@ export function createGameController({ state, ui, api, audio }) {
             note: `${state.expeditionName} reached ${nextMilestone.name} after ${state.milesTraveled} miles; river crossing remains ahead.`
           });
           const riverData = nextMilestone.river ?? { depthFt: 2.8, flowRate: 180 };
+          const riverSpeaker = getRoleHolder(state, 'Guide') ?? randomLivingMember();
+          state.activeDialogue = riverSpeaker
+            ? {
+                speakerId: riverSpeaker.id,
+                speakerName: riverSpeaker.name,
+                speakerRole: riverSpeaker.role,
+                targetType: 'party',
+                text: `The water at ${destinationName} is ${riverData.depthFt} feet deep—we need to decide how to cross.`
+              }
+            : null;
+          state.activeDialogueShownAt = state.activeDialogue ? Date.now() : 0;
           setDecision(buildRiverDecision(actionType, nextMilestone.id, 'west', destinationName, riverData));
           state.statusMessage = `You have reached ${destinationName}. Swollen river waters block the trail ahead.`;
           ui.renderWagonState(state);
@@ -1736,7 +1829,11 @@ export function createGameController({ state, ui, api, audio }) {
         ui.renderWagonState(state);
         ui.renderStatusBanner(state);
         ui.updateActionState(state);
-        await playWagonAnimation();
+        if (context.riverChoice && context.riverContext) {
+          await animateRiverCrossing(context.riverChoice);
+        } else {
+          await playWagonAnimation();
+        }
 
         const actualMilesGained = context.riverContext ? Math.max(5, Math.round(milesGained / 2)) : milesGained;
         if (context.riverChoice && riverMilestone) {
@@ -2116,7 +2213,7 @@ export function createGameController({ state, ui, api, audio }) {
 
       await applyPendingSurrealEffect(actionType);
       if (actionType !== 'press-on') {
-        await playWagonAnimation(650);
+        await playWagonAnimation(2400);
       }
       const skippedConsequenceNote = applySkippedActionConsequences(actionType, availableOptionsAtStop, selectedTile);
     if (skippedConsequenceNote) {
@@ -2194,6 +2291,8 @@ export function createGameController({ state, ui, api, audio }) {
       }
       state.prologueHeadline = String(genesis.headline).trim();
       state.prologueParagraphs = paragraphs;
+      state.prologueDialogue = extractDialogueFromNarration(genesis, state);
+      state.activeDialogue = state.prologueDialogue;
       state.prologueReady = true;
       prologueReady = true;
     } catch (error) {
@@ -2310,9 +2409,11 @@ export function createGameController({ state, ui, api, audio }) {
       ui.updateActionState(state);
     }
     if (departureRecorded) {
-      void playWagonAnimation(1100);
+      void animateWalkFromGeneralStore();
       state.latestNarration = null;
       state.narrationText = '';
+      state.activeDialogue = null;
+      state.prologueDialogue = null;
       state.narrationStateKey = '';
       state.narrationInFlightKey = '';
       state.lastRemoteNarrationTriggerKey = '';
@@ -2322,6 +2423,8 @@ export function createGameController({ state, ui, api, audio }) {
 
   async function startTrailAfterPrologue() {
     if (state.turnPhase !== 'prologue' || state.setupStage !== 'prologue' || state.journeyLoading || !state.prologueReady) return;
+    state.activeDialogue = null;
+    state.prologueDialogue = null;
     await animateWalkToGeneralStore();
     state.setupStage = 'outfitting';
     state.turnPhase = 'dispatch';
@@ -2444,6 +2547,7 @@ export function createGameController({ state, ui, api, audio }) {
     state.expeditionName = expeditionName.slice(0, 48);
     state.wagon.cash = getStartingCashForState(state);
     state.landscapeCharX = 116;
+    state.generalStoreApproachProgress = 0;
     state.landscapeScrollX = 0;
     state.landscapeMoving = false;
     state.setupError = '';
@@ -2468,6 +2572,7 @@ export function createGameController({ state, ui, api, audio }) {
   function returnToPartyRegister() {
     state.setupStage = 'register';
     state.turnPhase = 'dispatch';
+    state.generalStoreApproachProgress = 0;
     state.prologueReady = false;
     state.prologueHeadline = '';
     state.prologueParagraphs = [];
@@ -2560,6 +2665,72 @@ export function createGameController({ state, ui, api, audio }) {
     }
   }
 
+  function warpBeforeLandmark(landmarkId) {
+    const landmark = trailMilestones.find((milestone) => milestone.id === landmarkId && milestone.mile > 0);
+    if (!landmark) {
+      state.statusMessage = 'Choose a valid trail landmark for the test warp.';
+      ui.renderStatusBanner(state);
+      console.error('Rejected invalid landmark test warp', landmarkId);
+      return;
+    }
+    if (
+      !state.journeyStarted ||
+      state.gameOver ||
+      state.journeyLoading ||
+      state.actionInProgress ||
+      state.narrationLoading ||
+      state.turnPhase === 'results' ||
+      state.turnPhase === 'resolving'
+    ) {
+      state.statusMessage = 'Test warp is available only during an idle, active journey.';
+      ui.renderStatusBanner(state);
+      console.warn('Rejected landmark test warp while journey is not idle', landmarkId);
+      return;
+    }
+
+    if (state.narrationRefreshTimer) {
+      clearTimeout(state.narrationRefreshTimer);
+      state.narrationRefreshTimer = null;
+    }
+    state.narrationRequestId += 1;
+    audio.stopNarration();
+    state.milesTraveled = landmark.mile - 1;
+    state.journeyCompleted = false;
+    state.turnPhase = 'dispatch';
+    state.activeDecision = null;
+    state.pendingMetaDialogue = null;
+    state.justResolvedDecision = null;
+    state.pendingSurrealEffect = null;
+    state.riverCrossingAnimation = null;
+    state.landscapeScrollX = 0;
+    state.landscapeMoving = false;
+    state.travelAnimationActive = false;
+    state.wagonAnimationFrame = 0;
+    state.lastActionSummary = null;
+    state.lastActionContext = null;
+    state.lastRemoteNarrationTriggerKey = '';
+    state.narrationInFlightKey = '';
+    state.narrationStateKey = '';
+    state.narrationLoading = false;
+    state.dispatchAutoPlayPending = false;
+    applyNarrationBeat(state, null);
+    state.statusMessage = `TEST WARP: Positioned at mile ${state.milesTraveled}, one mile before ${landmark.name}. Day, party, and supplies are unchanged; this local test warp was not added to the ledger.`;
+    state.wagon.status = `Test position before ${landmark.shortName}`;
+    syncTrailProgress();
+
+    ui.setNarrationLoading(false, state);
+    ui.renderSelectedTile(state.currentTrailSnapshot ?? fallbackTile);
+    ui.renderWagonState(state);
+    ui.renderObjective(state);
+    ui.renderStatusBanner(state);
+    ui.renderActionSummary(state);
+    ui.renderHazardBanner(state);
+    ui.renderMap(state);
+    ui.syncJourneyControls(state);
+    ui.updateActionState(state);
+    renderStoryPanel();
+  }
+
   function setPace(value) {
     state.wagon.pace = ['steady', 'strenuous', 'grueling'].includes(value) ? value : 'steady';
     state.statusMessage = `The wagon pace is now ${paceLabel(state.wagon.pace).toLowerCase()}.`;
@@ -2582,6 +2753,10 @@ export function createGameController({ state, ui, api, audio }) {
     const matchingOption = (decision.options ?? []).find(
       (opt) => opt.id === effectiveChoiceInput || String(opt.hotkey) === String(effectiveChoiceInput)
     );
+    if (decision.type === 'river-crossing' && !matchingOption) {
+      ui.setDecisionInputFeedback('Choose one of the listed river crossing options.');
+      return;
+    }
     const choiceId = matchingOption ? matchingOption.id : effectiveChoiceInput;
     const obstacle = decision.type === 'obstacle-dilemma'
       ? decision.context?.obstacle ?? state.activeObstacle
@@ -2642,13 +2817,22 @@ export function createGameController({ state, ui, api, audio }) {
           const selectedTile = state.currentTrailSnapshot ?? fallbackTile;
           applyTurnPressure('camp', selectedTile, 0);
           const riverTile = state.tileMap.find((tile) => tile.id === decision.context.nextTileId);
+          state.statusMessage = `You waited by the riverbank for the waters near ${decision.context.destinationName} to ease.`;
           if (riverTile?.river) {
             riverTile.river = {
               depthFt: Number(Math.max(1.4, riverTile.river.depthFt - 0.7).toFixed(2)),
               flowRate: Number(Math.max(70, riverTile.river.flowRate - 35).toFixed(2))
             };
+            syncTrailProgress();
+            state.activeDecision = buildRiverDecision(
+              decision.context.travelAction,
+              decision.context.nextTileId,
+              decision.context.directionText,
+              decision.context.destinationName,
+              riverTile.river
+            );
+            state.statusMessage = `The water eased to ${riverTile.river.depthFt} ft. Choose how to cross ${decision.context.destinationName}.`;
           }
-          state.statusMessage = `You waited by the riverbank for the waters near ${decision.context.destinationName} to ease.`;
           await appendEvent('river_wait', {
             tileId: decision.context.nextTileId,
             note: `The wagon delayed at ${decision.context.destinationName}, hoping for lower water.`
@@ -2819,7 +3003,11 @@ export function createGameController({ state, ui, api, audio }) {
     const shouldAutoPlay = state.dispatchAutoPlayPending;
     state.dispatchAutoPlayPending = false;
     state.turnPhase = 'dispatch';
+    if (state.activeDialogue) {
+      state.activeDialogueShownAt = Date.now();
+    }
     ui.renderMap(state);
+    ui.refreshLandscapeCanvas?.(state);
     ui.updateActionState(state);
     if (shouldAutoPlay) {
       void audio.playNarration();
@@ -2830,6 +3018,15 @@ export function createGameController({ state, ui, api, audio }) {
     if (!state.pendingMetaDialogue) return;
     state.pendingMetaDialogue = null;
     ui.renderMap(state);
+  }
+
+  function setWeatherOverlay(value) {
+    const normalized = normalizeWeatherOverlayId(value);
+    state.weatherOverlay = normalized;
+    state.weatherOverlayOverride = normalized === 'none' ? null : normalized;
+    state.weatherSeed = Math.floor(Math.random() * 1000000);
+    ui.syncJourneyControls(state);
+    ui.refreshLandscapeCanvas?.(state);
   }
 
   return {
@@ -2856,6 +3053,8 @@ export function createGameController({ state, ui, api, audio }) {
     setJourneyAutoReadPreference,
     setJourneyCloudPreference,
     setJourneyLlmPreference,
-    setStrangenessOverride
+    setStrangenessOverride,
+    setWeatherOverlay,
+    warpBeforeLandmark
   };
 }

@@ -1,12 +1,101 @@
 import { debugNarration } from './state.js';
 
 const CLOUD_NARRATION_CACHE_LIMIT = 24;
+const SETUP_MUSIC_URL = new URL('../assets/OTTitle-setup.wav', import.meta.url).href;
+const SETUP_MUSIC_VOLUME = 0.28;
+const SETUP_MUSIC_FADE_DURATION_MS = 1800;
+const SETUP_MUSIC_FADE_INTERVAL_MS = 40;
 
 export function createAudioController({ state, api, onCloudAvailabilityChanged = () => {} }) {
   let cloudNarrationAudio = null;
   let cloudNarrationUrl = null;
   const cloudNarrationBlobCache = new Map();
   const cloudNarrationPending = new Map();
+  let setupMusicAudio = null;
+  let setupMusicFadeTimer = null;
+  let setupMusicFadeResolve = null;
+  let setupMusicGeneration = 0;
+  let setupMusicFailureLogged = false;
+
+  function clearSetupMusicFade() {
+    if (setupMusicFadeTimer !== null) {
+      window.clearInterval(setupMusicFadeTimer);
+      setupMusicFadeTimer = null;
+    }
+    if (setupMusicFadeResolve) {
+      const resolve = setupMusicFadeResolve;
+      setupMusicFadeResolve = null;
+      resolve();
+    }
+  }
+
+  function getSetupMusicAudio() {
+    if (!setupMusicAudio) {
+      setupMusicAudio = new Audio(SETUP_MUSIC_URL);
+      setupMusicAudio.loop = true;
+      setupMusicAudio.preload = 'auto';
+      setupMusicAudio.volume = SETUP_MUSIC_VOLUME;
+    }
+    return setupMusicAudio;
+  }
+
+  async function playSetupMusic() {
+    const audio = getSetupMusicAudio();
+    setupMusicGeneration += 1;
+    clearSetupMusicFade();
+    audio.volume = SETUP_MUSIC_VOLUME;
+    if (!audio.paused) return true;
+
+    try {
+      await audio.play();
+      setupMusicFailureLogged = false;
+      return true;
+    } catch (error) {
+      const autoplayBlocked = error instanceof DOMException && error.name === 'NotAllowedError';
+      if (!setupMusicFailureLogged) {
+        console.warn(
+          autoplayBlocked
+            ? 'Setup music is waiting for a user interaction before playback.'
+            : 'Setup music playback failed.',
+          error
+        );
+        setupMusicFailureLogged = true;
+      }
+      return false;
+    }
+  }
+
+  function fadeOutSetupMusic(durationMs = SETUP_MUSIC_FADE_DURATION_MS) {
+    const audio = setupMusicAudio;
+    if (!audio || audio.paused) return Promise.resolve();
+
+    setupMusicGeneration += 1;
+    clearSetupMusicFade();
+    const generation = setupMusicGeneration;
+    const startVolume = audio.volume;
+    const startTime = performance.now();
+
+    return new Promise((resolve) => {
+      setupMusicFadeResolve = resolve;
+      setupMusicFadeTimer = window.setInterval(() => {
+        if (generation !== setupMusicGeneration) {
+          clearSetupMusicFade();
+          return;
+        }
+        const progress = Math.min(1, (performance.now() - startTime) / durationMs);
+        audio.volume = startVolume * (1 - progress);
+        if (progress >= 1) {
+          window.clearInterval(setupMusicFadeTimer);
+          setupMusicFadeTimer = null;
+          setupMusicFadeResolve = null;
+          audio.pause();
+          audio.currentTime = 0;
+          audio.volume = SETUP_MUSIC_VOLUME;
+          resolve();
+        }
+      }, SETUP_MUSIC_FADE_INTERVAL_MS);
+    });
+  }
 
   function stopNarration() {
     if (window.speechSynthesis) {
@@ -185,8 +274,11 @@ export function createAudioController({ state, api, onCloudAvailabilityChanged =
     window.speechSynthesis.speak(utterance);
   }
 
-  async function playCloudNarration() {
+  async function playCloudNarration(speechId) {
     const blob = await getCloudNarrationBlob(state.narrationText || state.latestNarration?.body || 'The wagon writes its own history.');
+    if (speechId !== state.narrationSpeechId) {
+      return false;
+    }
     stopCloudNarration();
     cloudNarrationUrl = URL.createObjectURL(blob);
     cloudNarrationAudio = new Audio(cloudNarrationUrl);
@@ -209,7 +301,7 @@ export function createAudioController({ state, api, onCloudAvailabilityChanged =
 
     if (isCloudNarrationEnabled()) {
       try {
-        const played = await playCloudNarration();
+        const played = await playCloudNarration(speechId);
         if (speechId !== state.narrationSpeechId) {
           debugNarration(state, 'playNarration:stale-cloud', { speechId, currentSpeechId: state.narrationSpeechId });
           return;
@@ -251,6 +343,21 @@ export function createAudioController({ state, api, onCloudAvailabilityChanged =
     });
   }
 
+  function isBrowserSpeechAvailable() {
+    return Boolean(window.speechSynthesis && window.SpeechSynthesisUtterance);
+  }
+
+  function speakTextLocally(text) {
+    const spokenText = String(text ?? '').trim();
+    state.narrationSpeechId += 1;
+    stopAllNarration();
+    if (!spokenText || !isBrowserSpeechAvailable()) {
+      return false;
+    }
+    speakNarration(spokenText);
+    return true;
+  }
+
   function getStoryRenderState() {
     return {
       cloudNarrationEnabled: isCloudNarrationEnabled(),
@@ -263,9 +370,13 @@ export function createAudioController({ state, api, onCloudAvailabilityChanged =
   }
 
   return {
+    fadeOutSetupMusic,
     getStoryRenderState,
     isCloudNarrationEnabled,
+    isBrowserSpeechAvailable,
+    playSetupMusic,
     playNarration,
+    speakTextLocally,
     populateVoiceSelect,
     primeCloudNarrationCache,
     stopAllNarration,

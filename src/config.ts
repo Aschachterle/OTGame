@@ -43,5 +43,5 @@ export const config = {
   elevenLabsVoiceId: process.env.ELEVENLABS_VOICE_ID ?? '',
   llmNarrationEnabled: process.env.ENABLE_LLM_NARRATION === 'true',
   googleAiStudioApiKey: process.env.GOOGLE_AI_STUDIO_API_KEY ?? '',
-  googleAiStudioModel: process.env.GOOGLE_AI_STUDIO_MODEL ?? 'gemini-2.5-flash'
+  googleAiStudioModel: process.env.GOOGLE_AI_STUDIO_MODEL ?? 'gemini-3.5-flash-lite'
 };
