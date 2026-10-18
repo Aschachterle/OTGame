@@ -544,7 +544,7 @@ export function buildNeutralCompositeGrid(appearance, baseOrientation = 'front')
 }
 
 const SIDE_LEG_POSE_MAPS = {
-  // FRAME 1 (f=0, Neutral Height torsoBounceY=0): Near (warm) leg forward with heel-strike; Far (cool dark) leg back pushing off on toe
+  // FRAME 1 (f=0, Neutral Height torsoBounceY=0): Wide Contact Stride A — Near (warm) leg forward heel-strike, Far (cool dark) leg back on toe (5-8px gap)
   frame0: [
     '............OOOOOOO.............',
     '............OhhhHHHO............',
@@ -559,37 +559,37 @@ const SIDE_LEG_POSE_MAPS = {
     '........OuwO.......ODUOOO.......',
     '........OOOO........OOO.........'
   ],
-  // FRAME 2 (f=1, Down - Dip 1px torsoBounceY=+1): Near (warm) foot planted flat bearing weight; Far (cool dark) leg bends, lifting knee and foot to pass forward
+  // FRAME 2 (f=1, Down - Dip 1px torsoBounceY=+1): Closed Passing A — Near foot planted flat under body; Far leg crosses directly behind/across with 0px gap between legs!
   frame1: [
     '............OOOOOOO.............',
     '............OOOOOOO.............',
     '............OhhhHHHO............',
     '............OhhOHHHO............',
-    '...........OppOOLPO.............',
-    '...........OppO.OLPO............',
-    '..........ObbO..OBPO............',
-    '........OoukbO..OKPO............',
-    '........OduwO...OKPO............',
-    '........OduO....OKUOOO..........',
-    '........OOO.....ODUWWWO.........',
-    '................OOOOOOO.........'
+    '............OppOLPPO............',
+    '............OppOLPPpo...........',
+    '...........ObbOOBPpo............',
+    '..........OukbOOKPO.............',
+    '..........OduwOOKPO.............',
+    '..........OduO.OKUOOO...........',
+    '..........OOO..ODUWWWO..........',
+    '...............OOOOOOO..........'
   ],
-  // FRAME 3 (f=2, Up - Rise 1px torsoBounceY=-1): Near (warm) heel lifts pushing off back; Far (cool dark) leg extends forward in air to strike
+  // FRAME 3 (f=2, Up - Rise 1px torsoBounceY=-1): Emerging Push-Off A — Near heel lifts behind as Far (dark) leg emerges in front (1-3px gap opening into Frame 4)
   frame2: [
     '............OHHHHHO.............',
     '............OHHHhhhO............',
-    '............OHHOohhhO...........',
+    '............OHHOhhhO............',
+    '............OLPOoppO............',
     '...........OLPO.oppO............',
-    '..........OLPO...oppO...........',
-    '.........OBPO.....obbO..........',
-    '........OOKPO.....okbO..........',
-    '.......ODUWO.......okbO.........',
-    '.......ODUWO.......okuOOO.......',
-    '........OUWO........ouwwwO......',
-    '........OUWO........oduOOO......',
-    '........OOOO....................'
+    '..........OBPO..obbO............',
+    '.........OOKPO...okbO...........',
+    '........ODUWO....okbO...........',
+    '........ODUWO....okuOOO.........',
+    '.........OUWO.....ouwwwO........',
+    '.........OUWO.....oduOOO........',
+    '.........OOOO...................'
   ],
-  // FRAME 4 (f=3, Neutral Height torsoBounceY=0): Far (cool dark) leg forward with heel-strike; Near (warm) leg back pushing off on toe
+  // FRAME 4 (f=3, Neutral Height torsoBounceY=0): Wide Contact Stride B — Far (cool dark) leg forward heel-strike, Near (warm) leg back on toe (5-8px gap)
   frame3: [
     '............OOOOOOO.............',
     '............OHHHhhhO............',
@@ -604,35 +604,35 @@ const SIDE_LEG_POSE_MAPS = {
     '........OUWO.......oduOOO.......',
     '........OOOO........OOO.........'
   ],
-  // FRAME 5 (f=4, Down - Dip 1px torsoBounceY=+1): Far (cool dark) foot planted flat bearing weight; Near (warm) leg bends in foreground, lifting knee & foot to pass forward
+  // FRAME 5 (f=4, Down - Dip 1px torsoBounceY=+1): Closed Passing B — Far foot planted flat under body; Near (warm) leg crosses directly across in foreground with 0px gap!
   frame4: [
     '............OOOOOOO.............',
     '............OOOOOOO.............',
     '............OHHHhhhO............',
     '............OHHOhhO.............',
     '............OLPOppO.............',
-    '............OLPOoppO............',
-    '...........OBPO.obbO............',
-    '........OOKBPO..okbO............',
-    '........ODUWO...okbO............',
-    '........ODUO....okuOOO..........',
-    '........OOO.....oduwwwO.........',
-    '................OOOOOOO.........'
+    '............OLPPLPO.............',
+    '...........OBPPLPO..............',
+    '..........OOKBPOkbo.............',
+    '..........ODUWOokbo.............',
+    '..........ODUO.okuOOO...........',
+    '..........OOO..oduwwwO..........',
+    '...............OOOOOOO..........'
   ],
-  // FRAME 6 (f=5, Up - Rise 1px torsoBounceY=-1): Far (cool dark) heel lifts pushing off back; Near (warm) leg reaches forward in air to prepare for Frame 1 heel-strike
+  // FRAME 6 (f=5, Up - Rise 1px torsoBounceY=-1): Emerging Push-Off B — Far heel lifts behind as Near (warm) leg emerges in front (1-3px gap opening into Frame 1)
   frame5: [
     '............OHHHHHO.............',
     '............OhhhHHHO............',
     '............OhhOHHHO............',
+    '............OppOLPO.............',
     '...........OppO.OLPO............',
-    '..........OppO...OLPO...........',
-    '.........ObbO.....OBPO..........',
-    '........OukbO.....OKPO..........',
-    '.......OduwO.......OKPO.........',
-    '.......OduwO.......OKUOOO.......',
-    '........OuwO........OUWWWO......',
-    '........OuwO........ODUOOO......',
-    '........OOOO....................'
+    '..........ObbO..OBPO............',
+    '.........OukbO...OKPO...........',
+    '........OduwO....OKPO...........',
+    '........OduwO....OKUOOO.........',
+    '.........OuwO.....OUWWWO........',
+    '.........OuwO.....ODUOOO........',
+    '.........OOOO...................'
   ]
 };
 
