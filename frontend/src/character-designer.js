@@ -383,15 +383,12 @@ function applyDirectional16BitShading(hexColor, x, y, baseOrientation, category,
   let delta = 0;
 
   if (category === 'body') {
-    // Directional light on skin (top-left in front view, top-front in side view)
-    if (y <= 6) delta += 5;
-    else if (y >= 11 && y <= 12) delta -= 7;
+    // Keep facial skin (y <= 11) crisp and un-muddied so eyes, nose, and mouth read clearly
+    if (y <= 11) return hexColor;
+    if (y === 12) return shadeHex(hexColor, -6);
     if (baseOrientation === 'front') {
       if (x <= 14) delta += 3;
       else if (x >= 18) delta -= 5;
-    } else {
-      if (x >= 16) delta += 4;
-      else if (x <= 12) delta -= 6;
     }
     return shadeHex(hexColor, delta);
   }
