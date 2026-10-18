@@ -144,220 +144,220 @@ const BASE_BODY_TEMPLATES = [
   {
     id: 'standard_adventurer',
     name: 'Standard Frame',
-    description: 'Balanced 32×32 8-bit character proportions',
+    description: 'Balanced heroic 32×32 adventurer proportions with defined silhouette',
     front: [
-      '................................', // 00
-      '................................', // 01
-      '..........HHHHHHHHHHHH..........', // 02
-      '.........HHHHHHHHHHHHHH.........', // 03
-      '........HHHOOOOOOOOOOHHH........', // 04
-      '........HHOLLLLLLLLLLOHH........', // 05
-      '........HOBBBBBBBBBBBBOH........', // 06
-      '........HOFEPBBBBBBPEFOH........', // 07
-      '........HOBEEBBBBBBEEBOH........', // 08
-      '.......HHSBBBBBBBBBBBBSOHH......', // 09
-      '.......HHOSBBBBMMBBBBSOHHH......', // 10
-      '.......HHHOOSSSSSSSSOOHHHH......', // 11
-      '.......HHHHHOOSSSSOOHHHHHH......', // 12 (Neck + hair cascade allowance H)
-      '.......HHOOOOOBBBBOOOOOHHH......', // 13 (Shoulders)
-      '.......HOSSSSBBBBBBBBSSOHH......', // 14
-      '.......OSSBBBBBBBBBBBBSSO.......', // 15
-      '.......OSBBBBBBBBBBBBBBSO.......', // 16
-      '.......OSBBBBBBBBBBBBBBSO.......', // 17
-      '.......OSSBBBBBBBBBBBBSSO.......', // 18
-      '.......OSSOOBBBBBBBBOOSOO.......', // 19
-      '........OO..OSSSSSSOO.OO........', // 20
-      '...........OSSSSSSSSO...........', // 21
-      '...........OSSBBBBSSO...........', // 22
-      '...........OSBBOOOBSO...........', // 23
-      '...........OSBO..OBSO...........', // 24
-      '...........OSBO..OBSO...........', // 25
-      '...........OSBO..OBSO...........', // 26
-      '...........OSSO..OSSO...........', // 27
-      '..........OOSSO..OSSOO..........', // 28
-      '.........OOSSSO..OSSSOO.........', // 29
-      '.........OOOOOO..OOOOOO.........', // 30
-      '................................'  // 31
+      '................................',
+      '..........HHHHHHHHHHHH..........',
+      '........HHHHHHHHHHHHHHHH........',
+      '.......HHHHHHHHHHHHHHHHHH.......',
+      '.......HHHOOOOOOOOOOOOHHH.......',
+      '.......HHOLLLLLLLLLLLLOHH.......',
+      '.......HHOBBBBBBBBBBBBOHH.......',
+      '.......HHOBFEPBBBBPEFBOHH.......',
+      '.......HHOBBEEBSSBEEBBOHH.......',
+      '.......HHOLBBBBSSBBBBLLOHH......',
+      '.......HHOOSBBBMMBBBSSOOHH......',
+      '........HHHOOSSBLLBSOOHHH.......',
+      '........HHHHHOOSSSSOOHHHHH......',
+      '.......HHHOOOOOOOOOOOOHHH.......',
+      '......HHOOSSSBBBBBBSSSOOHH......',
+      '......HHOSBBBBBBBBBBBBSOHH......',
+      '.......HOSBBBBBBBBBBBBSOH.......',
+      '.......HOSSBBBBBBBBBBSSOH.......',
+      '........OSSBBBBBBBBBBSSO........',
+      '........OOSSSSSSSSSSSSOO........',
+      '.........OSSSSSSSSSSSSO.........',
+      '.........OSSBBHHHHBBSSO.........',
+      '.........OSSBOHHHHOBSO..........',
+      '.........OSBOHHHHOBSO...........',
+      '.........OSBOHHHHOBSO...........',
+      '........OOSBOHHHHOBSOO..........',
+      '........OSSBOHHHHOBSO...........',
+      '........OSSSOHHHHOSSSO..........',
+      '........OSSSOHHHHOSSSO..........',
+      '.......OOSSSOHHHHOSSSOO.........',
+      '.......OOOOOOHHHHOOOOOO.........',
+      '................................'
     ],
     side: [
-      '................................', // 00
-      '................................', // 01
-      '..........HHHHHHHHHHH...........', // 02
-      '.........HHHHHHHHHHHHH..........', // 03
-      '........HHHOOOOOOOOOOHH.........', // 04
-      '.......HHHOLLLLLLLLLLOH.........', // 05
-      '......HHHOBBBBBBBBBBBBO.........', // 06
-      '......HHHOBBBBBBBFPEBBO.........', // 07
-      '......HHHOSBBBBBBBEEBBOOO.......', // 08
-      '......HHHOSBBBBBBBBBBBBSO.......', // 09
-      '......HHHHOSBBBBBBBBMMOO........', // 10
-      '......HHHHHOOSSSSSSSSOO.........', // 11
-      '......HHHHHHOOSSSSSOO...........', // 12
-      '......HHHHHOOOOBBBBOOO..........', // 13
-      '......HHHHOSSSSBBBBBBSSO........', // 14
-      '......HHHHOSSBBBBBBBBBBSO.......', // 15
-      '......HHHHOSBBBBBBBBBBBSO.......', // 16
-      '......HHHHOSBBBBBBBBBBBSO.......', // 17
-      '......HHHHOSSBBBBBBBBBBSO.......', // 18
-      '..........OSSOOBBBBBBBSO........', // 19
-      '...........OO.OSSSSSSOO.........', // 20
-      '............OOSSSSSSSSO.........', // 21
-      '............OSSBBBBBSSO.........', // 22
-      '............OSBBBBBBBSO.........', // 23
-      '............OSBBBBBBBSO.........', // 24
-      '............OSBBBBBBBSO.........', // 25
-      '............OSBBBBBBBSO.........', // 26
-      '............OSSSSSSSSSO.........', // 27
-      '............OOSSSSSSSOOO........', // 28
-      '............OOSSSSSSSSSOO.......', // 29
-      '............OOOOOOOOOOOOO.......', // 30
-      '................................'  // 31
+      '................................',
+      '..........HHHHHHHHHH............',
+      '........HHHHHHHHHHHHHH..........',
+      '.......HHHHHHHHHHHHHHHH.........',
+      '.......HHHOOOOOOOOOOHH..........',
+      '......HHHOLLLLLLLLLLOH..........',
+      '.....HHHOBBBBBBBBBBBBO..........',
+      '.....HHHOBBBBBBBFPEBBO..........',
+      '.....HHHOSBBBBBBBEEBBOOO........',
+      '.....HHHOSBBBBBBBBBBBBSO........',
+      '.....HHHHOSBBBBBBBBMMOO.........',
+      '.....HHHHHOOSSSSSSSSOO..........',
+      '.....HHHHHHOOSSSSSOO............',
+      '.....HHHHHOOOOOOOOOOO...........',
+      '.....HHHHOSSSSBBBBBBSSO.........',
+      '.....HHHHOSSBBBBBBBBBBSO........',
+      '.....HHHHOSBBBBBBBBBBBSO........',
+      '.....HHHHOSBBBBBBBBBBBSO........',
+      '.....HHHHOSSBBBBBBBBBBSO........',
+      '.........OSSOOBBBBBBBSO.........',
+      '..........OO.OSSSSSSOO..........',
+      '...........OOSSSSSSSSO..........',
+      '...........OSSBBBBBSSO..........',
+      '...........OSBBBBBBBSO..........',
+      '...........OSBBBBBBBSO..........',
+      '..........OOSBBBBBBBSOO.........',
+      '..........OSSSSSSSSSSSO.........',
+      '..........OSSSSSSSSSSSO.........',
+      '..........OOSSSSSSSSSOOO........',
+      '..........OOSSSSSSSSSSSOO.......',
+      '..........OOOOOOOOOOOOOOO.......',
+      '................................'
     ]
   },
   {
     id: 'broad_guardian',
     name: 'Broad Frame',
-    description: 'Sturdy frame for heavy coats, buckskins, and doublets',
+    description: 'Heroic sturdy frame with broader shoulders and powerful stance',
     front: [
-      '................................', // 00
-      '................................', // 01
-      '..........HHHHHHHHHHHH..........', // 02
-      '.........HHHHHHHHHHHHHH.........', // 03
-      '........HHHOOOOOOOOOOHHH........', // 04
-      '........HHOLLLLLLLLLLOHH........', // 05
-      '........HOBBBBBBBBBBBBOH........', // 06
-      '........HOFEPBBBBBBPEFOH........', // 07
-      '........HOBEEBBBBBBEEBOH........', // 08
-      '.......HHSBBBBBBBBBBBBSOHH......', // 09
-      '.......HHOSBBBBMMBBBBSOHHH......', // 10
-      '.......HHHOOSSSSSSSSOOHHHH......', // 11
-      '.......HHHHOOOSSSSOOOHHHHH......', // 12
-      '.......OOOOOOOBBBBOOOOOOO.......', // 13
-      '......OSSSSSSBBBBBBBBSSSSO......', // 14
-      '......OSSBBBBBBBBBBBBBBSSO......', // 15
-      '......OSBBBBBBBBBBBBBBBBSO......', // 16
-      '......OSBBBBBBBBBBBBBBBBSO......', // 17
-      '......OSSBBBBBBBBBBBBBBSSO......', // 18
-      '......OSSOOBBBBBBBBBBOOSOO......', // 19
-      '.......OO..OSSSSSSSSO..OO.......', // 20
-      '..........OOSSSSSSSSOO..........', // 21
-      '..........OSSBBBBBBSSO..........', // 22
-      '..........OSBBBOOOOBSO..........', // 23
-      '..........OSBBO..OBBSO..........', // 24
-      '..........OSBBO..OBBSO..........', // 25
-      '..........OSBBO..OBBSO..........', // 26
-      '..........OSSOO..OOSSO..........', // 27
-      '.........OOSSOO..OOSSOO.........', // 28
-      '........OOSSSOO..OOSSSOO........', // 29
-      '........OOOOOOO..OOOOOOO........', // 30
-      '................................'  // 31
+      '................................',
+      '..........HHHHHHHHHHHH..........',
+      '........HHHHHHHHHHHHHHHH........',
+      '.......HHHHHHHHHHHHHHHHHH.......',
+      '.......HHHOOOOOOOOOOOOHHH.......',
+      '.......HHOLLLLLLLLLLLLOHH.......',
+      '.......HHOBBBBBBBBBBBBOHH.......',
+      '.......HHOBFEPBBBBPEFBOHH.......',
+      '.......HHOBBEEBSSBEEBBOHH.......',
+      '.......HHOLBBBBSSBBBBLLOHH......',
+      '.......HHOOSBBBMMBBBSSOOHH......',
+      '........HHHOOSSBLLBSOOHHH.......',
+      '........HHHHHOOSSSSOOHHHHH......',
+      '.....HHHOOOOOOOOOOOOOOOOHHH.....',
+      '....HHOOSSSBBBBBBBBSSSOOHH......',
+      '....HHOSBBBBBBBBBBBBBBSOHH......',
+      '.....HOSBBBBBBBBBBBBBBSOH.......',
+      '.....HOSSBBBBBBBBBBBBSSOH.......',
+      '......OSSBBBBBBBBBBBBSSO........',
+      '......OOSSSSSSSSSSSSSSOO........',
+      '.......OSSSSSSSSSSSSSSO.........',
+      '.......OSSBBHHHHHHBBSSO.........',
+      '.......OSSBOHHHHHHOBSO..........',
+      '.......OSBOHHHHHHOBSO...........',
+      '.......OSBOHHHHHHOBSO...........',
+      '......OOSBOHHHHHHOBSOO..........',
+      '......OSSBOHHHHHHOBSO...........',
+      '......OSSSOHHHHHHOSSSO..........',
+      '......OSSSOHHHHHHOSSSO..........',
+      '.....OOSSSOHHHHHHOSSSOO.........',
+      '.....OOOOOOHHHHHHOOOOOO.........',
+      '................................'
     ],
     side: [
-      '................................', // 00
-      '................................', // 01
-      '..........HHHHHHHHHHH...........', // 02
-      '.........HHHHHHHHHHHHH..........', // 03
-      '........HHHOOOOOOOOOOHH.........', // 04
-      '.......HHHOLLLLLLLLLLOH.........', // 05
-      '......HHHOBBBBBBBBBBBBO.........', // 06
-      '......HHHOBBBBBBBFPEBBO.........', // 07
-      '......HHHOSBBBBBBBEEBBOOO.......', // 08
-      '......HHHOSBBBBBBBBBBBBSO.......', // 09
-      '......HHHHOSBBBBBBBBMMOO........', // 10
-      '......HHHHHOOSSSSSSSSOO.........', // 11
-      '......HHHHHOOOSSSSSSOO..........', // 12
-      '......HHHHOOOOOBBBBBBOOO........', // 13
-      '......HHHOSSSSSBBBBBBBSSO.......', // 14
-      '......HHHOSSBBBBBBBBBBBBSO......', // 15
-      '......HHHOSBBBBBBBBBBBBBSO......', // 16
-      '......HHHOSBBBBBBBBBBBBBSO......', // 17
-      '......HHHOSSBBBBBBBBBBBBSO......', // 18
-      '.........OSSOOBBBBBBBBBSO.......', // 19
-      '..........OO.OSSSSSSSSOO........', // 20
-      '...........OOSSSSSSSSSSO........', // 21
-      '...........OSSBBBBBBBSSO........', // 22
-      '...........OSBBBBBBBBBSO........', // 23
-      '...........OSBBBBBBBBBSO........', // 24
-      '...........OSBBBBBBBBBSO........', // 25
-      '...........OSBBBBBBBBBSO........', // 26
-      '...........OSSSSSSSSSSSO........', // 27
-      '...........OOSSSSSSSSSOOO.......', // 28
-      '...........OOSSSSSSSSSSSOO......', // 29
-      '...........OOOOOOOOOOOOOOO......', // 30
-      '................................'  // 31
+      '................................',
+      '..........HHHHHHHHHH............',
+      '........HHHHHHHHHHHHHH..........',
+      '.......HHHHHHHHHHHHHHHH.........',
+      '.......HHHOOOOOOOOOOHH..........',
+      '......HHHOLLLLLLLLLLOH..........',
+      '.....HHHOBBBBBBBBBBBBO..........',
+      '.....HHHOBBBBBBBFPEBBO..........',
+      '.....HHHOSBBBBBBBEEBBOOO........',
+      '.....HHHOSBBBBBBBBBBBBSO........',
+      '.....HHHHOSBBBBBBBBMMOO.........',
+      '.....HHHHHOOSSSSSSSSOO..........',
+      '.....HHHHHHOOSSSSSOO............',
+      '....HHHHHOOOOOOOOOOOOO..........',
+      '....HHHHOSSSSSBBBBBBSSO.........',
+      '....HHHHOSSBBBBBBBBBBBSO........',
+      '....HHHHOSBBBBBBBBBBBBSO........',
+      '....HHHHOSBBBBBBBBBBBBSO........',
+      '....HHHHOSSBBBBBBBBBBBSO........',
+      '........OSSOOBBBBBBBBBSO........',
+      '.........OO.OSSSSSSSSOO.........',
+      '..........OOSSSSSSSSSSO.........',
+      '..........OSSBBBBBBBSSO.........',
+      '..........OSBBBBBBBBBSO.........',
+      '..........OSBBBBBBBBBSO.........',
+      '.........OOSBBBBBBBBBSOO........',
+      '.........OSSSSSSSSSSSSSO........',
+      '.........OSSSSSSSSSSSSSO........',
+      '.........OOSSSSSSSSSSSOOO.......',
+      '.........OOSSSSSSSSSSSSSOO......',
+      '.........OOOOOOOOOOOOOOOOO......',
+      '................................'
     ]
   },
   {
     id: 'nimble_scout',
     name: 'Slender Frame',
-    description: 'Tailored silhouette ideal for dresses, bodices, and slim suits',
+    description: 'Slender, tailored JRPG silhouette ideal for scouts, mages, and dresses',
     front: [
-      '................................', // 00
-      '................................', // 01
-      '..........HHHHHHHHHHHH..........', // 02
-      '.........HHHHHHHHHHHHHH.........', // 03
-      '........HHHOOOOOOOOOOHHH........', // 04
-      '........HHOLLLLLLLLLLOHH........', // 05
-      '........HOBBBBBBBBBBBBOH........', // 06
-      '........HOFEPBBBBBBPEFOH........', // 07
-      '........HOBEEBBBBBBEEBOH........', // 08
-      '.......HHSBBBBBBBBBBBBSOHH......', // 09
-      '.......HHOSBBBBMMBBBBSOHHH......', // 10
-      '.......HHHOOSSSSSSSSOOHHHH......', // 11
-      '.......HHHHHOOSSSSOOHHHHHH......', // 12
-      '.......HHHOOOOBBBBOOOOHHHH......', // 13
-      '.......HHOSSSBBBBBBBBSSOHH......', // 14
-      '.......HOSSBBBBBBBBBBBSSOH......', // 15
-      '.......HOSBBBBBBBBBBBBBSOH......', // 16
-      '.......HOSBBBBBBBBBBBBBSOH......', // 17
-      '.......HOSSBBBBBBBBBBBSSOH......', // 18
-      '........OSSOOBBBBBBBOOSOO.......', // 19
-      '.........OO..OSSSSOO..OO........', // 20
-      '............OSSSSSSOO...........', // 21
-      '...........OSSBBBBSSO...........', // 22
-      '...........OSBO..OBSO...........', // 23
-      '...........OSBO..OBSO...........', // 24
-      '...........OSBO..OBSO...........', // 25
-      '...........OSBO..OBSO...........', // 26
-      '...........OSSO..OSSO...........', // 27
-      '..........OOSSO..OSSOO..........', // 28
-      '..........OSSSO..OSSSO..........', // 29
-      '..........OOOOO..OOOOO..........', // 30
-      '................................'  // 31
+      '................................',
+      '..........HHHHHHHHHHHH..........',
+      '........HHHHHHHHHHHHHHHH........',
+      '.......HHHHHHHHHHHHHHHHHH.......',
+      '.......HHHOOOOOOOOOOOOHHH.......',
+      '.......HHOLLLLLLLLLLLLOHH.......',
+      '.......HHOBBBBBBBBBBBBOHH.......',
+      '.......HHOBFEPBBBBPEFBOHH.......',
+      '.......HHOBBEEBSSBEEBBOHH.......',
+      '.......HHOLBBBBSSBBBBLLOHH......',
+      '.......HHOOSBBBMMBBBSSOOHH......',
+      '........HHHOOSSBLLBSOOHHH.......',
+      '........HHHHHOOSSSSOOHHHHH......',
+      '.......HHHOOOOOOOOOOOOHHH.......',
+      '.......HHOOSSSBBBBSSSOOHH.......',
+      '.......HHOSBBBBBBBBBBSOHH.......',
+      '........HOSBBBBBBBBBBSOH........',
+      '........HOSSBBBBBBBBSSOH........',
+      '.........OSSBBBBBBBBSSO.........',
+      '.........OOSSSSSSSSSSOO.........',
+      '..........OSSSSSSSSSSO..........',
+      '..........OSSBBHHHHBBSSO........',
+      '..........OSSBOHHHHOBSO.........',
+      '..........OSBOHHHHOBSO..........',
+      '..........OSBOHHHHOBSO..........',
+      '.........OOSBOHHHHOBSOO.........',
+      '.........OSSBOHHHHOBSO..........',
+      '.........OSSSOHHHHOSSSO.........',
+      '.........OSSSOHHHHOSSSO.........',
+      '........OOSSSOHHHHOSSSOO........',
+      '........OOOOOOHHHHOOOOOO........',
+      '................................'
     ],
     side: [
-      '................................', // 00
-      '................................', // 01
-      '..........HHHHHHHHHHH...........', // 02
-      '.........HHHHHHHHHHHHH..........', // 03
-      '........HHHOOOOOOOOOOHH.........', // 04
-      '.......HHHOLLLLLLLLLLOH.........', // 05
-      '......HHHOBBBBBBBBBBBBO.........', // 06
-      '......HHHOBBBBBBBFPEBBO.........', // 07
-      '......HHHOSBBBBBBBEEBBOOO.......', // 08
-      '......HHHOSBBBBBBBBBBBBSO.......', // 09
-      '......HHHHOSBBBBBBBBMMOO........', // 10
-      '......HHHHHOOSSSSSSSSOO.........', // 11
-      '......HHHHHHOOSSSSSOO...........', // 12
-      '......HHHHHOOOOBBBBOOO..........', // 13
-      '......HHHHOSSSSBBBBBBSSO........', // 14
-      '......HHHHOSSBBBBBBBBBBSO.......', // 15
-      '......HHHHOSBBBBBBBBBBBSO.......', // 16
-      '......HHHHOSBBBBBBBBBBBSO.......', // 17
-      '......HHHHOSSBBBBBBBBBBSO.......', // 18
-      '..........OSSOOBBBBBBBSO........', // 19
-      '...........OO.OSSSSSSOO.........', // 20
-      '............OOSSSSSSSSO.........', // 21
-      '............OSSBBBBBSSO.........', // 22
-      '............OSBBBBBBBSO.........', // 23
-      '............OSBBBBBBBSO.........', // 24
-      '............OSBBBBBBBSO.........', // 25
-      '............OSBBBBBBBSO.........', // 26
-      '............OSSSSSSSSSO.........', // 27
-      '............OOSSSSSSSOOO........', // 28
-      '............OOSSSSSSSSSOO.......', // 29
-      '............OOOOOOOOOOOOO.......', // 30
-      '................................'  // 31
+      '................................',
+      '..........HHHHHHHHHH............',
+      '........HHHHHHHHHHHHHH..........',
+      '.......HHHHHHHHHHHHHHHH.........',
+      '.......HHHOOOOOOOOOOHH..........',
+      '......HHHOLLLLLLLLLLOH..........',
+      '.....HHHOBBBBBBBBBBBBO..........',
+      '.....HHHOBBBBBBBFPEBBO..........',
+      '.....HHHOSBBBBBBBEEBBOOO........',
+      '.....HHHOSBBBBBBBBBBBBSO........',
+      '.....HHHHOSBBBBBBBBMMOO.........',
+      '.....HHHHHOOSSSSSSSSOO..........',
+      '.....HHHHHHOOSSSSSOO............',
+      '.....HHHHHOOOOOOOOOOO...........',
+      '.....HHHHOSSSSBBBBBBSSO.........',
+      '.....HHHHOSSBBBBBBBBBBSO........',
+      '.....HHHHOSBBBBBBBBBBBSO........',
+      '.....HHHHOSBBBBBBBBBBBSO........',
+      '.....HHHHOSSBBBBBBBBBBSO........',
+      '.........OSSOOBBBBBBBSO.........',
+      '..........OO.OSSSSSSOO..........',
+      '...........OOSSSSSSSSO..........',
+      '...........OSSBBBBBSSO..........',
+      '...........OSBBBBBBBSO..........',
+      '...........OSBBBBBBBSO..........',
+      '..........OOSBBBBBBBSOO.........',
+      '..........OSSSSSSSSSSSO.........',
+      '..........OSSSSSSSSSSSO.........',
+      '..........OOSSSSSSSSSOOO........',
+      '..........OOSSSSSSSSSSSOO.......',
+      '..........OOOOOOOOOOOOOOO.......',
+      '................................'
     ]
   }
 ];
@@ -420,159 +420,192 @@ function makeItemPreset(id, name, era, frontStartY, frontRows, sideStartY, sideR
 const PATTERNS = {
   // ======================== OREGON TRAIL BESPOKE PATTERNS ========================
   sunbonnetFront: [
-    '..........OOOOOOOOOOOO..........',
-    '.........OLLLLPPPPLLLLO.........',
-    '........OOPPPPPPPPPPPPOO........',
-    '........OPLLSSSSSSSSLLPO........',
-    '........OPO..........OPO........',
-    '........OPO..........OPO........',
+    '.........OOOOOOOOOOOOOO.........',
+    '........OPPLLLLLLLLLLPPO........',
+    '.......OOPPPPPPPPPPPPPPOO.......',
+    '.......OPLLSSSSSSSSSSLLPO.......',
+    '.......OPO............OPO.......',
+    '.......OPO............OPO.......',
     '........OSO..........OSO........',
     '........OSO..........OSO........',
     '.........OL..........LO.........',
-    '..........OO..LLLL..OO..........'
+    '..........OO...LL...OO..........',
+    '...........OLL....LLO...........',
+    '............OL....LO............'
   ],
   sunbonnetSide: [
-    '..........OOOOOOOOOOO...........',
-    '.........OPPPPPPPPPPPO..........',
-    '.........OPPPLLLLLLLLPO.........',
-    '.........OPPPSSSSSSSSLLOO.......',
-    '.........OPPPPPPO....OLLO.......',
-    '.........OPPPPPPO.....OO........',
-    '.........OSSSSSSO...............',
-    '.........OSSSSSSO...............',
-    '..........OO..LLO...............',
-    '..............LLO...............'
+    '........OOOOOOOOOOOO............',
+    '.......OPPPPPPPPPPPPO...........',
+    '......OOPPPLLLLLLLLPPO..........',
+    '......OPPPSSSSSSSSLLPO..........',
+    '......OPPPPPPO.....OPO..........',
+    '......OPPPPPPO.....OO...........',
+    '......OSSSSSSO..................',
+    '.......OSSSSSO..................',
+    '........OO..LO..................',
+    '............LO..................',
+    '............LO..................'
   ],
 
   coonskinCapFront: [
-    '..........OOOOOOOOOOOO..........',
-    '.........OPSPPPLLLPPPSO.........',
-    '........OOPPSSSSSSSSPPOO........',
-    '........OSSSSLLLLLLSSSSO........',
-    '........OO............PSO.......',
-    '......................SLO.......',
-    '......................PSO.......',
-    '......................OO........'
+    '.........OOOOOOOOOOOOOO.........',
+    '........OPSSPPPPLLPPPPSSO.......',
+    '.......OOPPSSSSSSSSSSSSPPOO.....',
+    '.......OSSSSLLLLLLLLLLSSSSO.....',
+    '.......OOOOOOOOOOOOOOOOOOOO.....',
+    '.......................OO.......',
+    '......................OPPO......',
+    '......................OSSO......',
+    '......................OPPO......',
+    '......................OSSO......',
+    '......................OPPO......',
+    '......................OSSO......',
+    '.......................OO.......'
   ],
   coonskinCapSide: [
-    '..........OOOOOOOOOOO...........',
-    '.........OPSPPPLLLPPPO..........',
-    '.........OPPSSSSSSSSPPO.........',
-    '.........OSSSSLLLLSSSSO.........',
-    '.........OPSO...................',
-    '.........OSLO...................',
-    '.........OPSO...................',
-    '..........OO....................'
+    '........OOOOOOOOOOOOOO..........',
+    '.......OPSSPPPPLLPPPPPO.........',
+    '......OOPPSSSSSSSSSSSSPPO.......',
+    '......OSSSSLLLLLLLLSSSSO........',
+    '......OOOOOOOOOOOOOOOOOO........',
+    '.....OO.........................',
+    '....OPPO........................',
+    '....OSSO........................',
+    '....OPPO........................',
+    '...OSSO.........................',
+    '...OPPO.........................',
+    '....OSSO........................',
+    '.....OO.........................'
   ],
 
   slouchHatFront: [
-    '..........OOOOOOOOOOOO..........',
-    '.........OPPPLLLLLLPPPO.........',
-    '........OOPPPPPPPPPPPPOO........',
-    '........OSSSSSSSSSSSSSSO........',
-    '........OOOOOOOOOOOOOOOO........'
+    '.........OOPPPP....PPPPOO.......',
+    '........OPPPLLLLPPLLLLPPPO......',
+    '........OPPPPPPPPPPPPPPPPO......',
+    '........OSSSSSSLLLLSSSSSSO......',
+    '.....OOOOOOOOOOOOOOOOOOOOOOOO...',
+    '.....OPPLLSSSSSSSSSSSSSSLLPO....',
+    '......OOSSSSSSSSSSSSSSSSSSOO....'
   ],
   slouchHatSide: [
-    '..........OOOOOOOOOOO...........',
-    '.........OPPPLLLLLLPPO..........',
-    '.........OPPPPPPPPPPPPO.........',
-    '.........OSSSSSSSSSSSSO.........',
-    '.........OOOOOOOOOOOOOO.........'
+    '........OOPPPPPPPOO.............',
+    '.......OPPPLLLLLPPO.............',
+    '.......OPPPPPPPPPPO.............',
+    '.......OSSSSLLSSSSO.............',
+    '....OOOOOOOOOOOOOOOOOOOO........',
+    '....OPPLLSSSSSSSSSSSSLLPO.......',
+    '.....OOOOOOOOOOOOOOOOOO.........'
   ],
 
   calicoBodiceFront: [
-    '............OOOOOOOO............',
-    '.........OOOOLPPPPLOOOO.........',
-    '........OPPLLPPSLPPLLPPO........',
-    '.......OPPPPPPPSSPPPPPPPO.......',
-    '.......OPPLLPPPSSPPPLLPPO.......',
+    '...........OOOOOOOOOO...........',
+    '........OOOLLLLLLLLLLOOO........',
+    '.......OPPLLPPSLLSPPLLPPO.......',
+    '......OPPPPPPPSLLSPPPPPPO.......',
+    '......OPPLLPPPSLLSPPPLPPO.......',
     '.......OPPSSSSSSSSSSSSPPO.......',
     '.......OSSOOPPPPPPPPOOSOO.......',
-    '.......OOO..OOOOOOOO..OOO.......'
+    '........OO..OOOOOOOO..OO........'
   ],
   calicoBodiceSide: [
-    '............OOOOOOOO............',
-    '...........OOLPPPPLOOO..........',
-    '..........OPPLLPPLLLPPPO........',
-    '..........OPPPPOLLLPPPPO........',
-    '..........OPPLLOLLLPPLPO........',
-    '..........OSSSOPPPPSSSSO........',
-    '..........OOPPPPPPPPPPOO........',
-    '...........OOOOOOOOOOOO.........'
+    '...........OOOOOOOOOO...........',
+    '..........OOLLLLLLLLOO..........',
+    '.........OPPLLPPLLLPPPO.........',
+    '.........OPPPPOLLLPPPPO.........',
+    '.........OPPLLOLLLPPLPO.........',
+    '.........OSSSOPPPPSSSSO.........',
+    '.........OOPPPPPPPPPPOO.........',
+    '..........OOOOOOOOOOOO..........'
   ],
 
   fringedBuckskinFront: [
-    '.........OOOOO....OOOOO.........',
-    '........OPPPPPOOOOPPPPPO........',
-    '.......OPPLLLLLLLLLLLLPPO.......',
-    '.......OSSSSSSSSSSSSSSSSO.......',
-    '.......OPPPPPPPSSPPPPPPPO.......',
+    '........OOOOO......OOOOO........',
+    '.......OPPPPPOOOOOOPPPPPO.......',
+    '......OPPLLLLLLLLLLLLLLPPO......',
+    '......OSSLSLSLSLSLSLSLSLSS......',
+    '......OPPPPPPPSSPPPPPPPPO.......',
     '.......OSSOOPPPPPPPPOOSOO.......',
-    '.......OOO..OSSSSSSO..OOO.......'
+    '........OO..OSSSSSSO..OO........'
   ],
   fringedBuckskinSide: [
-    '...........OOOOOOOOOOO..........',
-    '..........OPPPPPPPPPPPO.........',
-    '..........OPPLLLLLLLLPPO........',
-    '..........OSSSSSSSSSSSSO........',
-    '..........OPPPPOSSOPLPPO........',
-    '..........OSSSOPPPPSSSSO........',
-    '...........OOOOOOOOOOOO.........'
+    '..........OOOOOOOOOOOO..........',
+    '.........OPPPPPPPPPPPPO.........',
+    '.........OPPLLLLLLLLLPPO........',
+    '.........OSSLSLSLSLSLSSO........',
+    '.........OPPPPOSSOPLPPO.........',
+    '.........OSSSOPPPPSSSSO.........',
+    '..........OOOOOOOOOOOO..........'
   ],
 
   prairieLongSkirtFront: [
-    '...........OOOOOOOOOO...........',
-    '...........OSSSSSSSSO...........',
-    '...........OPPLLLLPPO...........',
-    '...........OPPPPPPPPO...........',
-    '...........OPPSSSSPPO...........',
-    '...........OPPLLLLPPO...........',
-    '...........OSSSSSSSSO...........',
-    '...........OOOO..OOOO...........'
+    '........OOOOOOOOOOOOOOOO........',
+    '........OSSSSSSSSSSSSSSO........',
+    '.......OPPLLLLPPPPLLLLPPO.......',
+    '.......OPPPPPPPPPPPPPPPPO.......',
+    '......OPPSSSSSSSSSSSSSSPO.......',
+    '......OPPLLLLPPPPLLLLPPPO.......',
+    '......OPPPPPPPPPPPPPPPPPO.......',
+    '.....OPPSSSSSSSSSSSSSSSSPPO.....',
+    '.....OPPLLLLPPPPPPPPLLLLPPO.....',
+    '.....OPPPPPPPPPPPPPPPPPPPPO.....',
+    '.....OPSSLLSSLLSSLLSSLLSSPO.....',
+    '......OOOOOOOOOOOOOOOOOOOO......'
   ],
   prairieLongSkirtSide: [
-    '............OOOOOOOOO...........',
-    '............OSSSSSSSSO..........',
-    '............OPPLLLLPPO..........',
-    '............OPPPPPPPPO..........',
-    '............OPPSSSSPPO..........',
-    '............OPPLLLLPPO..........',
-    '............OSSSSSSSSO..........',
-    '............OOOOOOOOOO..........'
+    '.........OOOOOOOOOOOOOO.........',
+    '.........OSSSSSSSSSSSSO.........',
+    '........OPPLLLLPPPPLLPPO........',
+    '........OPPPPPPPPPPPPPPO........',
+    '.......OPPSSSSSSSSSSSSPPO.......',
+    '.......OPPLLLLPPPPLLLLPPO.......',
+    '.......OPPPPPPPPPPPPPPPPO.......',
+    '......OPPSSSSSSSSSSSSSSPO.......',
+    '......OPPLLLLPPPPPPPPLLPO.......',
+    '......OPPPPPPPPPPPPPPPPPO.......',
+    '......OPSSLLSSLLSSLLSSSSP.......',
+    '.......OOOOOOOOOOOOOOOOO........'
   ],
 
   pioneerApronFront: [
+    '.........OO..........OO.........',
+    '.........OL..........LO.........',
+    '........OOOOOOOOOOOOOOOO........',
+    '........OLLLLLLLLLLLLLLO........',
+    '........OLLLLLLLLLLLLLLO........',
+    '........OLLLLPPPPLLLLLLO........',
+    '........OLLLLPPPPLLLLLLO........',
+    '........OLLLLLLLLLLLLLLO........',
+    '........OSSSSSSSSSSSSSSO........',
+    '.........OOOOOOOOOOOOOO.........'
+  ],
+  pioneerApronSide: [
+    '............OOOOOOOO............',
+    '............OLLLLLLO............',
     '...........OOOOOOOOOO...........',
     '...........OLLLLLLLLO...........',
     '...........OLLLLLLLLO...........',
-    '...........OLLPPPPLLO...........',
+    '...........OLLPPOLLO............',
+    '...........OLLPPOLLO............',
     '...........OLLLLLLLLO...........',
     '...........OSSSSSSSSO...........',
     '............OOOOOOOO............'
   ],
-  pioneerApronSide: [
-    '............OOOOOOOOO...........',
-    '............OSSSSLLLL...........',
-    '...............OLLLLLO..........',
-    '...............OLLPPLO..........',
-    '...............OLLLLLO..........',
-    '...............OSSSSSO..........',
-    '................OOOOO...........'
-  ],
 
   trailBandanaFront: [
-    '............OOOOOOOO............',
-    '...........OPPLLLLPPO...........',
-    '............OPPSSPPO............',
-    '.............OOPPOO.............',
-    '..............OOOO..............'
+    '...........OOOOOOOOOO...........',
+    '..........OPPLLLLLLPPO..........',
+    '...........OPPSSLSSPPO..........',
+    '............OOPPLLO.............',
+    '.............OOPPO..............',
+    '..............OO................'
   ],
   trailBandanaSide: [
-    '............OOOOOOOO............',
-    '............OPPLLLLPPO..........',
-    '..............OPPSSPPO..........',
-    '...............OOPPOO...........',
-    '................OOOO............'
+    '...........OOOOOOOOOO...........',
+    '..........OPPLLLLLLPPO..........',
+    '............OPPSSLLO............',
+    '.............OPPLLO.............',
+    '..............OOPPO.............',
+    '...............OO...............'
   ],
 
   // ======================== HATS ========================
@@ -767,80 +800,80 @@ const PATTERNS = {
   // ======================== GENUINE LONG & SHORT HAIRSTYLES (y=2..18) ========================
   // 1. Long Flowing Chest-Length Waves (17 rows tall: y=2..18! Cascades over shoulders & down back)
   longWavyFlowFront: [
-    '..........OOOOOOOOOOOO..........', // y=2: Crown
-    '.........OPPPPLLLLPPPPO.........', // y=3
-    '........OOPPPLL..LLPPPOO........', // y=4: Parted top waves
-    '........OPPPPPPPPPPPPPPO........', // y=5
-    '........OPOO........OOPO........', // y=6: Framing forehead & temples
-    '........OPO..........OPO........', // y=7
-    '........OLPO........OPLO........', // y=8
-    '.......OOPPO........OPPOO.......', // y=9: Flowing past ears
-    '.......OPLPO........OPLPO.......', // y=10: Jawline locks
-    '.......OPSPO........OPSPO.......', // y=11: Past chin
-    '.......OPLPO........OPLPO.......', // y=12: Framing neck
-    '.......OPSPO........OPSPO.......', // y=13: Draping over shoulders!
-    '.......OPLPO........OPLPO.......', // y=14: Cascading onto chest!
-    '........OPSO........OSPO........', // y=15
-    '........OPLO........OLPO........', // y=16
-    '........OSSO........OSSO........', // y=17: Chest-length wave tips!
-    '.........OO..........OO.........'  // y=18
+    '.........OOOOOOOOOOOOOO.........',
+    '........OPPPPLLLLLLPPPPO........',
+    '.......OOPPPLL....LLPPPOO.......',
+    '.......OPPPPPO....OPPPPPO.......',
+    '.......OPOOO........OOOPO.......',
+    '.......OPO............OPO.......',
+    '.......OLPO..........OPLO.......',
+    '......OOPPO..........OPPOO......',
+    '......OPLPO..........OPLPO......',
+    '......OPSPO..........OPSPO......',
+    '......OPLPO..........OPLPO......',
+    '......OPSPO..........OPSPO......',
+    '......OPLPO..........OPLPO......',
+    '.......OPSO..........OSPO.......',
+    '.......OPLO..........OLPO.......',
+    '.......OSSO..........OSSO.......',
+    '........OO............OO........'
   ],
   longWavyFlowSide: [
-    '..........OOOOOOOOOOO...........', // y=2
-    '.........OPPPPLLLLPPPO..........', // y=3
-    '........OOPPPPPPPPPPPPO.........', // y=4
-    '.......OOPLLPPPPPPPPPPO.........', // y=5
-    '......OOPPPPPPO.....OOPO........', // y=6: Cascading behind head
-    '......OPLPPPPPO......OO.........', // y=7
-    '......OPSPPPPPO.................', // y=8
-    '......OPLPPPPPO.................', // y=9: Flowing past jawline
-    '......OPSPPPPPO.................', // y=10
-    '......OPLPPPPPO.................', // y=11: Flowing behind neck
-    '......OPSPPPPPO.................', // y=12
-    '......OPLPPPPSO.................', // y=13: Draping over shoulder & upper back
-    '.......OPPPPPSO.................', // y=14
-    '.......OPLPPPSO.................', // y=15: Mid-back length!
-    '........OPPPSSO.................', // y=16
-    '........OSSSSO..................', // y=17
-    '.........OOOO...................'  // y=18
+    '........OOOOOOOOOOOO............',
+    '.......OPPPPLLLLLLPPO...........',
+    '......OOPPPPPPPPPPPPO...........',
+    '.....OOPLLPPPPPPPPPO............',
+    '....OOPPPPPPO....OOPO...........',
+    '....OPLPPPPPO.....OO............',
+    '....OPSPPPPPO...................',
+    '....OPLPPPPPO...................',
+    '....OPSPPPPPO...................',
+    '....OPLPPPPPO...................',
+    '....OPSPPPPPO...................',
+    '....OPLPPPPSO...................',
+    '.....OPPPPPSO...................',
+    '.....OPLPPPSO...................',
+    '......OPPPSSO...................',
+    '......OSSSSO....................',
+    '.......OOOO.....................'
   ],
 
   // 2. Long Over-the-Shoulder Twin Braids / Plaits (17 rows tall: y=2..18!)
   longTwinBraidsFront: [
-    '..........OOOOOOOOOOOO..........', // y=2
-    '.........OPPPPP..PPPPPO.........', // y=3: Center-parted crown
-    '........OOPPPLL..LLPPPOO........', // y=4
-    '........OPPPPPPPPPPPPPPO........', // y=5
-    '........OPOO........OOPO........', // y=6
-    '........OSO..........OSO........', // y=7
-    '........OPO..........OPO........', // y=8
-    '........OPSO........OSPO........', // y=9: Gathering into twin braids behind ears
-    '........OPLO........OLPO........', // y=10: Woven plait segment 1
-    '........OPSO........OSPO........', // y=11: Woven plait segment 2
-    '........OPLO........OLPO........', // y=12: Woven plait segment 3 (neck)
-    '........OPSO........OSPO........', // y=13: Over collarbones
-    '........OPLO........OLPO........', // y=14: Over chest
-    '........OSSO........OSSO........', // y=15: Ribbon ties on braids
-    '........OPPo........oPPO........'.replace('o', 'O').replace('o', 'O'), // y=16: Tassel ends
-    '.........OO..........OO.........'  // y=17
+    '.........OOOOOOOOOOOOOO.........',
+    '........OPPPPP....PPPPPO........',
+    '.......OOPPPLL....LLPPPOO.......',
+    '.......OPPPPPO....OPPPPPO.......',
+    '.......OPOOO........OOOPO.......',
+    '.......OSO............OSO.......',
+    '.......OPO............OPO.......',
+    '.......OPSO..........OSPO.......',
+    '.......OPLO..........OLPO.......',
+    '.......OPSO..........OSPO.......',
+    '.......OPLO..........OLPO.......',
+    '.......OPSO..........OSPO.......',
+    '.......OPLO..........OLPO.......',
+    '.......OSSO..........OSSO.......',
+    '.......OPPO..........OPPO.......',
+    '........OO............OO........'
   ],
   longTwinBraidsSide: [
-    '..........OOOOOOOOOOO...........', // y=2
-    '.........OPPPPPPPPPPPO..........', // y=3
-    '.........OPPPLLLLLLPPPO.........', // y=4
-    '.........OPPPPPPPPPPPPO.........', // y=5
-    '........OOPPPPPO....OPO.........', // y=6
-    '........OPLPPPO.................', // y=7: Thick woven braid descending behind ear
-    '........OPSPPPO.................', // y=8
-    '........OPLPPPO.................', // y=9
-    '........OPSPPPO.................', // y=10
-    '........OPLPPPO.................', // y=11
-    '........OPSPPPO.................', // y=12
-    '........OPLPPPO.................', // y=13: Hanging past shoulder down the back
-    '.........OPSPPO.................', // y=14
-    '.........OSSSSO.................', // y=15: Ribbon tie
-    '.........OPPPO..................', // y=16: Braid tassel tip
-    '..........OOO...................'  // y=17
+    '........OOOOOOOOOOOO............',
+    '.......OPPPPPPPPPPPPO...........',
+    '......OPPPLLLLLLPPPPO...........',
+    '......OPPPPPPPPPPPPPO...........',
+    '.....OOPPPPPO.....OPO...........',
+    '.....OPLLPPPO......OO...........',
+    '.....OPSPPPPPO..................',
+    '.....OPLPPPPPO..................',
+    '.....OPSPPPPPO..................',
+    '......OOPPPPPO..................',
+    '.......OPLPPPO..................',
+    '.......OPSPPPO..................',
+    '.......OPLPPPO..................',
+    '.......OSSSSSO..................',
+    '.......OPPPPPO..................',
+    '........OOOOO...................'
   ],
 
   // 3. Voluminous Long Curls / Baroque Ringlets / Glam Mane (17 rows tall: y=2..18!)
@@ -919,122 +952,125 @@ const PATTERNS = {
 
   // 5. Men's Long Frontier / Rocker / Viking Mane + Full Beard (16 rows tall: y=2..17!)
   frontierBeardHairFront: [
-    '..........OOOOOOOOOOOO..........', // y=2: Shaggy crown
-    '.........OPPPLLLLLLPPPO.........', // y=3
-    '........OOPPPPPPPPPPPPOO........', // y=4
-    '........OSSSSSSSSSSSSSSO........', // y=5
-    '.......OOPO..........OPOO.......', // y=6: Long side locks + sideburns
-    '.......OPLO..........OLPO.......', // y=7
-    '.......OPSO..........OSPO.......', // y=8
-    '.......OPLP..OOOOOO..PLPO.......', // y=9: Mustache + long shoulder locks
-    '.......OPSPPPPPPPPPPPPSPO.......', // y=10: Full bushy trail beard + long hair
-    '.......OPLPOOSSSSSSSSOOLPO......', // y=11
-    '.......OPSPO..OOOOOO..OSPO......', // y=12: Beard bottom + hair continuing past neck
-    '.......OPLPO..........OLPO......', // y=13: Long hair resting on shoulders!
-    '........OPSO..........OSPO......', // y=14
-    '........OSSO..........OSSO......', // y=15
-    '.........OO............OO.......'  // y=16
+    '.........OOOOOOOOOOOOOO.........',
+    '........OPPPPLLLLLLPPPPO........',
+    '.......OOPPPLL....LLPPPOO.......',
+    '.......OPPPPPO....OPPPPPO.......',
+    '.......OPOOO........OOOPO.......',
+    '.......OPO............OPO.......',
+    '.......OPPO..........OPPO.......',
+    '......OOPPPO........OPPPOO......',
+    '......OPPSSSOOOOOOOOSSSPOO......',
+    '......OPPSSSBBMMBBSSSPOO........',
+    '.......OPSSSSSSSSSSSSPO.........',
+    '........OPPSSSSSSSSPPO..........',
+    '.........OPPSSSSSSPPO...........',
+    '..........OOPPPPPOO.............',
+    '............OOOOO...............'
   ],
   frontierBeardHairSide: [
-    '..........OOOOOOOOOOO...........', // y=2
-    '.........OPPPLLLLLLPPO..........', // y=3
-    '........OOPPPPPPPPPPPPO.........', // y=4
-    '.......OOPSSSSSSSSSSSSO.........', // y=5
-    '......OOPLPPPPO..OO.............', // y=6: Long mane down back of head + sideburn
-    '......OPSPPPPPO..OO.............', // y=7
-    '......OPLPPPPPO..OO.............', // y=8
-    '......OPSPPPPPSPPPPPPPO.........', // y=9: Full trail beard projecting at chin
-    '......OPLPPPPPSPPPPPPPO.........', // y=10
-    '......OPSPPPPPOOSSSSSSOO........', // y=11
-    '.......OPLPPPPO.................', // y=12: Long hair continuing down back of neck
-    '.......OPSPPPPO.................', // y=13: Shoulder-length back mane!
-    '........OPLPPPO.................', // y=14
-    '........OSSSSO..................', // y=15
-    '.........OOOO...................'  // y=16
+    '........OOOOOOOOOOOO............',
+    '.......OPPPPLLLLLLPPO...........',
+    '......OOPPPPPPPPPPPPO...........',
+    '.....OOPLLPPPPPPPPPO............',
+    '....OOPPPPPPO....OOPO...........',
+    '....OPLPPPPPO.....OO............',
+    '....OPSPPPPPO.....OO............',
+    '....OPLPPPPPO....OPPO...........',
+    '....OPSPPPPPPOOOPPPPO...........',
+    '....OPLPPPPPPPPPPPPO............',
+    '....OPSPPPPPPPPPPPO.............',
+    '.....OPPPPPPPPPPPO..............',
+    '......OPPPPPPPPPO...............',
+    '.......OOPPPPPOO................',
+    '.........OOOOO..................'
   ],
 
   // 6. Men's & Women's Long Parted Shoulder-Cascade / Grunge / Surfer / Poet Locks (15 rows tall: y=2..16!)
   longPartedCascadeFront: [
-    '..........OO.OOOOOO.OO..........', // y=2
-    '.........OOPPPPPPPPPPOO.........', // y=3
-    '........OOPPPLLLLLLPPPOO........', // y=4
-    '........OPPPPPOOOOPPPPPO........', // y=5: Parted curtain fringe
-    '.......OOPOO........OOPOO.......', // y=6
-    '.......OPLO..........OLPO.......', // y=7
-    '.......OPSO..........OSPO.......', // y=8
-    '.......OPLO..........OLPO.......', // y=9
-    '.......OPSO..........OSPO.......', // y=10: Past jawline
-    '.......OPLO..........OLPO.......', // y=11: Past neck
-    '.......OPSO..........OSPO.......', // y=12
-    '.......OPLO..........OLPO.......', // y=13: Draping onto shoulders & collarbones!
-    '........OPSO........OSPO........', // y=14
-    '........OSSO........OSSO........', // y=15
-    '.........OO..........OO.........'  // y=16
+    '.........OOOOOOOOOOOOOO.........',
+    '........OPPPPLLLLLLPPPPO........',
+    '.......OOPPPLL....LLPPPOO.......',
+    '.......OPPPPPPO..OPPPPPPO.......',
+    '.......OPOOPPPO..OPPPOOPO.......',
+    '.......OPO............OPO.......',
+    '.......OPPO..........OPPO.......',
+    '.......OPLPO........OPLPO.......',
+    '.......OPSPO........OPSPO.......',
+    '.......OPLPO........OPLPO.......',
+    '.......OPSPO........OPSPO.......',
+    '........OPLO........OLPO........',
+    '........OSSO........OSSO........',
+    '.........OO..........OO.........'
   ],
   longPartedCascadeSide: [
-    '..........OO.OOOOOO.OO..........', // y=2
-    '.........OOPPPPPPPPPPOO.........', // y=3
-    '........OOPPPLLLLLLPPPO.........', // y=4
-    '.......OOPPPPPPO..OOPO..........', // y=5
-    '......OOPLPPPPO.................', // y=6
-    '......OPSPPPPPO.................', // y=7
-    '......OPLPPPPPO.................', // y=8
-    '......OPSPPPPPO.................', // y=9
-    '......OPLPPPPPO.................', // y=10
-    '.......OPSPPPPO.................', // y=11
-    '.......OPLPPPPO.................', // y=12
-    '.......OPSPPPPO.................', // y=13: Shoulder-length back flow
-    '........OPLPPO..................', // y=14
-    '........OSSSSO..................', // y=15
-    '.........OOOO...................'  // y=16
+    '........OOOOOOOOOOOO............',
+    '.......OPPPPLLLLLLPPO...........',
+    '......OOPPPPPPPPPPPPO...........',
+    '.....OOPLLPPPPPPPPPO............',
+    '....OOPPPPPPO....OOPO...........',
+    '....OPLPPPPPO.....OO............',
+    '....OPSPPPPPO...................',
+    '....OPLPPPPPO...................',
+    '....OPSPPPPPO...................',
+    '....OPLPPPPPO...................',
+    '....OPSPPPPPO...................',
+    '.....OPPPPPO....................',
+    '......OPSSO.....................',
+    '.......OOO......................'
   ],
 
   // 7. Pioneer Braided Chignon Bun + Long Tendrils (Medium-Long Updo)
   pioneerBunFront: [
-    '..........OOOOOOOOOOOO..........',
-    '.........OPPPPP..PPPPPO.........',
-    '........OOPPPLL..LLPPPOO........',
-    '........OPPPPPPPPPPPPPPO........',
-    '........OPOO........OOPO........',
-    '........OSO..........OSO........',
+    '...........OOOOOOOOOO...........',
+    '..........OPPPLLLLPPPO..........',
+    '.........OOPPPPPPPPPPPOO........',
+    '........OOPPPLLLLLLPPPOO........',
+    '.......OPPPPPPPPPPPPPPPPO.......',
+    '.......OPOOO........OOOPO.......',
+    '.......OPO............OPO.......',
+    '.......OLPO..........OPLO.......',
     '........OPO..........OPO........',
     '........OSO..........OSO........',
-    '........OPO..........OPO........',
-    '........OO............OO........'
+    '.........OO..........OO.........'
   ],
   pioneerBunSide: [
-    '..........OOOOOOOOOOO...........',
-    '.........OPPPPPPPPPPPO..........',
-    '.........OPPPLLLLLLPPPO.........',
-    '.........OPPPPPPPPPPPPO.........',
-    '......OOOOSSSSPPO....OPO........',
-    '.....OOLLOSLLSPPO...............',
-    '.....OPLLSSSSSOO................',
-    '......OOOOOO.OPO................',
-    '.............OSO................',
-    '..............OO................'
+    '.......OOOOOOOOO................',
+    '......OPPPLLLLPPO...............',
+    '.....OOPPPPPPPPPOO..............',
+    '....OOPPPLLLLLLLPPPO............',
+    '...OOPPPPPPPPPPPPPPO............',
+    '...OPPPPPPO........O............',
+    '...OPLPPPPO.....................',
+    '....OPSPPPO.....................',
+    '.....OPPPO......................',
+    '......OOO.......................'
   ],
 
   // 8. Classic Bob / Pageboy (Short-Medium option)
   bobPageboyFront: [
-    '..........OOOOOOOOOOOO..........',
-    '.........OPPPPPPPPPPPPO.........',
-    '........OOPPPLLLLLLPPPOO........',
-    '........OPPPPPPPPPPPPPPO........',
-    '........OPOO........OOPO........',
+    '.........OOOOOOOOOOOOOO.........',
+    '........OPPPPLLLLLLPPPPO........',
+    '.......OOPPPLL....LLPPPOO.......',
+    '.......OPPPPPPO..OPPPPPPO.......',
+    '.......OPOOO........OOOPO.......',
+    '.......OPO............OPO.......',
+    '.......OPPO..........OPPO.......',
     '........OPO..........OPO........',
     '........OSO..........OSO........',
-    '........OO............OO........'
+    '.........OO..........OO.........'
   ],
   bobPageboySide: [
-    '..........OOOOOOOOOOO...........',
-    '.........OPPPPPPPPPPPO..........',
-    '.........OPPPLLLLLLPPPO.........',
-    '.........OPPPPPPPPPPPPO.........',
-    '.........OPPPPPO....OPO.........',
-    '.........OPPPPPO................',
-    '.........OSSSSO.................',
-    '..........OOOO..................'
+    '........OOOOOOOOOOOO............',
+    '.......OPPPPLLLLLLPPO...........',
+    '......OOPPPPPPPPPPPPO...........',
+    '.....OOPLLPPPPPPPPPO............',
+    '....OOPPPPPPO....OOPO...........',
+    '....OPLPPPPPO.....OO............',
+    '....OPSPPPPPO...................',
+    '.....OPPPPPO....................',
+    '......OPSSO.....................',
+    '.......OOO......................'
   ],
 
   // 9. Pompadour / Afro / Victory Rolls
@@ -1133,22 +1169,22 @@ const PATTERNS = {
     '..........OOOOOOOOOOOOO.........'
   ],
   suitJacketFront: [
-    '.........OOOOO....OOOOO.........',
-    '........OPPPPPO..OPPPPPO........',
-    '.......OPPSSPPOOOOPPSSPPO.......',
-    '.......OPPPPPPOLLOOPPPPPO.......',
-    '.......OPPPPPPOLLOOPPPPPO.......',
-    '.......OOOPPPPOOOOPPPPOOO.......',
-    '..........OOOOOOOOOOOO..........'
+    '........OOOOO......OOOOO........',
+    '.......OPPPSSOOOOOOPSSPPPO......',
+    '......OPSSPPSSSSSSSSPPSSPO......',
+    '......OPSPPSSLLLLSSPPSSPO.......',
+    '......OPSSPPSSSSSSSSPPSSPO......',
+    '.......OSSOOPPPPPPPPOOSOO.......',
+    '........OO..OOOOOOOO..OO........'
   ],
   suitJacketSide: [
-    '...........OOOOOOOOOOO..........',
-    '..........OPPPPPPPPPPPO.........',
-    '..........OPPSSLLLLPPLLO........',
-    '..........OPPPPOSSOPLLLO........',
-    '..........OPPPPOSSOPLLLO........',
-    '..........OOOPPPPPPPPPOO........',
-    '...........OOOOOOOOOOOO.........'
+    '..........OOOOOOOOOOOO..........',
+    '.........OPPSSPPPPSSPPO.........',
+    '.........OPSSPPSSPPSSPO.........',
+    '.........OPPSSPPPPSSPPO.........',
+    '.........OPSSPPSSPPSSPO.........',
+    '.........OSSSOPPPPSSSSO.........',
+    '..........OOOOOOOOOOOO..........'
   ],
   teeHoodieFront: [
     '.........OOOOO....OOOOO.........',
@@ -1261,44 +1297,44 @@ const PATTERNS = {
     '............OOOOOOOOOO..........'
   ],
   trousersJeansFront: [
-    '...........OOOOOOOOOO...........',
-    '...........OPPPPPPPPO...........',
-    '...........OPPLLLLPPO...........',
-    '...........OPPOOOOPPO...........',
-    '...........OPPO..OPPO...........',
-    '...........OSSO..OSSO...........',
-    '...........OSSO..OSSO...........',
-    '...........OOOO..OOOO...........'
+    '........OOOOOOOOOOOOOOOO........',
+    '........OSSSSSSSSSSSSSSO........',
+    '........OSSBB..HH..BBSSO........',
+    '........OSBO...HH...OBSO........',
+    '........OSBO...HH...OBSO........',
+    '........OSLL...HH...LLSO........',
+    '........OSBO...HH...OBSO........',
+    '........OSSO...HH...OSSO........'
   ],
   trousersJeansSide: [
-    '............OOOOOOOOO...........',
-    '............OPPPPPPPPO..........',
-    '............OPPLLLLPPO..........',
-    '............OSPPPPLLPO..........',
-    '............OSPPPPLLPO..........',
-    '............OSSPPPPSSO..........',
-    '............OSSPPPPSSO..........',
-    '............OOOOOOOOOO..........'
+    '.........OOOOOOOOOOOOOO.........',
+    '.........OSSSSSSSSSSSSO.........',
+    '..........OOSSSSSSSSO...........',
+    '..........OSSBBBBBSSO...........',
+    '..........OSBBBBBBBSO...........',
+    '..........OSLLLLLLBSO...........',
+    '..........OSBBBBBBBSO...........',
+    '..........OSSSSSSSSSO...........'
   ],
   bellBottomsBaggyFront: [
-    '...........OOOOOOOOOO...........',
-    '...........OPPPPPPPPO...........',
-    '...........OPPLLLLPPO...........',
-    '...........OPPOOOOPPO...........',
-    '...........OPPO..OPPO...........',
-    '..........OOPPO..OPPOO..........',
-    '..........OSSSS..SSSSO..........',
-    '..........OOOOO..OOOOO..........'
+    '........OOOOOOOOOOOOOOOO........',
+    '........OSSSSSSSSSSSSSSO........',
+    '........OSSBB..HH..BBSSO........',
+    '........OSBO...HH...OBSO........',
+    '........OSBO...HH...OBSO........',
+    '........OSBO...HH...OBSO........',
+    '.......OOSBO...HH...OBSOO.......',
+    '.......OSSBO...HH...OBSSO.......'
   ],
   bellBottomsBaggySide: [
-    '............OOOOOOOOO...........',
-    '............OPPPPPPPPO..........',
-    '............OPPLLLLPPO..........',
-    '............OSPPPPLLPO..........',
-    '............OSPPPPLLPO..........',
-    '............OSSPPPPSSOO.........',
-    '............OSSSSSSSSOO.........',
-    '............OOOOOOOOOOO.........'
+    '.........OOOOOOOOOOOOOO.........',
+    '.........OSSSSSSSSSSSSO.........',
+    '..........OOSSSSSSSSO...........',
+    '..........OSSBBBBBSSO...........',
+    '..........OSBBBBBBBSO...........',
+    '..........OSBBBBBBBSO...........',
+    '.........OOSBBBBBBBSOO..........',
+    '.........OSSSSSSSSSSSO..........'
   ],
   pleatedSkirtKiltFront: [
     '...........OOOOOOOOOO...........',
@@ -1339,16 +1375,18 @@ const PATTERNS = {
 
   // ======================== SHOES & BOOTS ========================
   bootsFront: [
-    '...........OOOO..OOOO...........',
-    '..........OOPPO..OPPOO..........',
-    '.........OOPSSO..OSSPOO.........',
-    '.........OOOOOO..OOOOOO.........'
+    '........OSSSSO....OSSSSO........',
+    '........OSLLSO....OSLLSO........',
+    '........OSLLSO....OSLLSO........',
+    '.......OOSSSSO....OSSSSOO.......',
+    '.......OOOOOO......OOOOOO.......'
   ],
   bootsSide: [
-    '............OOOOOOOOOO..........',
-    '............OOPPPPPPOOO.........',
-    '............OOPPSSSSSSOO........',
-    '............OOOOOOOOOOOO........'
+    '.........OSSSSSSSSSSO...........',
+    '.........OSLLLLSSSSSO...........',
+    '.........OOSSSSSSSOOO...........',
+    '.........OOSSSSSSSSSSOO.........',
+    '.........OOOOOOOOOOOOOO.........'
   ],
   sneakersShoesFront: [
     '...........OOOO..OOOO...........',
@@ -1363,30 +1401,34 @@ const PATTERNS = {
     '............OOOOOOOOOOOO........'
   ],
   tallRidingBootsFront: [
-    '...........OLLO..OLLO...........',
-    '...........OPPO..OPPO...........',
-    '..........OOPPO..OPPOO..........',
-    '.........OOPSSO..OSSPOO.........',
-    '.........OOOOOO..OOOOOO.........'
+    '.......OOSSSSS....SSSSOO........',
+    '.......OSLLLLSO..OSLLLLSO.......',
+    '........OSSSSO....OSSSSO........',
+    '........OSSSSO....OSSSSO........',
+    '.......OOSSSSO....OSSSSOO.......',
+    '.......OOOOOO......OOOOOO.......'
   ],
   tallRidingBootsSide: [
-    '............OLLLLLLLLO..........',
-    '............OPPPPPPPPO..........',
-    '............OOPPPPPPOOO.........',
-    '............OOPPSSSSSSOO........',
-    '............OOOOOOOOOOOO........'
+    '.........OOSSSSSSSSOO...........',
+    '.........OSLLLLLLLLSO...........',
+    '.........OSSSSSSSSSSO...........',
+    '.........OOSSSSSSSOOO...........',
+    '.........OOSSSSSSSSSSOO.........',
+    '.........OOOOOOOOOOOOOO.........'
   ],
   loafersLowShoesFront: [
-    '...........OLLO..OLLO...........',
-    '..........OOSSO..OSSOO..........',
-    '.........OOPPPO..OPPPOO.........',
-    '.........OOOOOO..OOOOOO.........'
+    '........OSSSSO....OSSSSO........',
+    '........OSLLSO....OSLLSO........',
+    '........OSSSSO....OSSSSO........',
+    '.......OOSSSSO....OSSSSOO.......',
+    '.......OOOOOO......OOOOOO.......'
   ],
   loafersLowShoesSide: [
-    '............OLLLLLLLLO..........',
-    '............OOSSSSSSOOO.........',
-    '............OOPPPPPPPPOO........',
-    '............OOOOOOOOOOOO........'
+    '.........OSSSSSSSSSSO...........',
+    '.........OSLLLLSSSSSO...........',
+    '.........OOSSSSSSSSOO...........',
+    '.........OOSSSSSSSSSSOO.........',
+    '.........OOOOOOOOOOOOOO.........'
   ],
 
   // ======================== ACCESSORIES ========================
@@ -1451,34 +1493,38 @@ const PATTERNS = {
     '.................PLLP...........'
   ],
   suspendersBracesFront: [
-    '...........PO......OP...........',
-    '...........PO......OP...........',
-    '...........PO......OP...........',
-    '...........PO......OP...........',
-    '...........PO......OP...........',
-    '...........LO......OL...........'
+    '........OO........OO............',
+    '........OPPO....OPPO............',
+    '........OLLO....OLLO............',
+    '........OPPO....OPPO............',
+    '........OPPO....OPPO............',
+    '........OLLO....OLLO............'
   ],
   suspendersBracesSide: [
-    '.............PO.................',
-    '.............PO.................',
-    '.............PO.................',
-    '.............PO.................',
-    '.............PO.................',
-    '.............LO.................'
+    '..........OOOOOOOOOO............',
+    '.........OPPO....OPPO...........',
+    '.........OLLO....OLLO...........',
+    '.........OPPO....OPPO...........',
+    '.........OPPO....OPPO...........',
+    '.........OLLO....OLLO...........'
   ],
   drapedScarfFront: [
-    '............OOOOOOOO............',
-    '...........OPPLLLLPPO...........',
-    '............OSSSSPPPO...........',
-    '...............OOPPO............',
-    '...............OLLO.............'
+    '.......OOOOOOOOOOOOOOOOO........',
+    '......OPPLLLLLLLLLLLLLLPPO......',
+    '......OPPSSSSSSSSSSSSSSSSP......',
+    '......OPPLLLLPPPPPPLLLLPPO......',
+    '......OPPSSSSSSSSSSSSSPO........',
+    '.......OSLSLSLSLSLSLSLS.........',
+    '........OOOOOOOOOOOOOO..........'
   ],
   drapedScarfSide: [
-    '............OOOOOOOO............',
-    '...........OPPLLLLPPO...........',
-    '............OOSSSPPPO...........',
-    '...............OOPPO............',
-    '...............OLLO.............'
+    '.........OOOOOOOOOOOOOO.........',
+    '........OPPLLLLLLLLLLPPO........',
+    '........OPPSSSSSSSSSSSSP........',
+    '........OPPLLLLPPPPLLPPO........',
+    '........OPPSSSSSSSSSSSO.........',
+    '.........OSLSLSLSLSLS...........',
+    '..........OOOOOOOOOO............'
   ],
   discoMedallionFront: [
     '............SO....OS............',
@@ -1509,21 +1555,30 @@ const PATTERNS = {
     '.................OOOO...........'
   ],
   crossbodyBagFront: [
-    '..........OO....................',
-    '...........SSO..................',
-    '............OSSOOOO.............',
-    '.............OPPLLPO............',
-    '.............OPPPPPO............',
-    '..............OOOOOOSSO.........',
-    '....................OO..........'
+    '........OO......................',
+    '.........OPPO...................',
+    '..........OPPO..................',
+    '...........OPPO.................',
+    '............OPPO....OLLO........',
+    '.............OPPO..OLLLO........',
+    '..............OPPO.OLLPO........',
+    '.............OOPPPPPPPPO........',
+    '.............OPPSSSSSSPO........',
+    '.............OPPLLLLLLPO........',
+    '..............OOOOOOOO..........'
   ],
   crossbodyBagSide: [
-    '............OO..................',
-    '.............SSO................',
-    '..............OSSOOOO...........',
-    '...............OPPLLPO..........',
-    '...............OPPPPPO..........',
-    '................OOOOOO..........'
+    '..........OO....................',
+    '.........OPPO...................',
+    '.........OPPO...................',
+    '.........OPPO...................',
+    '.........OPPO...................',
+    '.........OPPO...OLLO............',
+    '.........OPPO..OLLPO............',
+    '.........OOPPPPPPPO.............',
+    '.........OPPSSSSSPO.............',
+    '.........OPPLLLLLPO.............',
+    '..........OOOOOOOO..............'
   ],
   beltChainSashFront: [
     '...........OOOOOOOOOO...........',

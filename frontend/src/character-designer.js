@@ -325,8 +325,9 @@ function createEmptyGrid() {
   return Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null));
 }
 
-function isInsideBodyForView(appearance, x, y, baseOrientation = 'front') {
+function isInsideBodyForView(appearance, x, y, baseOrientation = 'front', category = null) {
   if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return false;
+  if (category === 'hats' || category === 'accessories') return true;
   const template = getBodyTemplateById(appearance?.bodyTemplateId);
   const map = baseOrientation === 'side' ? template.side : template.front;
   const ch = map[y]?.[x];
@@ -399,7 +400,7 @@ export function buildNeutralCompositeGrid(appearance, baseOrientation = 'front')
         : preset.front || preset.pixels || [];
 
     pixelList.forEach(([x, y, rawColor, role]) => {
-      if (isInsideBodyForView(appearance, x, y, baseOrientation)) {
+      if (isInsideBodyForView(appearance, x, y, baseOrientation, cat)) {
         const finalColor = resolvePresetPixelColor(rawColor, role, dyeId);
         if (finalColor) {
           grid[y][x] = finalColor;
