@@ -353,8 +353,10 @@ function getBaseBodyPixel(appearance, x, y, baseOrientation = 'front') {
       return skin.highlight;
     case 'E':
       return skin.eye;
+    case 'I':
+      return skin.iris || '#0098dc';
     case 'F':
-      return gender === 'female' ? skin.eye : skin.base;
+      return gender === 'female' ? skin.eye : skin.shadow;
     case 'P':
       return skin.pupil;
     case 'M':
@@ -376,77 +378,18 @@ function resolvePresetPixelColor(rawColor, role, dyeId) {
 }
 
 function applyDirectional16BitShading(hexColor, x, y, baseOrientation, category, subType, role) {
-  if (!hexColor) return hexColor;
-  // Keep crisp dark outlines and eye catchlights intact
-  if (role === null) return hexColor;
+  if (!hexColor || role === null) return hexColor;
 
-  let delta = 0;
-
-  if (category === 'body') {
-    // Keep facial skin (y <= 11) crisp and un-muddied so eyes, nose, and mouth read clearly
-    if (y <= 11) return hexColor;
-    if (y === 12) return shadeHex(hexColor, -6);
-    if (baseOrientation === 'front') {
-      if (x <= 14) delta += 3;
-      else if (x >= 18) delta -= 5;
-    }
-    return shadeHex(hexColor, delta);
-  }
-
+  // High-contrast 16-color JRPG cluster discipline: keep discrete palette clusters crisp
+  // and only apply subtle vertical depth to long cascading hair and lower boots/trousers.
   if (category === 'hats' && subType === 'hair') {
-    // Rich 16-bit JRPG multi-tone hair gradient (halo crown -> mid sheen -> deep lower cascades)
-    if (y <= 3) delta += 10;
-    else if (y === 4) delta += 6;
-    else if (y >= 11 && y <= 13) delta -= 6;
-    else if (y >= 14) delta -= 12;
-
-    if (baseOrientation === 'front') {
-      if (x <= 13) delta += 4;
-      else if (x >= 19) delta -= 6;
-    } else {
-      if (x >= 13) delta += 5;
-      else if (x <= 8) delta -= 7;
-    }
-    return shadeHex(hexColor, delta);
+    if (y <= 3) return shadeHex(hexColor, 8);
+    if (y >= 13) return shadeHex(hexColor, -10);
+    return hexColor;
   }
 
-  if (category === 'shirts') {
-    if (y <= 14) delta += 6;
-    else if (y >= 17) delta -= 6;
-    if (baseOrientation === 'front') {
-      if (x <= 14) delta += 4;
-      else if (x >= 18) delta -= 6;
-    } else {
-      if (x >= 15) delta += 5;
-      else if (x <= 12) delta -= 7;
-    }
-    return shadeHex(hexColor, delta);
-  }
-
-  if (category === 'pants') {
-    if (y <= 21) delta += 4;
-    else if (y >= 25) delta -= 6;
-    if (baseOrientation === 'front') {
-      if (x <= 14) delta += 4;
-      else if (x >= 17) delta -= 6;
-    } else {
-      if (x >= 15) delta += 5;
-      else if (x <= 13) delta -= 7;
-    }
-    return shadeHex(hexColor, delta);
-  }
-
-  if (category === 'shoes') {
-    if (y === 26) delta += 5;
-    else if (y >= 29) delta -= 5;
-    if (baseOrientation === 'front') {
-      if (x <= 13) delta += 3;
-      else if (x >= 18) delta -= 5;
-    } else {
-      if (x >= 16) delta += 5;
-      else if (x <= 13) delta -= 6;
-    }
-    return shadeHex(hexColor, delta);
+  if (category === 'pants' && y >= 25) {
+    return shadeHex(hexColor, -6);
   }
 
   return hexColor;
@@ -479,8 +422,6 @@ export function buildNeutralCompositeGrid(appearance, baseOrientation = 'front')
     ? ['shoes', 'pants', 'shirts', 'accessories', 'hats']
     : ['pants', 'shoes', 'shirts', 'accessories', 'hats'];
 
-  const skin = getSkinToneById(appearance?.skinToneId);
-
   for (const cat of effectiveDrawOrder) {
     const presetId = appearance?.equippedPresets?.[cat];
     const preset = (INITIAL_CLOTHING_BOILERPLATE[cat] || []).find((p) => p.id === presetId);
@@ -497,15 +438,7 @@ export function buildNeutralCompositeGrid(appearance, baseOrientation = 'front')
     pixelList.forEach(([x, y, rawColor, role]) => {
       if (isInsideBodyForView(appearance, x, y, baseOrientation, cat)) {
         let finalColor = resolvePresetPixelColor(rawColor, role, dyeId);
-        if (
-          finalColor &&
-          cat === 'shirts' &&
-          role !== null &&
-          (!isInsideBodyForView(appearance, x - 1, y, baseOrientation, cat) ||
-            !isInsideBodyForView(appearance, x + 1, y, baseOrientation, cat))
-        ) {
-          finalColor = skin?.outline || '#2c1e31';
-        } else if (finalColor && role !== null) {
+        if (finalColor && role !== null) {
           finalColor = applyDirectional16BitShading(
             finalColor,
             x,
@@ -572,15 +505,15 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
         }
       }
 
-      for (let y = 2; y <= 20; y++) {
+      for (let y = 1; y <= 20; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
           const c = neutral[y][x];
           if (!c) continue;
           let dy = torsoDy;
-          if (y >= 14 && y <= 20) {
-            if (x <= 10) {
+          if (y >= 14 && y <= 19) {
+            if (x <= 9) {
               dy = f === 0 ? 1 : f === 2 ? -1 : 0;
-            } else if (x >= 21) {
+            } else if (x >= 22) {
               dy = f === 2 ? 1 : f === 0 ? -1 : 0;
             }
           }
@@ -600,44 +533,35 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
       let armSwingDx = 0;
 
       if (f === 0) {
-        backLegDx = -2;
-        backLegDy = -1;
-        frontLegDx = 2;
-        armSwingDx = -1;
-      } else if (f === 1) {
         backLegDx = -1;
         backLegDy = -1;
+        frontLegDx = 1;
+        armSwingDx = -1;
+      } else if (f === 1) {
+        backLegDx = 1;
+        frontLegDx = -1;
+        frontLegDy = -1;
         armSwingDx = 0;
       } else if (f === 2) {
-        backLegDx = 2;
-        frontLegDx = -2;
+        backLegDx = 3;
+        frontLegDx = -3;
         frontLegDy = -1;
         armSwingDx = 1;
       } else if (f === 3) {
+        backLegDx = 1;
+        backLegDy = -1;
         frontLegDx = -1;
-        frontLegDy = -1;
         armSwingDx = 0;
       }
 
       if (isSkirtEquipped) {
-        // Keep the A-line skirt bell cohesive while scissoring the boots underneath
-        for (let y = 28; y <= 30; y++) {
-          for (let x = 0; x < GRID_SIZE; x++) {
-            const c = neutral[y][x];
-            if (!c) continue;
-            const destX = x + backLegDx;
-            const destY = y + backLegDy;
-            if (destX >= 0 && destX < GRID_SIZE && destY >= 27 && destY < GRID_SIZE) {
-              result[destY][destX] = shadeHex(c, -26);
-            }
-          }
-        }
         for (let y = 21; y <= 30; y++) {
           for (let x = 0; x < GRID_SIZE; x++) {
             const c = neutral[y][x];
             if (!c) continue;
-            const dx = y >= 28 ? frontLegDx : y >= 25 ? Math.round(frontLegDx * 0.35) : 0;
-            const dy = y >= 28 ? frontLegDy : torsoBounceY;
+            const isBackBoot = y >= 27 && x <= 14;
+            const dx = isBackBoot ? backLegDx : y >= 27 ? frontLegDx : 0;
+            const dy = isBackBoot ? backLegDy : y >= 27 ? frontLegDy : torsoBounceY;
             const destX = x + dx;
             const destY = y + dy;
             if (destX >= 0 && destX < GRID_SIZE && destY >= 20 && destY < GRID_SIZE) {
@@ -646,11 +570,11 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
           }
         }
       } else {
-        // Slim 5px legs pivot from the hip (y=21 stays anchored) and scissor cleanly at the knees/boots
         const legStrideFactor = (y) => (y <= 21 ? 0 : y <= 23 ? 0.35 : y <= 25 ? 0.65 : 1);
 
-        for (let y = 22; y <= 30; y++) {
-          for (let x = 0; x < GRID_SIZE; x++) {
+        // Draw back leg (x <= 13 in neutral)
+        for (let y = 21; y <= 30; y++) {
+          for (let x = 0; x <= 13; x++) {
             const c = neutral[y][x];
             if (!c) continue;
             const factor = legStrideFactor(y);
@@ -658,14 +582,15 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
             const dy = y >= 27 ? backLegDy : 0;
             const destX = x + dx;
             const destY = y + dy;
-            if (destX >= 0 && destX < GRID_SIZE && destY >= 21 && destY < GRID_SIZE) {
-              result[destY][destX] = shadeHex(c, -28);
+            if (destX >= 0 && destX < GRID_SIZE && destY >= 20 && destY < GRID_SIZE) {
+              result[destY][destX] = c;
             }
           }
         }
 
+        // Draw front leg (x >= 14 in neutral)
         for (let y = 21; y <= 30; y++) {
-          for (let x = 0; x < GRID_SIZE; x++) {
+          for (let x = 14; x < GRID_SIZE; x++) {
             const c = neutral[y][x];
             if (!c) continue;
             const factor = legStrideFactor(y);
@@ -680,7 +605,7 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
         }
       }
 
-      for (let y = 2; y <= 20; y++) {
+      for (let y = 1; y <= 20; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
           const c = neutral[y][x];
           if (!c) continue;
@@ -691,8 +616,8 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
         }
       }
 
-      for (let y = 14; y <= 18; y++) {
-        for (let x = 14; x <= 16; x++) {
+      for (let y = 15; y <= 17; y++) {
+        for (let x = 14; x <= 21; x++) {
           const c = neutral[y][x];
           if (!c) continue;
           const destX = x + armSwingDx;
