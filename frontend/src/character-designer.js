@@ -1285,6 +1285,8 @@ const SIDE_NEAR_HAND_CONTOURS = {
   }
 };
 
+import { CUSTOM_SPRITE_MASKS } from './custom-sprite-masks.js';
+
 const CUSTOM_MASKS_STORAGE_KEY = 'ot_custom_sprite_masks';
 const CUSTOM_FRAME_MASKS = new Map();
 
@@ -1297,6 +1299,13 @@ function normalizeMaskKey(gender, view, animMode, frameIndex) {
 }
 
 function loadCustomMasksFromStorage() {
+  if (CUSTOM_SPRITE_MASKS && typeof CUSTOM_SPRITE_MASKS === 'object') {
+    for (const [key, coords] of Object.entries(CUSTOM_SPRITE_MASKS)) {
+      if (Array.isArray(coords)) {
+        CUSTOM_FRAME_MASKS.set(key, coords);
+      }
+    }
+  }
   if (typeof localStorage === 'undefined') return;
   try {
     const raw = localStorage.getItem(CUSTOM_MASKS_STORAGE_KEY);
@@ -1328,6 +1337,27 @@ function saveCustomMasksToStorage() {
 }
 
 loadCustomMasksFromStorage();
+
+export function getAllCustomMasksObject() {
+  const obj = {};
+  for (const [k, v] of CUSTOM_FRAME_MASKS.entries()) {
+    obj[k] = v;
+  }
+  return obj;
+}
+
+export async function saveCustomMasksToServer() {
+  const payload = getAllCustomMasksObject();
+  const response = await fetch('/api/dev/save-sprite-masks', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    throw new Error(`Server returned status ${response.status}`);
+  }
+  return await response.json();
+}
 
 export function getBaseBoilerplateGrid(gender, view = 'side', animMode = 'walk', frameIndex = 0) {
   const normGender = gender === 'female' ? 'female' : 'male';

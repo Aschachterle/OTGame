@@ -379,6 +379,57 @@ h2 {
   white-space: nowrap;
 }
 
+.mask-save-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mask-save-btn {
+  flex: 1 1 100%;
+  min-height: 28px;
+  background: #00ff66;
+  color: #071009;
+  border: 1px solid #00ff66;
+  font-size: 10px;
+  font-weight: 700;
+  box-shadow: 0 0 10px rgba(0, 255, 102, 0.25);
+  transition: all 120ms ease;
+  cursor: pointer;
+}
+
+.mask-save-btn:hover {
+  background: #77ffad;
+}
+
+.mask-save-row .secondary-button {
+  flex: 1 1 calc(50% - 3px);
+  min-height: 25px;
+  font-size: 9px;
+}
+
+.mask-save-status {
+  padding: 5px 8px;
+  border-radius: 2px;
+  font-size: 9px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mask-save-status.success {
+  background: rgba(0, 255, 102, 0.12);
+  border: 1px solid #00ff66;
+  color: #a0ffca;
+}
+
+.mask-save-status.error {
+  background: rgba(255, 70, 70, 0.12);
+  border: 1px solid #ff4646;
+  color: #ffa0a0;
+}
+
 .mask-readout-panel {
   display: flex;
   flex-direction: column;

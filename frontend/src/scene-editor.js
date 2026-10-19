@@ -13,7 +13,9 @@ import {
   resetFrameCustomMask,
   resetAllCustomMasks,
   exportAllMaskOverrides,
-  importMaskOverrides
+  importMaskOverrides,
+  getAllCustomMasksObject,
+  saveCustomMasksToServer
 } from './character-designer.js?v=sprite32_1';
 import { trailMilestones } from './state.js';
 import {
@@ -64,6 +66,11 @@ const maskBtnReset = document.querySelector('#mask-btn-reset');
 const maskBtnClear = document.querySelector('#mask-btn-clear');
 const maskBtnCopy = document.querySelector('#mask-btn-copy');
 const maskBtnPaste = document.querySelector('#mask-btn-paste');
+const maskBtnSaveProject = document.querySelector('#mask-btn-save-project');
+const maskBtnDownload = document.querySelector('#mask-btn-download');
+const maskBtnLoadFile = document.querySelector('#mask-btn-load-file');
+const maskFileInput = document.querySelector('#mask-file-input');
+const maskSaveStatus = document.querySelector('#mask-save-status');
 const maskTargetReadout = document.querySelector('#mask-target-readout');
 const maskPixelInfo = document.querySelector('#mask-pixel-info');
 const maskOriginInfo = document.querySelector('#mask-origin-info');
@@ -87,6 +94,11 @@ if (
   || !(maskBtnClear instanceof HTMLButtonElement)
   || !(maskBtnCopy instanceof HTMLButtonElement)
   || !(maskBtnPaste instanceof HTMLButtonElement)
+  || !(maskBtnSaveProject instanceof HTMLButtonElement)
+  || !(maskBtnDownload instanceof HTMLButtonElement)
+  || !(maskBtnLoadFile instanceof HTMLButtonElement)
+  || !(maskFileInput instanceof HTMLInputElement)
+  || !(maskSaveStatus instanceof HTMLElement)
   || !(maskTargetReadout instanceof HTMLElement)
   || !(maskPixelInfo instanceof HTMLElement)
   || !(maskOriginInfo instanceof HTMLElement)
@@ -815,6 +827,71 @@ maskBtnPaste.addEventListener('click', () => {
     updateState();
   } catch (err) {
     alert('Invalid JSON coordinate array: ' + err.message);
+  }
+});
+
+function showSaveStatus(message, isError = false) {
+  maskSaveStatus.textContent = message;
+  maskSaveStatus.className = `mask-save-status ${isError ? 'error' : 'success'}`;
+  maskSaveStatus.hidden = false;
+  setTimeout(() => {
+    maskSaveStatus.hidden = true;
+  }, 4000);
+}
+
+function downloadMasksJsonFile() {
+  const data = exportAllMaskOverrides();
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'custom-sprite-masks.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+maskBtnSaveProject.addEventListener('click', async () => {
+  maskBtnSaveProject.disabled = true;
+  maskBtnSaveProject.textContent = '⏳ Saving...';
+  try {
+    const res = await saveCustomMasksToServer();
+    showSaveStatus(`Saved ${res.count ?? Object.keys(getAllCustomMasksObject()).length} frame mask(s) to custom-sprite-masks.js & .json!`, false);
+  } catch (err) {
+    console.warn('Could not save via dev server endpoint, falling back to file download:', err);
+    downloadMasksJsonFile();
+    showSaveStatus('Saved via download (custom-sprite-masks.json)!', false);
+  } finally {
+    maskBtnSaveProject.disabled = false;
+    maskBtnSaveProject.textContent = '💾 Save to Project';
+  }
+});
+
+maskBtnDownload.addEventListener('click', () => {
+  downloadMasksJsonFile();
+  showSaveStatus('Downloaded custom-sprite-masks.json!', false);
+});
+
+maskBtnLoadFile.addEventListener('click', () => {
+  maskFileInput.click();
+});
+
+maskFileInput.addEventListener('change', async (evt) => {
+  const file = evt.target?.files?.[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const ok = importMaskOverrides(text);
+    if (!ok) throw new Error('Invalid mask file format');
+    renderMaskEditor();
+    renderSpriteViewer();
+    updateState();
+    showSaveStatus(`Loaded masks from ${file.name}!`, false);
+  } catch (err) {
+    showSaveStatus(`Failed to load file: ${err.message}`, true);
+  } finally {
+    maskFileInput.value = '';
   }
 });
 

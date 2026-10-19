@@ -1,4 +1,4 @@
-import { createReadStream, statSync } from 'node:fs';
+import { createReadStream, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -31,11 +31,42 @@ function resolveRequestPath(requestPath) {
 }
 
 const server = createServer((request, response) => {
-  if (request.method !== 'GET' && request.method !== 'HEAD') {
-    response.writeHead(405, { Allow: 'GET, HEAD' }).end();
+  const requestPath = new URL(request.url || '/', 'http://localhost').pathname;
+
+  if (request.method === 'POST' && requestPath === '/api/dev/save-sprite-masks') {
+    let body = '';
+    request.on('data', (chunk) => {
+      body += chunk;
+    });
+    request.on('end', () => {
+      try {
+        const parsed = JSON.parse(body || '{}');
+        const jsFile = resolve(frontendRoot, 'src', 'custom-sprite-masks.js');
+        const jsonFile = resolve(frontendRoot, 'src', 'custom-sprite-masks.json');
+        const jsContent = `// Automatically saved custom frame masks from the Trail Scene Editor\nexport const CUSTOM_SPRITE_MASKS = ${JSON.stringify(parsed, null, 2)};\n`;
+        const jsonContent = JSON.stringify(parsed, null, 2);
+        writeFileSync(jsFile, jsContent, 'utf-8');
+        writeFileSync(jsonFile, jsonContent, 'utf-8');
+        response.writeHead(200, {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Access-Control-Allow-Origin': '*'
+        });
+        response.end(JSON.stringify({ ok: true, count: Object.keys(parsed).length }));
+      } catch (err) {
+        response.writeHead(500, {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Access-Control-Allow-Origin': '*'
+        });
+        response.end(JSON.stringify({ ok: false, error: String(err?.message || err) }));
+      }
+    });
     return;
   }
-  const requestPath = new URL(request.url || '/', 'http://localhost').pathname;
+
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    response.writeHead(405, { Allow: 'GET, HEAD, POST' }).end();
+    return;
+  }
   const filePath = resolveRequestPath(requestPath === '/' ? '/index.html' : requestPath);
   if (!filePath) {
     response.writeHead(400).end('Bad request');

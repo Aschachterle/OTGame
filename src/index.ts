@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import staticPlugin from '@fastify/static';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { writeFile } from 'fs/promises';
 import { config } from './config.js';
 import { registerActionRoutes } from './routes/actions.js';
 import { registerEventRoutes } from './routes/events.js';
@@ -37,6 +38,20 @@ await app.register(staticPlugin, {
 });
 
 app.get('/health', async () => ({ ok: true }));
+
+app.post('/api/dev/save-sprite-masks', async (request, reply) => {
+  const body = request.body as Record<string, [number, number][]>;
+  if (!body || typeof body !== 'object') {
+    return reply.status(400).send({ ok: false, error: 'Invalid body' });
+  }
+  const jsContent = `// Automatically saved custom frame masks from the Trail Scene Editor\nexport const CUSTOM_SPRITE_MASKS = ${JSON.stringify(body, null, 2)};\n`;
+  const jsonContent = JSON.stringify(body, null, 2);
+  const targetJs = join(__dirname, '../frontend/src/custom-sprite-masks.js');
+  const targetJson = join(__dirname, '../frontend/src/custom-sprite-masks.json');
+  await writeFile(targetJs, jsContent, 'utf-8');
+  await writeFile(targetJson, jsonContent, 'utf-8');
+  return { ok: true, count: Object.keys(body).length };
+});
 
 await registerWorldRoutes(app);
 await registerEventRoutes(app);

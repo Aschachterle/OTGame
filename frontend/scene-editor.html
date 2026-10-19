@@ -112,6 +112,19 @@
                 Paste JSON
               </button>
             </div>
+            <div class="mask-save-row">
+              <button id="mask-btn-save-project" class="mask-save-btn" type="button" title="Save custom masks directly into the project codebase (custom-sprite-masks.js & custom-sprite-masks.json)">
+                💾 Save to Project
+              </button>
+              <button id="mask-btn-download" class="secondary-button" type="button" title="Download custom-sprite-masks.json file">
+                ⬇️ Download JSON
+              </button>
+              <button id="mask-btn-load-file" class="secondary-button" type="button" title="Load masks from a JSON file">
+                📂 Load File
+              </button>
+              <input id="mask-file-input" type="file" accept=".json,application/json" hidden>
+            </div>
+            <div id="mask-save-status" class="mask-save-status" hidden></div>
             <div class="mask-readout-panel">
               <div class="mask-readout-row">
                 <span class="readout-label">Target Frame:</span>
