@@ -15,7 +15,8 @@ import {
   exportAllMaskOverrides,
   importMaskOverrides,
   getAllCustomMasksObject,
-  saveCustomMasksToServer
+  saveCustomMasksToServer,
+  summarizeMemberOutfit
 } from './character-designer.js?v=sprite32_1';
 import { trailMilestones } from './state.js';
 import {
@@ -59,6 +60,9 @@ const spriteFrameStrip = document.querySelector('#sprite-frame-strip');
 const spriteFrameReadout = document.querySelector('#sprite-frame-readout');
 
 const maskEditorCanvas = document.querySelector('#mask-editor-canvas');
+const maskPreviewCanvas = document.querySelector('#mask-preview-canvas');
+const maskPreviewBackdrop = document.querySelector('#mask-preview-backdrop');
+const maskOutfitSummary = document.querySelector('#mask-outfit-summary');
 const maskStatusReadout = document.querySelector('#mask-status-readout');
 const maskModeDraw = document.querySelector('#mask-mode-draw');
 const maskModeErase = document.querySelector('#mask-mode-erase');
@@ -87,6 +91,9 @@ if (
   || !(spriteFrameStrip instanceof HTMLElement)
   || !(spriteFrameReadout instanceof HTMLOutputElement)
   || !(maskEditorCanvas instanceof HTMLCanvasElement)
+  || !(maskPreviewCanvas instanceof HTMLCanvasElement)
+  || !(maskPreviewBackdrop instanceof HTMLInputElement)
+  || !(maskOutfitSummary instanceof HTMLElement)
   || !(maskStatusReadout instanceof HTMLOutputElement)
   || !(maskModeDraw instanceof HTMLButtonElement)
   || !(maskModeErase instanceof HTMLButtonElement)
@@ -694,6 +701,20 @@ function renderMaskEditor() {
       maskPixelInfo.textContent = `X: ${hx}, Y: ${hy} | ${isMasked ? 'MASKED' : 'UNMASKED'} (${basePixel})`;
     }
   }
+
+  // Render clothed preview with fitted outfits and Z-mask applied
+  const clothedGrid = getCharacterFrameGrid(
+    target.member.appearance,
+    target.view,
+    target.animationMode,
+    target.frameIndex
+  );
+  renderCharacterGridToCanvas(maskPreviewCanvas, clothedGrid, {
+    bgColor: '#020904',
+    includeBackdrop: maskPreviewBackdrop.checked,
+    backdropId: state.currentTrailSnapshot?.biome || 'prairie'
+  });
+  maskOutfitSummary.textContent = summarizeMemberOutfit(target.member);
 }
 
 function applyMaskPixel(x, y, mode) {
@@ -893,6 +914,10 @@ maskFileInput.addEventListener('change', async (evt) => {
   } finally {
     maskFileInput.value = '';
   }
+});
+
+maskPreviewBackdrop.addEventListener('change', () => {
+  renderMaskEditor();
 });
 
 updateState();

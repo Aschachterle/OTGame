@@ -83,10 +83,22 @@
         </p>
         <div class="mask-editor-body">
           <div class="mask-canvas-container">
+            <div class="mask-canvas-title">Mask Selection (Base Sprite)</div>
             <canvas id="mask-editor-canvas" width="256" height="256" aria-label="32 by 32 pixel mask editor"></canvas>
             <div class="mask-canvas-legend">
               <span class="legend-chip legend-base"></span><span>Base Sprite</span>
               <span class="legend-chip legend-mask"></span><span>Masked (Foreground)</span>
+            </div>
+          </div>
+          <div class="mask-preview-container">
+            <div class="mask-canvas-title">Clothed Preview (Live Result)</div>
+            <canvas id="mask-preview-canvas" width="256" height="256" aria-label="32 by 32 pixel clothed preview"></canvas>
+            <div class="mask-preview-controls">
+              <label class="mask-preview-backdrop-toggle">
+                <input id="mask-preview-backdrop" type="checkbox">
+                <span>Show Trail Backdrop</span>
+              </label>
+              <span id="mask-outfit-summary" class="mask-outfit-summary"></span>
             </div>
           </div>
           <div class="mask-editor-controls">

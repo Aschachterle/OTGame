@@ -294,23 +294,67 @@ h2 {
   align-items: flex-start;
 }
 
-.mask-canvas-container {
+.mask-canvas-title {
+  color: #00ff66;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.mask-canvas-container,
+.mask-preview-container {
   display: flex;
   flex-direction: column;
   gap: 6px;
   flex: 0 0 auto;
 }
 
-#mask-editor-canvas {
+#mask-editor-canvas,
+#mask-preview-canvas {
   display: block;
   width: 256px;
   height: 256px;
   border: 1px solid #304c38;
   background: #040906;
   image-rendering: pixelated;
-  cursor: crosshair;
   user-select: none;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+#mask-editor-canvas {
+  cursor: crosshair;
+}
+
+.mask-preview-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 256px;
+}
+
+.mask-preview-backdrop-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 8px;
+  color: #b9c5ba;
+  cursor: pointer;
+}
+
+.mask-preview-backdrop-toggle input {
+  accent-color: #00ff66;
+  margin: 0;
+}
+
+.mask-outfit-summary {
+  font-size: 8px;
+  color: #7e8e81;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 256px;
 }
 
 .mask-canvas-legend {
