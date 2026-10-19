@@ -7,9 +7,10 @@ import {
   drawPixelBackdropParallaxLayer,
   drawPixelBackdropScene,
   getCharacterFrameGrid,
+  getCharacterFrameCount,
   mapBiomeToBackdropId,
   syncAllPartyAppearancesToEra
-} from './character-designer.js?v=pixi_final_11';
+} from './character-designer.js?v=sprite32_1';
 import { GRID_SIZE } from './character-presets.js';
 import {
   WEATHER_OVERLAYS,
@@ -645,7 +646,8 @@ export function renderGameLandscapeStageLegacy(canvas, state, animTick = 0, opti
   const partyFootPositions = [];
 
   party.forEach((member, idx) => {
-    const memberFrameIndex = ((typeof rawWalkFrame === "number" ? rawWalkFrame : frameIndex) + idx) % 6;
+    const memberFrameCount = getCharacterFrameCount(member.appearance, 'side_right', effectiveAnimMode);
+    const memberFrameIndex = ((typeof rawWalkFrame === "number" ? rawWalkFrame : frameIndex) + idx) % memberFrameCount;
     const memberGrid = pixiActorLayer
       ? null
       : getCharacterFrameGrid(member.appearance, 'side_right', effectiveAnimMode, memberFrameIndex);

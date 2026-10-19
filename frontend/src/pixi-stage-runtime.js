@@ -7,8 +7,9 @@ import {
   Texture,
   TilingSprite
 } from 'pixi.js';
-import { PixiTextureFactory } from './pixi-texture-factory.js?v=pixi_final_9';
+import { PixiTextureFactory } from './pixi-texture-factory.js?v=sprite32_1';
 import { createPixiWeatherLayer } from './pixi-weather-layer.js?v=pixi_final_1';
+import { preloadBoilerplateSprites } from './character-designer.js?v=sprite32_1';
 import {
   drawRiverChannelRow,
   drawRiverForegroundSoil,
@@ -273,6 +274,7 @@ function createActorController(container, textureFactory, shadowTexture) {
 }
 
 export async function mountPixiStage(sourceCanvas) {
+  await preloadBoilerplateSprites();
   const frame = sourceCanvas.parentElement;
   if (!frame) {
     throw new Error('PixiJS stage requires a canvas frame.');

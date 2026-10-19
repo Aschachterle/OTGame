@@ -386,6 +386,16 @@ function buildPixelsFromRowMap(startY, rows, palette, roleMap = {}) {
   return pixels;
 }
 
+function resolvePatternId(frontRows) {
+  if (!PATTERNS) return null;
+  for (const [key, value] of Object.entries(PATTERNS)) {
+    if (value === frontRows && key.endsWith('Front')) {
+      return key.slice(0, -5);
+    }
+  }
+  return null;
+}
+
 function makeHatPreset(id, name, era, frontStartY, frontRows, sideStartY, sideRows, colors, gender = 'unisex') {
   const roleMap = { P: 'primary', S: 'secondary', L: 'highlight' };
   return {
@@ -394,6 +404,12 @@ function makeHatPreset(id, name, era, frontStartY, frontRows, sideStartY, sideRo
     era,
     gender,
     subType: 'hat',
+    patternId: resolvePatternId(frontRows),
+    palette: colors,
+    frontStartY,
+    sideStartY,
+    frontRows,
+    sideRows,
     author: 'Boilerplate',
     front: buildPixelsFromRowMap(frontStartY, frontRows, colors, roleMap),
     side: buildPixelsFromRowMap(sideStartY, sideRows, colors, roleMap)
@@ -408,6 +424,12 @@ function makeHairPreset(id, name, era, frontStartY, frontRows, sideStartY, sideR
     era,
     gender,
     subType: 'hair',
+    patternId: resolvePatternId(frontRows),
+    palette: colors,
+    frontStartY,
+    sideStartY,
+    frontRows,
+    sideRows,
     author: 'Boilerplate',
     front: buildPixelsFromRowMap(frontStartY, frontRows, colors, roleMap),
     side: buildPixelsFromRowMap(sideStartY, sideRows, colors, roleMap)
@@ -421,6 +443,12 @@ function makeItemPreset(id, name, era, frontStartY, frontRows, sideStartY, sideR
     name,
     era,
     gender,
+    patternId: resolvePatternId(frontRows),
+    palette: colors,
+    frontStartY,
+    sideStartY,
+    frontRows,
+    sideRows,
     author: 'Boilerplate',
     front: buildPixelsFromRowMap(frontStartY, frontRows, colors, roleMap),
     side: buildPixelsFromRowMap(sideStartY, sideRows, colors, roleMap)

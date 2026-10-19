@@ -2,7 +2,7 @@ import {
   NPC_APPEARANCES,
   drawCharacterGridAt,
   getCharacterFrameGrid
-} from './character-designer.js?v=pixi_final_11';
+} from './character-designer.js?v=sprite32_1';
 
 export function riverBounds(width) {
   const channelWidth = Math.max(1, Math.round(width * 0.6));

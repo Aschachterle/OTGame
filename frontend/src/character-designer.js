@@ -9,6 +9,12 @@ import {
   INITIAL_CLOTHING_BOILERPLATE
 } from './character-presets.js';
 import {
+  getBoilerplateSpriteFrameCount,
+  getBoilerplateSpriteGrid,
+  getBoilerplateSpriteSize,
+  preloadBoilerplateSprites
+} from './boilerplate-sprites.js';
+import {
   drawRiverChannelRow,
   getRiverVisualProfile,
   riverBounds,
@@ -40,6 +46,8 @@ export {
   BASE_BODY_TEMPLATES,
   INITIAL_CLOTHING_BOILERPLATE
 };
+
+export { preloadBoilerplateSprites };
 
 // Single party era selector excludes 'all' so the user picks one concrete era for all party members
 export const SELECTABLE_ERAS = ERAS.filter((era) => era.id !== 'all');
@@ -782,7 +790,7 @@ const SIDE_ARM_POSE_MAPS = {
   }
 };
 
-export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'walk', frameIndex = 0) {
+function getLegacyCharacterFrameGrid(appearance, view = 'front', animMode = 'walk', frameIndex = 0) {
   const isSide = view === 'side_right' || view === 'side_left';
   const baseOrientation = isSide ? 'side' : 'front';
   const neutral = buildNeutralCompositeGrid(appearance, baseOrientation);
@@ -1122,6 +1130,1768 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
   }
 
   return result;
+}
+
+const SPRITE_OUTLINE_COLORS = new Set([
+  '#050004', '#1a0507', '#110b0f', '#4c0207',
+  '#120e26', '#242339', '#281028', '#410a32'
+]);
+
+const SPRITE_FAR_LIMB_COLORS = new Set([
+  '#b73a32', '#ae4a3a', '#a82824', '#a0322b', '#962926', '#7b2218',
+  '#bc4437', '#550735', '#821534', '#7a093e', '#a32938', '#ad4437',
+  '#98423e', '#8d332e', '#8c3e3e', '#511425', '#422434', '#411726'
+]);
+
+const SPRITE_BASE_HAIR_COLORS = new Set([
+  '#4d1b1b', '#81492c',
+  '#4b4e59', '#636a76', '#747c86', '#2b2a3f', '#3f4050', '#5a5766', '#333345'
+]);
+
+const SPRITE_UNDIES_COLORS = new Set([
+  '#f3fbfb', '#859dc6', '#9db2ce', '#84807e',
+  '#6d6679', '#8a6c75'
+]);
+
+function isSpriteOutline(color) {
+  if (!color) return false;
+  const lower = color.toLowerCase();
+  if (SPRITE_OUTLINE_COLORS.has(lower)) return true;
+  if (!lower.startsWith('#') || lower.length !== 7) return false;
+  const r = parseInt(lower.slice(1, 3), 16);
+  const g = parseInt(lower.slice(3, 5), 16);
+  const b = parseInt(lower.slice(5, 7), 16);
+  return (r + g + b) / 3 < 42;
+}
+
+function isSpriteFarLimb(color, y, headDy = 0) {
+  if (!color || y < 11 + headDy) return false;
+  return SPRITE_FAR_LIMB_COLORS.has(color.toLowerCase());
+}
+
+function isSpriteBaseHair(color, y, headDy = 0) {
+  if (!color || y > 8 + headDy) return false;
+  return SPRITE_BASE_HAIR_COLORS.has(color.toLowerCase());
+}
+
+function isSpriteUndies(color) {
+  if (!color) return false;
+  return SPRITE_UNDIES_COLORS.has(color.toLowerCase());
+}
+
+function isSkirtPreset(preset) {
+  if (!preset || preset.isNone) return false;
+  const id = String(preset.id || '');
+  const pat = String(preset.patternId || '');
+  return (
+    pat === 'prairieLongSkirt' ||
+    pat === 'pleatedSkirtKilt' ||
+    id.includes('skirt') ||
+    id.includes('kirtle') ||
+    id.includes('kilt') ||
+    id.includes('rhinegraves')
+  );
+}
+
+function isShortSkirtPreset(preset) {
+  if (!isSkirtPreset(preset)) return false;
+  const id = String(preset.id || '');
+  const pat = String(preset.patternId || '');
+  return (
+    pat === 'pleatedSkirtKilt' ||
+    id.includes('flapper') ||
+    id.includes('pleated') ||
+    id.includes('poodle') ||
+    id.includes('mini')
+  );
+}
+
+function resolveGarmentPalette(preset, dyeId) {
+  const raw = preset?.palette || {};
+  let fallbackP = raw.P || null;
+  let fallbackS = raw.S || null;
+  let fallbackL = raw.L || null;
+  let fallbackO = raw.O || null;
+
+  if (!fallbackP || !fallbackO) {
+    for (const [, , color, role] of preset?.front || []) {
+      if (role === 'primary' && !fallbackP) fallbackP = color;
+      else if (role === 'secondary' && !fallbackS) fallbackS = color;
+      else if (role === 'highlight' && !fallbackL) fallbackL = color;
+      else if (!role && !fallbackO) fallbackO = color;
+    }
+  }
+
+  const baseP = fallbackP || fallbackS || fallbackL || '#8f563b';
+  const baseS = fallbackS || shadeHex(baseP, -24);
+  const baseL = fallbackL || shadeHex(baseP, 24);
+  const baseO = fallbackO || localOutlineHex(baseP, 0.76);
+
+  const P = resolvePresetPixelColor(baseP, 'primary', dyeId);
+  const S = resolvePresetPixelColor(baseS, 'secondary', dyeId);
+  const L = resolvePresetPixelColor(baseL, 'highlight', dyeId);
+  const O = (!dyeId || dyeId === 'default') ? baseO : localOutlineHex(P, 0.76);
+
+  const farP = coolShadowHex(P, 0.42);
+  const farS = coolShadowHex(S, 0.46);
+  const farL = coolShadowHex(L, 0.36);
+  const farO = localOutlineHex(farP, 0.78);
+
+  return { O, P, S, L, farO, farP, farS, farL };
+}
+
+function analyzeBoilerplateFrame(baseGrid, gender, baseOrientation) {
+  let headTopY = 1;
+  for (let y = 0; y < GRID_SIZE; y += 1) {
+    if (baseGrid[y]?.some(Boolean)) {
+      headTopY = y;
+      break;
+    }
+  }
+  const headDy = headTopY - 1;
+
+  let crownMinX = 14;
+  let crownMaxX = 17;
+  if (baseGrid[headTopY]) {
+    let minX = GRID_SIZE;
+    let maxX = -1;
+    for (let x = 0; x < GRID_SIZE; x += 1) {
+      if (baseGrid[headTopY][x]) {
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+      }
+    }
+    if (maxX >= minX) {
+      crownMinX = minX;
+      crownMaxX = maxX;
+    }
+  }
+
+  const headDx = baseOrientation === 'side' ? crownMinX - 14 : 0;
+
+  let leftFootMaxY = 30;
+  let rightFootMaxY = 30;
+  if (baseOrientation === 'front') {
+    let lMax = -1;
+    let rMax = -1;
+    for (let y = 22; y < GRID_SIZE; y += 1) {
+      for (let x = 8; x <= 14; x += 1) {
+        if (baseGrid[y]?.[x]) lMax = Math.max(lMax, y);
+      }
+      for (let x = 16; x <= 23; x += 1) {
+        if (baseGrid[y]?.[x]) rMax = Math.max(rMax, y);
+      }
+    }
+    if (lMax >= 24) leftFootMaxY = lMax;
+    if (rMax >= 24) rightFootMaxY = rMax;
+  }
+
+  const sideLimb = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null));
+  const footBottomY = {
+    N: Array(GRID_SIZE).fill(-1),
+    F: Array(GRID_SIZE).fill(-1)
+  };
+
+  if (baseOrientation === 'side') {
+    for (let y = Math.max(0, 15 + headDy); y < GRID_SIZE; y += 1) {
+      for (let x = 0; x < GRID_SIZE; x += 1) {
+        const c = baseGrid[y]?.[x];
+        if (!c || isSpriteOutline(c)) continue;
+        sideLimb[y][x] = isSpriteFarLimb(c, y, headDy) ? 'F' : 'N';
+      }
+    }
+    for (let pass = 0; pass < 3; pass += 1) {
+      for (let y = Math.max(0, 15 + headDy); y < GRID_SIZE; y += 1) {
+        for (let x = 0; x < GRID_SIZE; x += 1) {
+          if (!baseGrid[y]?.[x] || sideLimb[y][x]) continue;
+          let hasN = false;
+          let hasF = false;
+          for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+            const neighbor = sideLimb[y + dy]?.[x + dx];
+            if (neighbor === 'N') hasN = true;
+            if (neighbor === 'F') hasF = true;
+          }
+          if (hasN) sideLimb[y][x] = 'N';
+          else if (hasF) sideLimb[y][x] = 'F';
+        }
+      }
+    }
+
+    for (const limbKey of ['N', 'F']) {
+      for (let x = 0; x < GRID_SIZE; x += 1) {
+        for (let y = 20; y < GRID_SIZE; y += 1) {
+          if (sideLimb[y][x] === limbKey) {
+            footBottomY[limbKey][x] = Math.max(footBottomY[limbKey][x], y);
+          }
+        }
+      }
+      for (let pass = 0; pass < 4; pass += 1) {
+        const next = [...footBottomY[limbKey]];
+        for (let x = 1; x < GRID_SIZE - 1; x += 1) {
+          if (next[x] < 20) continue;
+          if (footBottomY[limbKey][x - 1] >= 20) next[x] = Math.max(next[x], footBottomY[limbKey][x - 1]);
+          if (footBottomY[limbKey][x + 1] >= 20) next[x] = Math.max(next[x], footBottomY[limbKey][x + 1]);
+        }
+        footBottomY[limbKey] = next;
+      }
+    }
+  }
+
+  return {
+    gender,
+    baseOrientation,
+    headTopY,
+    headDy,
+    headDx,
+    crownMinX,
+    crownMaxX,
+    leftFootMaxY,
+    rightFootMaxY,
+    sideLimb,
+    footBottomY
+  };
+}
+
+function getFrontLegSideAndMaxY(baseGrid, frameInfo, x, y) {
+  if (x <= 14) return { side: 'left', footMaxY: frameInfo.leftFootMaxY };
+  if (x >= 16) return { side: 'right', footMaxY: frameInfo.rightFootMaxY };
+  // x === 15 (center column on female front walk)
+  const hasLeft = Boolean(baseGrid[y]?.[14]);
+  const hasRight = Boolean(baseGrid[y]?.[16]);
+  if (hasLeft && !hasRight) return { side: 'left', footMaxY: frameInfo.leftFootMaxY };
+  if (hasRight && !hasLeft) return { side: 'right', footMaxY: frameInfo.rightFootMaxY };
+  return frameInfo.leftFootMaxY >= frameInfo.rightFootMaxY
+    ? { side: 'left', footMaxY: frameInfo.leftFootMaxY }
+    : { side: 'right', footMaxY: frameInfo.rightFootMaxY };
+}
+
+function getContiguousSegmentBounds(baseGrid, y, startX, minX = 0, maxX = GRID_SIZE - 1) {
+  let segMin = startX;
+  let segMax = startX;
+  while (segMin > minX && baseGrid[y]?.[segMin - 1]) segMin -= 1;
+  while (segMax < maxX && baseGrid[y]?.[segMax + 1]) segMax += 1;
+  return { segMin, segMax };
+}
+
+function renderFittedPantsOrSkirt(target, baseGrid, frameInfo, preset, palette, hasShoes) {
+  const { gender, baseOrientation, headDy, leftFootMaxY, rightFootMaxY, sideLimb, footBottomY } = frameInfo;
+  const { O, P, S, L, farO, farP, farS, farL } = palette;
+  const pat = preset.patternId || 'trousersJeans';
+
+  if (isSkirtPreset(preset)) {
+    const isShort = isShortSkirtPreset(preset);
+    const skirtTopY = 16 + headDy;
+    const skirtBottomY = (isShort ? 22 : 26) + headDy;
+    const H = skirtBottomY - skirtTopY + 1;
+
+    if (baseOrientation === 'front') {
+      const hipMinX = 11;
+      const hipMaxX = gender === 'female' ? 19 : 20;
+      const stepSway = leftFootMaxY > rightFootMaxY ? -1 : rightFootMaxY > leftFootMaxY ? 1 : 0;
+
+      for (let y = skirtTopY; y <= skirtBottomY; y += 1) {
+        if (y < 0 || y >= GRID_SIZE) continue;
+        const ry = y - skirtTopY;
+        let rowLeft = hipMinX;
+        let rowRight = hipMaxX;
+        if (ry >= 4 && ry <= 6) {
+          rowLeft = hipMinX - 1;
+          rowRight = hipMaxX + 1;
+        } else if (ry >= 7) {
+          const sway = ry >= 9 ? stepSway : 0;
+          rowLeft = hipMinX - 2 + Math.min(0, sway);
+          rowRight = hipMaxX + 2 + Math.max(0, sway);
+        }
+
+        for (let x = rowLeft; x <= rowRight; x += 1) {
+          if (x < 0 || x >= GRID_SIZE) continue;
+          if (ry === 0 || ry === H - 1 || x === rowLeft || x === rowRight) {
+            target[y][x] = O;
+          } else if ((isShort && ry === H - 2) || (!isShort && (ry === 5 || ry === H - 2))) {
+            target[y][x] = (x - rowLeft) % 3 === 1 ? L : S;
+          } else if (x <= rowLeft + 2 || x === 15) {
+            target[y][x] = L;
+          } else if (x >= rowRight - 2) {
+            target[y][x] = S;
+          } else {
+            target[y][x] = P;
+          }
+        }
+      }
+
+      if (!isShort) {
+        for (let y = skirtBottomY + 1; y < GRID_SIZE; y += 1) {
+          for (let x = 8; x <= 23; x += 1) {
+            if (!baseGrid[y]?.[x]) continue;
+            const { footMaxY } = getFrontLegSideAndMaxY(baseGrid, frameInfo, x, y);
+            const shoeH = hasShoes ? 3 : 0;
+            if (footMaxY - y >= shoeH) {
+              target[y][x] = isSpriteOutline(baseGrid[y][x]) ? O : S;
+            }
+          }
+        }
+      }
+      return;
+    }
+
+    // Side view skirt: keep a graceful, consistent bell width anchored to the hip/pelvis
+    // rather than stretching out to the tips of the striding feet.
+    const skirtFixedBottomY = isShort ? (22 + headDy) : 26;
+    const effectiveH = skirtFixedBottomY - skirtTopY + 1;
+    const centerHipX = 15.5 + (frameInfo.headDx > 0 ? 0.5 : 0);
+    let hemLeft = 10;
+    let hemRight = 21;
+
+    for (let y = skirtTopY; y <= skirtFixedBottomY; y += 1) {
+      if (y < 0 || y >= GRID_SIZE) continue;
+      const ry = y - skirtTopY;
+      const t = effectiveH > 1 ? ry / (effectiveH - 1) : 0;
+      const halfWidth = 2.5 + t * (isShort ? 2.0 : 3.2);
+      const rowLeft = Math.round(centerHipX - halfWidth);
+      const rowRight = Math.round(centerHipX + halfWidth);
+      hemLeft = rowLeft;
+      hemRight = rowRight;
+
+      // Clear any stray bare thigh/knee pixels of the base sprite that poke outside the skirt bell
+      if (!isShort && ry >= 3) {
+        for (let x = 5; x < rowLeft; x += 1) {
+          if (baseGrid[y]?.[x]) target[y][x] = null;
+        }
+        for (let x = rowRight + 1; x <= 26; x += 1) {
+          if (baseGrid[y]?.[x]) target[y][x] = null;
+        }
+      }
+
+      for (let x = rowLeft; x <= rowRight; x += 1) {
+        if (x < 0 || x >= GRID_SIZE) continue;
+        if (ry === 0 || ry === effectiveH - 1 || x === rowLeft || x === rowRight) {
+          target[y][x] = O;
+        } else if ((isShort && ry === effectiveH - 2) || (!isShort && (ry === 5 || ry === effectiveH - 2))) {
+          target[y][x] = (x - rowLeft) % 3 === 1 ? L : S;
+        } else if (x <= rowLeft + 2) {
+          target[y][x] = S;
+        } else if (x >= rowRight - 2) {
+          target[y][x] = L;
+        } else {
+          target[y][x] = P;
+        }
+      }
+    }
+
+    if (!isShort) {
+      for (let y = skirtFixedBottomY + 1; y < GRID_SIZE; y += 1) {
+        for (let x = 5; x <= 26; x += 1) {
+          if (!baseGrid[y]?.[x]) continue;
+          if (x < hemLeft || x > hemRight) {
+            target[y][x] = null;
+            continue;
+          }
+          const limb = sideLimb[y][x] || 'N';
+          const fMax = footBottomY[limb][x] >= 24 ? footBottomY[limb][x] : 29;
+          const shoeH = hasShoes ? 3 : 0;
+          if (fMax - y >= shoeH) {
+            target[y][x] = isSpriteOutline(baseGrid[y][x]) ? O : (limb === 'F' ? farS : S);
+          } else if (x === hemLeft || x === hemRight) {
+            target[y][x] = O;
+          }
+        }
+      }
+    }
+    return;
+  }
+
+  // Trousers, Jeans, Dungarees, Breeches/Shorts
+  const isShortPant = pat === 'breechesShorts';
+  const minDistFromFoot = isShortPant ? 5 : (hasShoes ? 2 : 3);
+  const pelvisTopY = 16 + headDy;
+  const pelvisBottomY = 19 + headDy;
+
+  if (baseOrientation === 'front') {
+    const pelvisMinX = 11;
+    const pelvisMaxX = gender === 'female' ? 19 : 20;
+
+    for (let y = pelvisTopY; y <= pelvisBottomY; y += 1) {
+      if (y < 0 || y >= GRID_SIZE) continue;
+      for (let x = pelvisMinX; x <= pelvisMaxX; x += 1) {
+        const c = baseGrid[y]?.[x];
+        if (!c) continue;
+        const isEdge = x === pelvisMinX || x === pelvisMaxX || !baseGrid[y]?.[x - 1] || !baseGrid[y]?.[x + 1];
+        if (y === pelvisTopY || isEdge || isSpriteOutline(c)) {
+          target[y][x] = O;
+        } else if (y === pelvisBottomY && (x === 15 || (gender === 'male' && x === 16))) {
+          target[y][x] = O;
+        } else if (x <= pelvisMinX + 2) {
+          target[y][x] = L;
+        } else if (x >= pelvisMaxX - 2) {
+          target[y][x] = S;
+        } else {
+          target[y][x] = P;
+        }
+      }
+    }
+
+    for (let y = pelvisBottomY + 1; y < GRID_SIZE; y += 1) {
+      for (let x = 8; x <= 23; x += 1) {
+        const c = baseGrid[y]?.[x];
+        if (!c) continue;
+        const { side, footMaxY } = getFrontLegSideAndMaxY(baseGrid, frameInfo, x, y);
+        const dist = footMaxY - y;
+        if (dist < minDistFromFoot) continue;
+
+        const subMin = side === 'left' ? 8 : (gender === 'female' ? 15 : 16);
+        const subMax = side === 'left' ? 15 : 23;
+        const { segMin, segMax } = getContiguousSegmentBounds(baseGrid, y, x, subMin, subMax);
+
+        if (x === segMin || x === segMax || isSpriteOutline(c)) {
+          target[y][x] = O;
+        } else if (dist === minDistFromFoot) {
+          target[y][x] = pat === 'bellBottomsBaggy' ? L : S;
+        } else if (pat === 'distressedJeans' && dist === 5) {
+          target[y][x] = L;
+        } else if (x === segMin + 1) {
+          target[y][x] = L;
+        } else if (x === segMax - 1 && segMax - segMin >= 3) {
+          target[y][x] = S;
+        } else {
+          target[y][x] = P;
+        }
+      }
+    }
+    return;
+  }
+
+  // Side view trousers / breeches
+  const isMaleIdleWithHandOverHip = gender === 'male' && baseGrid[17]?.[17] === '#f3fbfb';
+  for (let y = pelvisTopY; y <= pelvisBottomY; y += 1) {
+    if (y < 0 || y >= GRID_SIZE) continue;
+    const minX = (isMaleIdleWithHandOverHip && y >= 17) ? 15 : 12;
+    const maxX = 19;
+    let rowMin = GRID_SIZE;
+    let rowMax = -1;
+    for (let x = minX; x <= maxX; x += 1) {
+      if (baseGrid[y]?.[x]) {
+        rowMin = Math.min(rowMin, x);
+        rowMax = Math.max(rowMax, x);
+      }
+    }
+    if (rowMax < rowMin) continue;
+    for (let x = rowMin; x <= rowMax; x += 1) {
+      const c = baseGrid[y]?.[x];
+      if (!c) continue;
+      if (y === pelvisTopY || x === rowMin || x === rowMax || isSpriteOutline(c)) {
+        target[y][x] = O;
+      } else if (x >= rowMax - 1) {
+        target[y][x] = L;
+      } else if (x <= rowMin + 1) {
+        target[y][x] = S;
+      } else {
+        target[y][x] = P;
+      }
+    }
+  }
+
+  for (let y = pelvisBottomY + 1; y < GRID_SIZE; y += 1) {
+    for (let x = 5; x <= 26; x += 1) {
+      const c = baseGrid[y]?.[x];
+      if (!c) continue;
+      const limb = sideLimb[y][x] || 'N';
+      const rawFootMax = footBottomY[limb][x];
+      const footMaxY = rawFootMax >= 24 ? rawFootMax : 29;
+      const dist = footMaxY - y;
+      if (dist < minDistFromFoot) continue;
+
+      const curO = limb === 'F' ? farO : O;
+      const curP = limb === 'F' ? farP : P;
+      const curS = limb === 'F' ? farS : S;
+      const curL = limb === 'F' ? farL : L;
+
+      const isBoundary =
+        isSpriteOutline(c) ||
+        sideLimb[y][x - 1] !== limb ||
+        sideLimb[y][x + 1] !== limb;
+
+      if (isBoundary) {
+        target[y][x] = curO;
+      } else if (dist === minDistFromFoot) {
+        target[y][x] = pat === 'bellBottomsBaggy' ? curL : curS;
+      } else if (pat === 'distressedJeans' && dist === 5) {
+        target[y][x] = curL;
+      } else if (sideLimb[y][x + 2] !== limb) {
+        target[y][x] = curL;
+      } else if (sideLimb[y][x - 2] !== limb) {
+        target[y][x] = curS;
+      } else {
+        target[y][x] = curP;
+      }
+    }
+  }
+}
+
+function renderFittedShoes(target, baseGrid, frameInfo, preset, palette) {
+  const { gender, baseOrientation, sideLimb, footBottomY } = frameInfo;
+  const { O, P, S, L, farO, farP, farS, farL } = palette;
+  const pat = preset.patternId || 'boots';
+  const shoeHeight = pat === 'tallRidingBoots' ? 5 : pat === 'boots' ? 4 : 3;
+
+  if (baseOrientation === 'front') {
+    for (let y = 22; y < GRID_SIZE; y += 1) {
+      for (let x = 8; x <= 23; x += 1) {
+        const c = baseGrid[y]?.[x];
+        if (!c) continue;
+        const { side, footMaxY } = getFrontLegSideAndMaxY(baseGrid, frameInfo, x, y);
+        const dist = footMaxY - y;
+        if (dist < 0 || dist >= shoeHeight) continue;
+
+        const subMin = side === 'left' ? 8 : (gender === 'female' ? 15 : 16);
+        const subMax = side === 'left' ? 15 : 23;
+        const { segMin, segMax } = getContiguousSegmentBounds(baseGrid, y, x, subMin, subMax);
+
+        if (dist === 0 || x === segMin || x === segMax || isSpriteOutline(c)) {
+          target[y][x] = O;
+        } else if (dist === 1) {
+          target[y][x] = (pat === 'sneakersShoes' || x === segMin + 1) ? L : P;
+        } else if (dist === shoeHeight - 1) {
+          target[y][x] = pat === 'tallRidingBoots' ? L : S;
+        } else {
+          target[y][x] = x <= (segMin + segMax) / 2 ? P : S;
+        }
+      }
+    }
+    return;
+  }
+
+  // Side view shoes
+  for (let y = 22; y < GRID_SIZE; y += 1) {
+    for (let x = 5; x <= 26; x += 1) {
+      const c = baseGrid[y]?.[x];
+      if (!c) continue;
+      const limb = sideLimb[y][x] || 'N';
+      const footMaxY = footBottomY[limb][x];
+      if (footMaxY < 25) continue;
+      const dist = footMaxY - y;
+      if (dist < 0 || dist >= shoeHeight) continue;
+
+      const curO = limb === 'F' ? farO : O;
+      const curP = limb === 'F' ? farP : P;
+      const curS = limb === 'F' ? farS : S;
+      const curL = limb === 'F' ? farL : L;
+
+      const isBoundary =
+        isSpriteOutline(c) ||
+        sideLimb[y][x - 1] !== limb ||
+        sideLimb[y][x + 1] !== limb;
+
+      if (dist === 0 || isBoundary) {
+        target[y][x] = curO;
+      } else if (dist === 1) {
+        target[y][x] = (sideLimb[y][x + 2] !== limb || pat === 'sneakersShoes') ? curL : curP;
+      } else if (dist === shoeHeight - 1) {
+        target[y][x] = pat === 'tallRidingBoots' ? curL : curS;
+      } else {
+        target[y][x] = sideLimb[y][x + 2] !== limb ? curL : curP;
+      }
+    }
+  }
+}
+
+function renderFittedShirt(target, baseGrid, frameInfo, preset, palette) {
+  const { gender, baseOrientation, headDy } = frameInfo;
+  const { O, P, S, L, farO, farP, farS, farL } = palette;
+  const pat = preset.patternId || 'teeHoodie';
+  const isSleeveless = pat === 'vestJerkin' || pat === 'sleevelessTank';
+  const hasHighCollar = pat === 'turtleneckSweater' || pat === 'calicoBodice';
+  const isCapelet = pat === 'capeletCoat';
+
+  if (baseOrientation === 'front') {
+    const torsoMinX = 11;
+    const torsoMaxX = gender === 'female' ? 19 : 20;
+    const cx = gender === 'female' ? 15.0 : 15.5;
+    const neckY = 8 + headDy;
+    const topY = 9 + headDy;
+    const bottomY = 16 + headDy;
+
+    if (hasHighCollar && neckY >= 0 && neckY < GRID_SIZE) {
+      const cMin = 13;
+      const cMax = gender === 'female' ? 17 : 18;
+      for (let x = cMin; x <= cMax; x += 1) {
+        if (!baseGrid[neckY]?.[x]) continue;
+        target[neckY][x] = (x === cMin || x === cMax) ? O : (x <= cx ? L : S);
+      }
+    }
+
+    for (let y = topY; y <= bottomY; y += 1) {
+      if (y < 0 || y >= GRID_SIZE) continue;
+      const ry = y - topY;
+
+      for (let x = 7; x <= 24; x += 1) {
+        const c = baseGrid[y]?.[x];
+        if (!c) continue;
+        const inTorso = x >= torsoMinX && x <= torsoMaxX;
+        if (!inTorso && isSleeveless) continue;
+
+        if (!inTorso) {
+          // Sleeve pixel
+          const isSleeveEdge = y === bottomY || isSpriteOutline(c) || !baseGrid[y]?.[x - 1] || !baseGrid[y]?.[x + 1];
+          if (isSleeveEdge) {
+            target[y][x] = O;
+          } else if (isCapelet && ry <= 2) {
+            target[y][x] = L;
+          } else {
+            target[y][x] = x < cx ? L : P;
+          }
+          continue;
+        }
+
+        // Torso pixel
+        if (pat === 'sleevelessTank' && ry === 0 && Math.abs(x - cx) <= 1.5 && !isSpriteUndies(c)) {
+          continue;
+        }
+
+        const isTorsoOutline =
+          x === torsoMinX ||
+          x === torsoMaxX ||
+          (ry === 0 && (x <= torsoMinX + 1 || x >= torsoMaxX - 1)) ||
+          (!baseGrid[y]?.[x - 1] || !baseGrid[y]?.[x + 1]);
+
+        if (isTorsoOutline) {
+          target[y][x] = O;
+        } else if (y === bottomY) {
+          target[y][x] = (pat === 'fringedBuckskin' && Math.abs(x - cx) <= 1.5) ? L : O;
+        } else if (y === bottomY - 1) {
+          target[y][x] = (pat === 'fringedBuckskin' && Math.abs(x - cx) <= 1.5) ? L : S;
+        } else if (pat === 'fringedBuckskin') {
+          const isStrap = x === torsoMinX + 2 || x === torsoMaxX - 2;
+          target[y][x] = isStrap ? (ry === 1 ? L : S) : P;
+        } else if (pat === 'calicoBodice') {
+          if (Math.abs(x - cx) <= 1.5) {
+            target[y][x] = ry <= 3 ? L : S;
+          } else {
+            target[y][x] = P;
+          }
+        } else if (pat === 'suitJacket') {
+          if (Math.abs(x - cx) <= 0.6) {
+            target[y][x] = ry <= 2 ? L : S;
+          } else if (Math.abs(x - cx) <= 1.6 && ry <= 3) {
+            target[y][x] = S;
+          } else {
+            target[y][x] = x < cx ? L : P;
+          }
+        } else if (pat === 'doubletCoat' || pat === 'vestJerkin') {
+          if (Math.abs(x - cx) <= 0.6) {
+            target[y][x] = ry % 2 === 1 ? L : S;
+          } else {
+            target[y][x] = (ry <= 2 && x < cx) ? L : P;
+          }
+        } else if (isCapelet) {
+          if (ry <= 1) target[y][x] = x <= cx ? L : P;
+          else if (ry === 2) target[y][x] = O;
+          else target[y][x] = x <= cx ? P : S;
+        } else {
+          target[y][x] = (ry <= 2 && x <= cx) ? L : P;
+        }
+      }
+    }
+    return;
+  }
+
+  // Side view shirt
+  const neckY = (gender === 'female' ? 9 : 8) + headDy;
+  const topY = (gender === 'female' ? 10 : 9) + headDy;
+  const bottomY = 16 + headDy;
+
+  if (hasHighCollar && neckY >= 0 && neckY < GRID_SIZE) {
+    for (let x = 12; x <= 18; x += 1) {
+      const c = baseGrid[neckY]?.[x];
+      if (!c) continue;
+      target[neckY][x] = isSpriteOutline(c) ? O : (x <= 15 ? L : S);
+    }
+  }
+
+  for (let y = topY; y <= bottomY; y += 1) {
+    if (y < 0 || y >= GRID_SIZE) continue;
+    const ry = y - topY;
+
+    for (let x = 8; x <= 22; x += 1) {
+      const c = baseGrid[y]?.[x];
+      if (!c) continue;
+
+      // Preserve swinging bare hands at extreme forward/backward arm reach
+      if (y >= 15 + headDy && (x <= 9 || x >= 21)) continue;
+
+      if (isSleeveless) {
+        // Keep foreground shoulder & arm (x <= 14 on ry >= 1) and swinging arms bare
+        if (x < 14 || x > 18) continue;
+        if (ry >= 1 && x <= 14 && !isSpriteUndies(c)) continue;
+      }
+
+      const isFar = isSpriteFarLimb(c, y, headDy) || (x >= 19 && y >= 14 + headDy);
+      const curO = isFar ? farO : O;
+      const curP = isFar ? farP : P;
+      const curS = isFar ? farS : S;
+      const curL = isFar ? farL : L;
+
+      const isEdge =
+        isSpriteOutline(c) ||
+        !baseGrid[y]?.[x - 1] ||
+        !baseGrid[y]?.[x + 1] ||
+        (y === bottomY && (x <= 12 || x >= 19));
+
+      if (isEdge) {
+        target[y][x] = curO;
+      } else if (y === bottomY) {
+        target[y][x] = (pat === 'fringedBuckskin' && x === 16) ? curL : curS;
+      } else if (isCapelet && ry <= 2) {
+        target[y][x] = ry === 2 ? curO : curL;
+      } else if (pat === 'fringedBuckskin' && x === 17) {
+        target[y][x] = curS;
+      } else if ((pat === 'suitJacket' || pat === 'calicoBodice' || pat === 'doubletCoat') && x === 17 && ry <= 3) {
+        target[y][x] = curL;
+      } else if (x <= 14) {
+        target[y][x] = curL;
+      } else {
+        target[y][x] = curP;
+      }
+    }
+  }
+
+  // Harmonize any remaining far-arm shadow pixels on swinging hands/wrists (y <= 19 + headDy)
+  const handShadowSkin = gender === 'female' ? '#d67256' : '#c56749';
+  for (let y = 14 + headDy; y <= Math.min(GRID_SIZE - 1, 19 + headDy); y += 1) {
+    for (let x = 7; x <= 24; x += 1) {
+      if (isSpriteFarLimb(target[y][x], y, headDy)) {
+        target[y][x] = handShadowSkin;
+      }
+    }
+  }
+
+  // Clean up any remaining undergarment pixels on row 17 + headDy
+  const waistSeamY = 17 + headDy;
+  if (waistSeamY >= 0 && waistSeamY < GRID_SIZE) {
+    for (let x = 11; x <= 20; x += 1) {
+      if (isSpriteUndies(target[waistSeamY][x])) {
+        target[waistSeamY][x] = O;
+      }
+    }
+  }
+}
+
+function drawPatternRowsAt(target, startX, startY, rows, palette) {
+  rows.forEach((rowStr, dy) => {
+    const y = startY + dy;
+    if (y < 0 || y >= GRID_SIZE) return;
+    for (let dx = 0; dx < rowStr.length; dx += 1) {
+      const ch = rowStr[dx];
+      if (!ch || ch === '.' || ch === ' ') continue;
+      const x = startX + dx;
+      if (x < 0 || x >= GRID_SIZE) continue;
+      const color = palette[ch];
+      if (color) target[y][x] = color;
+    }
+  });
+}
+
+function renderFittedAccessory(target, baseGrid, frameInfo, preset, palette) {
+  const { gender, baseOrientation, headTopY, headDy, headDx } = frameInfo;
+  const { O, P, S, L } = palette;
+  const pat = preset.patternId || '';
+  const pal = { O, P, S, L };
+
+  // 1. Eye / Face Accessories
+  const eyeY = headTopY + (gender === 'female' ? 5 : 4);
+  if (
+    pat === 'monocleChain' ||
+    pat === 'aviatorGoggles' ||
+    pat === 'hornRimGlasses' ||
+    pat === 'roundPeaceShades' ||
+    pat === 'neonWayfarerShades' ||
+    pat === 'y2kRimlessShades'
+  ) {
+    if (baseOrientation === 'front') {
+      const isFem = gender === 'female';
+      if (pat === 'monocleChain') {
+        const mx = isFem ? 15 : 16;
+        drawPatternRowsAt(target, mx, eyeY - 1, [
+          'OOO',
+          'OLO',
+          'OOO',
+          '..S'
+        ], pal);
+        return;
+      }
+      if (pat === 'y2kRimlessShades') {
+        const rows = isFem
+          ? ['PLLSLPL']
+          : ['PLLSLLPL'];
+        drawPatternRowsAt(target, isFem ? 12 : 12, eyeY, rows, pal);
+        return;
+      }
+      const frameChar = pat === 'neonWayfarerShades' ? 'P' : 'O';
+      const rows = isFem
+        ? [
+            `.${frameChar}${frameChar}.${frameChar}${frameChar}.`,
+            `${frameChar}PLO${frameChar}LP${frameChar}`
+          ]
+        : [
+            `.${frameChar}${frameChar}..${frameChar}${frameChar}.`,
+            `${frameChar}PLOOPL${frameChar}`
+          ];
+      drawPatternRowsAt(target, 12, eyeY - 1, rows, pal);
+      return;
+    }
+
+    // Side view eyewear
+    const sx = 14 + headDx;
+    if (pat === 'monocleChain') {
+      drawPatternRowsAt(target, sx + 1, eyeY - 1, [
+        '.OOO',
+        '.OLO',
+        '.OOO',
+        '.S..'
+      ], pal);
+      return;
+    }
+    if (pat === 'y2kRimlessShades') {
+      drawPatternRowsAt(target, sx, eyeY, ['SSPLL'], pal);
+      return;
+    }
+    const frameChar = pat === 'neonWayfarerShades' ? 'P' : 'O';
+    drawPatternRowsAt(target, sx, eyeY - 1, [
+      `..${frameChar}${frameChar}${frameChar}`,
+      `OOPL${frameChar}`
+    ], pal);
+    return;
+  }
+
+  // 2. Trail Bandana & Pack
+  if (pat === 'trailBandana') {
+    if (baseOrientation === 'front') {
+      const isFem = gender === 'female';
+      const rows = isFem
+        ? [
+            'OO.....OO',
+            'OLO...OLO',
+            'OOPPPPPOO',
+            '..OPJPO..'.replace('J', 'L'),
+            '...OPO...'
+          ]
+        : [
+            'OO......OO',
+            'OLO....OLO',
+            'OOPPPPPPOO',
+            '..OPLLPO..',
+            '...OPPO...'
+          ];
+      drawPatternRowsAt(target, 11, 8 + headDy, rows, pal);
+      return;
+    }
+    drawPatternRowsAt(target, 8, 8 + headDy, [
+      'OOOO.......',
+      'OLLLOOOOOO.',
+      'OLSLLOPPPPO',
+      'OOOOO.OPPPO',
+      '.OSSS..OPO.',
+      '.OSSS......',
+      '.OOOO......'
+    ], pal);
+    return;
+  }
+
+  // 3. Neck / Collar / Chest Accessories
+  if (
+    pat === 'tudorRuff' ||
+    pat === 'collarRuffCravat' ||
+    pat === 'bowtieCollar' ||
+    pat === 'drapedScarf' ||
+    pat === 'neckHeadphones'
+  ) {
+    if (baseOrientation === 'front') {
+      const isFem = gender === 'female';
+      const rowsByPat = {
+        tudorRuff: isFem ? ['OOOOOOO', 'OLLPLLO', 'OLPLPLO'] : ['OOOOOOOO', 'OLLPPLLO', 'OLPLLPLO'],
+        collarRuffCravat: isFem ? ['.OOOOO.', 'OOLLLOO', '.OLPLO.'] : ['.OOOOOO.', 'OOLLLLOO', '.OLLPPO.'],
+        bowtieCollar: isFem ? ['.OLLLO.', 'OPSSSPO', '.O...O.'] : ['.OLLLL0.'.replace('0', 'O'), 'OPPSSPPO', '.O....O.'],
+        drapedScarf: isFem ? ['OLLPPSSO', 'OPLSSSPO', '.OO..OO.'] : ['OLLPPPSSO', 'OPLLSSSPO', '.OO...OO.'],
+        neckHeadphones: isFem ? ['OS...SO', 'OPLSLPO', '.O...O.'] : ['OS....SO', 'OPLSSLPO', '.O....O.']
+      };
+      drawPatternRowsAt(target, 12, 8 + headDy, rowsByPat[pat] || rowsByPat.drapedScarf, pal);
+      return;
+    }
+    const sideRowsByPat = {
+      tudorRuff: ['OOOOOO', 'OLLPLO', 'OLPLLO'],
+      collarRuffCravat: ['OOOOO.', '.OLLLO', '..OLPO'],
+      bowtieCollar: ['OLLLO.', '..OPSO', '..OOO.'],
+      drapedScarf: ['OLLPSO', 'OPLSSO', '.O..O.'],
+      neckHeadphones: ['.OOO..', '.OSOPO', '..OOO.']
+    };
+    drawPatternRowsAt(target, 13, 8 + headDy, sideRowsByPat[pat] || sideRowsByPat.drapedScarf, pal);
+    return;
+  }
+
+  if (pat === 'longNecktie' || pat === 'pearlBeadNecklace' || pat === 'discoMedallion') {
+    if (baseOrientation === 'front') {
+      const isFem = gender === 'female';
+      if (pat === 'longNecktie') {
+        drawPatternRowsAt(target, isFem ? 13 : 13, 8 + headDy, isFem ? [
+          'OLLLO',
+          '.OPO.',
+          '.OPO.',
+          '.OSO.',
+          '.OPO.',
+          '..O..'
+        ] : [
+          'OLLLL0'.replace('0', 'O'),
+          '.OPPO.',
+          '.OPPO.',
+          '.OSSO.',
+          '.OPPO.',
+          '..OO..'
+        ], pal);
+        return;
+      }
+      if (pat === 'pearlBeadNecklace') {
+        drawPatternRowsAt(target, 13, 8 + headDy, isFem ? [
+          'LP.PL',
+          'L...L',
+          '.LPL.',
+          '..P..'
+        ] : [
+          'LP..PL',
+          'L....L',
+          '.LPPL.',
+          '..PP..'
+        ], pal);
+        return;
+      }
+      drawPatternRowsAt(target, 13, 8 + headDy, isFem ? [
+        'S...S',
+        '.SOS.',
+        '.OLO.',
+        '.OPO.',
+        '..O..'
+      ] : [
+        'S....S',
+        '.SOOS.',
+        '.OLLO.',
+        '.OPPO.',
+        '..OO..'
+      ], pal);
+      return;
+    }
+    // Side view tie / necklace / medallion
+    if (pat === 'longNecktie') {
+      drawPatternRowsAt(target, 14, 9 + headDy, [
+        'OLLO',
+        '..PO',
+        '..PO',
+        '..SO',
+        '..OO'
+      ], pal);
+      return;
+    }
+    if (pat === 'pearlBeadNecklace') {
+      drawPatternRowsAt(target, 14, 9 + headDy, [
+        'LP..',
+        '.LP.',
+        '..LP'
+      ], pal);
+      return;
+    }
+    drawPatternRowsAt(target, 14, 9 + headDy, [
+      'S...',
+      '.SO.',
+      '.OLO',
+      '.OPO'
+    ], pal);
+    return;
+  }
+
+  // 4. Suspenders & Crossbody Bag
+  if (pat === 'suspendersBraces' || pat === 'crossbodyBag') {
+    if (baseOrientation === 'front') {
+      const isFem = gender === 'female';
+      if (pat === 'suspendersBraces') {
+        const rx = isFem ? 17 : 18;
+        for (let y = 9 + headDy; y <= 15 + headDy; y += 1) {
+          if (y < 0 || y >= GRID_SIZE) continue;
+          const c = y === 15 + headDy ? L : S;
+          if (baseGrid[y]?.[13]) target[y][13] = c;
+          if (baseGrid[y]?.[rx]) target[y][rx] = c;
+        }
+        return;
+      }
+      drawPatternRowsAt(target, 12, 9 + headDy, [
+        'OO.....',
+        '.LP....',
+        '..PO...',
+        '...SO..',
+        '....OLO',
+        '...OPPO',
+        '...OOOO'
+      ], pal);
+      return;
+    }
+    if (pat === 'suspendersBraces') {
+      for (let y = 9 + headDy; y <= 15 + headDy; y += 1) {
+        if (y < 0 || y >= GRID_SIZE) continue;
+        if (baseGrid[y]?.[15]) target[y][15] = y === 15 + headDy ? L : S;
+        if (baseGrid[y]?.[16]) target[y][16] = O;
+      }
+      return;
+    }
+    drawPatternRowsAt(target, 13, 9 + headDy, [
+      '.OO..',
+      '.LP..',
+      '..PO.',
+      '.OLLO',
+      '.OPPO',
+      '.OOOO'
+    ], pal);
+    return;
+  }
+
+  // 5. Waist Belts, Fanny Pack, and Pioneer Apron
+  if (pat === 'pioneerApron') {
+    if (baseOrientation === 'front') {
+      const isFem = gender === 'female';
+      drawPatternRowsAt(target, 12, 16 + headDy, isFem ? [
+        'OOOOOOO',
+        'OLLLLPO',
+        'OLLLLPO',
+        'OLLPPLO',
+        'OLLLLPO',
+        'OPPPSSO',
+        '.OOOOO.'
+      ] : [
+        'OOOOOOOO',
+        'OLLLLLPO',
+        'OLLLLLPO',
+        'OLLPPPLO',
+        'OLLLLLPO',
+        'OPPPPSSO',
+        '.OOOOOO.'
+      ], pal);
+      return;
+    }
+    drawPatternRowsAt(target, 13, 16 + headDy, [
+      'OOOOOO',
+      'OSSLLO',
+      '..OLLO',
+      '..OPLO',
+      '..OLLO',
+      '..OSSO',
+      '...OOO'
+    ], pal);
+    return;
+  }
+
+  // beltChainSash / fannyPackWaist
+  if (baseOrientation === 'front') {
+    const isFem = gender === 'female';
+    const rows = pat === 'fannyPackWaist'
+      ? (isFem ? ['OOOOOOO', 'OSOLPPO', '..OPPO.', '...OO..'] : ['OOOOOOOO', 'OSOLLPPO', '..OPPPO.', '...OOO..'])
+      : (isFem ? ['OOOOOOO', 'OSPPLSO', 'OOOOOOO'] : ['OOOOOOOO', 'OSPPLLSO', 'OOOOOOOO']);
+    drawPatternRowsAt(target, 12, 15 + headDy, rows, pal);
+    return;
+  }
+  const sideRows = pat === 'fannyPackWaist'
+    ? ['OOOOOO', 'OSOLPO', '..OPPO', '...OO.']
+    : ['OOOOOO', 'OSPPLO', 'OOOOOO'];
+  drawPatternRowsAt(target, 13, 15 + headDy, sideRows, pal);
+}
+
+const FITTED_HEADWEAR_MAPS = {
+  sunbonnet: {
+    front: [
+      '..OOOOOOOO..',
+      '.OLLLLPPPPO.',
+      'OPLLPPPPSSPO',
+      'OPLLSSSSSSPO',
+      'OPO......OPO',
+      'OSO......OSO',
+      '.OO......OO.',
+      '..L......S..'
+    ],
+    side: [
+      '..OOOOOOO...',
+      '.OLLLLPPPO..',
+      'OPLLPPPPPSSO',
+      'OPPPSSSSSLLO',
+      'OPPPSSO..OO.',
+      '.OSSSSO.....',
+      '..OO.L......',
+      '.....S......'
+    ]
+  },
+  slouchHat: {
+    front: [
+      '...OOOOOOOO...',
+      '..OLLLLPPPPO..',
+      '.OOSSSSSSSSOO.',
+      'OLLLLPPPPPPLSO',
+      '.OOOOOOOOOOOO.',
+      '...O......O...',
+      '...OSSSSSSO...',
+      '...OSSLLSSO...',
+      '....OOOOOO....'
+    ],
+    side: [
+      '...OOOOOO...',
+      '..OLLLLPPO..',
+      '.OOSSSSSSOO.',
+      'OLLLPPPPPLSO',
+      '.OOOOOOOOOO.',
+      '....OO......',
+      '....OSSSSOO.',
+      '.....OSSSSO.',
+      '.....OOOOOO.'
+    ]
+  },
+  coonskinCap: {
+    front: [
+      '..OOOOOOOO..',
+      '.OLLPPLLPPO.',
+      'OPLPSSSSPPPO',
+      '.OOOOOOOOOO.',
+      '.........OO.',
+      '........OPLO',
+      '........OSSO',
+      '.........OO.'
+    ],
+    side: [
+      '...OOOOOOOO.',
+      '..OLLPPLLPPO',
+      '.OPLPSSSSPPO',
+      '..OOOOOOOOOO',
+      '.OO.........',
+      'OPLO........',
+      'OSSO........',
+      '.OO.........'
+    ]
+  },
+  beret: {
+    front: [
+      '..OOOOOOOO..',
+      '.OLLLLPPPPO.',
+      'OPLLPPPPSSPO',
+      '.OOOOOOOOOO.'
+    ],
+    side: [
+      '..OOOOOOOO..',
+      '.OLLLLPPPSO.',
+      'OPLLPPPPPSSO',
+      '.OOOOOOOOOO.'
+    ]
+  },
+  plumedHat: {
+    front: [
+      '..OOOLLLLOOO..',
+      '.OLLLLPPPPSSO.',
+      'OOOOLLLPPSSOOO',
+      '.OOOOOOOOOOOO.'
+    ],
+    side: [
+      '..OOOLLLLOO...',
+      '.OLLLLPPPPSSO.',
+      'OOOOLLLPPSSOOO',
+      '.OOOOOOOOOOOO.'
+    ]
+  },
+  puritanCapotain: {
+    front: [
+      '...OOOOOOOO...',
+      '..OPLLPPSSPO..',
+      '..OOSSSLLSSOO.',
+      'OOOOLLPPPSSOOO',
+      '.OOOOOOOOOOOO.'
+    ],
+    side: [
+      '...OOOOOOOO..',
+      '..OPLLPPSSPO.',
+      '..OSSSLLSSSSO',
+      'OOOOLLPPPSSOO',
+      '.OOOOOOOOOOOO'
+    ]
+  },
+  tricorne: {
+    front: [
+      '.OOO....OOO.',
+      'OOLLOOOOLLOO',
+      'OPLLPPPPSSPO',
+      '.OOOOOOOOOO.'
+    ],
+    side: [
+      '..OOOOOOOO..',
+      '.OOLLLLLLSSO',
+      'OPLLPPPPPPSS',
+      '.OOOOOOOOOO.'
+    ]
+  },
+  bicorne: {
+    front: [
+      '..OOOOOOOO..',
+      '.OLLPPLLPPSO',
+      'OPLLPPPPSSPO',
+      'OOOOOOOOOOOO'
+    ],
+    side: [
+      '..OOOOOOOO..',
+      '.OLLLLPPPSSO',
+      'OPLLPPPPPPSO',
+      'OOOOOOOOOOOO'
+    ]
+  },
+  topHat: {
+    front: [
+      '..OOOOOOOO..',
+      '..OPLLPPSSPO',
+      '..OPLLPPSSPO',
+      '..OSSSLLSSSO',
+      'OOOOOOOOOOOO'
+    ],
+    side: [
+      '..OOOOOOOO..',
+      '..OPLLPPSSO.',
+      '..OPLLPPSSO.',
+      '..OSSSLLSSO.',
+      'OOOOOOOOOOOO'
+    ]
+  },
+  bowlerDerby: {
+    front: [
+      '..OOOOOOOO..',
+      '.OPLLPPPPSSO',
+      '.OSSSLLLLSSO',
+      'OOOOOOOOOOOO'
+    ],
+    side: [
+      '..OOOOOOOO..',
+      '.OPLLPPPPSSO',
+      '.OSSSLLLLSSO',
+      'OOOOOOOOOOOO'
+    ]
+  },
+  boaterFedora: {
+    front: [
+      '...OOOOOOOO...',
+      '..OPLLPPSSPO..',
+      '..OOSSSLLSSOO.',
+      'OOOOLLPPPSSOOO',
+      '.OOOOOOOOOOOO.'
+    ],
+    side: [
+      '...OOOOOOOO..',
+      '..OPLLPPPSSO.',
+      '..OSSSLLLSSO.',
+      'OOOOLLPPPSSOO',
+      '.OOOOOOOOOOOO'
+    ]
+  },
+  newsboyFlatCap: {
+    front: [
+      '..OOOOOOOO..',
+      '.OLLLLPPPPO.',
+      'OPLLPPPPSSPO',
+      '.OOOOOOOOOO.'
+    ],
+    side: [
+      '..OOOOOOOO..',
+      '.OLLLLPPPSO.',
+      'OPLLPPPPPSSO',
+      '.OOOOOOOOOOO'
+    ]
+  },
+  clocheBellHat: {
+    front: [
+      '..OOOOOOOO..',
+      '.OLLLLPPPPO.',
+      'OPLLSSSSSSPO',
+      '.OOOOOOOOOO.'
+    ],
+    side: [
+      '..OOOOOOOO..',
+      '.OLLLLPPPSO.',
+      'OPLLSSSSSPSO',
+      '.OOOOOOOOOO.'
+    ]
+  },
+  steelHelmet: {
+    front: [
+      '..OOOOOOOO..',
+      '.OLLLLPPPPO.',
+      'OOSSSSSSSSOO',
+      'OOOOOOOOOOOO'
+    ],
+    side: [
+      '..OOOOOOOO..',
+      '.OLLLLPPPSO.',
+      'OOSSSSSSSSOO',
+      'OOOOOOOOOOOO'
+    ]
+  },
+  capBeanie: {
+    front: [
+      '..OOOOOOOO..',
+      '.OLLLLPPPPO.',
+      'OPLLPPPPSSPO',
+      '.OOOOOOOOOO.'
+    ],
+    side: [
+      '..OOOOOOOO..',
+      '.OLLLLPPPSO.',
+      '.OPLLPPPPSSO',
+      '..OOOOOOOOOO'
+    ]
+  },
+  backwardsCap: {
+    front: [
+      '..OOOOOOOO..',
+      '.OLLLLPPPPO.',
+      'OPLLSSSSPPPO',
+      '.OOOOOOOOOO.'
+    ],
+    side: [
+      '...OOOOOOOO.',
+      '..OLLLLPPPSO',
+      'OOPLLPPPPSSO',
+      'OOOOOOOOOOO.'
+    ]
+  },
+  headbandBandana: {
+    front: [
+      '.OO..OOOO..OO.',
+      'OPLOLLLLPPOLPO',
+      '.OPLLPPPPSSPO.',
+      '..OOOOOOOOOO..'
+    ],
+    side: [
+      '.OO..OOOOOO.',
+      'OPLOLLLLPPSO',
+      '.OPLLPPPPSSO',
+      '..OOOOOOOOOO'
+    ]
+  },
+  longWavyFlow: {
+    front: [
+      '...OOOOOOOO...',
+      '..OLLLLPPPPO..',
+      '.OPLLPPPPSSPO.',
+      '.OPLSO..OLSPO.',
+      'OPLPO....OPLPO',
+      'OPLPO....OPLPO',
+      'OOLPO....OPLOO',
+      '.OPSO....OSPO.',
+      '.OOLO....OLOO.',
+      '..OO......OO..'
+    ],
+    side: [
+      '...OOOOOOOO..',
+      '..OLLLLPPPSO.',
+      '.OPLLPPPPPSSO',
+      'OOPLLPPSSSSPO',
+      'OPLPPSSO.....',
+      'OPLPSSO......',
+      '.OPLPSSO.....',
+      '.OPPPSSO.....',
+      '..OPSSO......',
+      '...OO........'
+    ]
+  },
+  longTwinBraids: {
+    front: [
+      '...OOOOOOOO...',
+      '..OLLPPLLPPO..',
+      '.OPLLPPPPSSPO.',
+      '.OPLSO..OLSPO.',
+      '.OOLO....OLOO.',
+      '..OPO....OPO..',
+      '.OOLO....OLOO.',
+      '..OPO....OPO..',
+      '.OOLO....OLOO.',
+      '..OO......OO..'
+    ],
+    side: [
+      '...OOOOOOOO..',
+      '..OLLPPPPPSSO',
+      '.OPLLPPPPPSSO',
+      '.OPLLPPSSSSPO',
+      'OOPPPSSO.....',
+      '.OPLPSSO.....',
+      '.OOLPPO......',
+      '..OSSSSO.....',
+      '..OOPLPO.....',
+      '...OOO.......'
+    ]
+  },
+  curlsWig: {
+    front: [
+      '..OOOOOOOOOO..',
+      '.OLLPPLLPPPPO.',
+      'OPLLPPPPPPSSPO',
+      'OPLSO....OLSPO',
+      'OOLPO....OPLOO',
+      'OPLSO....OLSPO',
+      'OOLPO....OPLOO',
+      '.OPSO....OSPO.',
+      '..OO......OO..'
+    ],
+    side: [
+      '...OOOOOOOO..',
+      '..OLLPPLLPPSO',
+      '.OPLLPPPPPSSO',
+      'OOPLLPPSSSSPO',
+      'OOLPPSSO.....',
+      'OPLPPSSO.....',
+      '.OOLPSSO.....',
+      '.OPLPSSO.....',
+      '..OOOO.......'
+    ]
+  },
+  ponytailQueue: {
+    front: [
+      '..OOOOOOOO..',
+      '.OLLLLPPPPO.',
+      'OPLLPPPPSSPO',
+      'OPLSO..OLSPO',
+      '.OO......OO.'
+    ],
+    side: [
+      '...OOOOOOOO.',
+      '..OLLLLPPPSO',
+      '.OPLLPPPPSSO',
+      'OOSSSSO.....',
+      'OPLPPPO.....',
+      '.OPLPO......',
+      '..OSSO......',
+      '..OO........'
+    ]
+  },
+  frontierBeardHair: {
+    front: [
+      '..OOOOOOOO..',
+      '.OLLLLPPPPO.',
+      'OPLLPPPPSSPO',
+      'OPLSO..OLSPO',
+      'OPO......OSO',
+      '.OSSSSSSSSO.',
+      '.OSSLLLLSSO.',
+      '..OSSSSSSSO.',
+      '...OOOOOOO..'
+    ],
+    side: [
+      '..OOOOOOOO..',
+      '.OLLLLPPPSO.',
+      'OPLLPPPPPSSO',
+      'OPLPPSSO....',
+      'OPLPSO......',
+      '.OSSO..OOOO.',
+      '..OO..OSSSSO',
+      '......OSSLLO',
+      '.......OOOO.'
+    ]
+  },
+  longPartedCascade: {
+    front: [
+      '...OOOOOOOO...',
+      '..OLLPPLLPPO..',
+      '.OPLLPPPPSSPO.',
+      '.OPLSO..OLSPO.',
+      'OOLPO....OPSOO',
+      'OPLPO....OPSPO',
+      '.OPLO....OLPO.',
+      '..OO......OO..'
+    ],
+    side: [
+      '...OOOOOOOO..',
+      '..OLLPPLLPPSO',
+      '.OPLLPPPPPSSO',
+      'OOPLLPPSSSSPO',
+      'OPLPPSSO.....',
+      '.OPLPSSO.....',
+      '.OPPPSSO.....',
+      '..OSSO.......',
+      '...OO........'
+    ]
+  },
+  pioneerBun: {
+    front: [
+      '...OOOOOO...',
+      '..OLLLLPPO..',
+      '.OOOPPPPOOO.',
+      'OPLLPPPPSSPO',
+      'OPLSO..OLSPO',
+      '.OO......OO.'
+    ],
+    side: [
+      '.OOOO.......',
+      'OPLPSOOOOO..',
+      'OPPSOLLLLPSO',
+      'OOPLLPPPPPPO',
+      '.OPPPSSO....',
+      '..OSSO......',
+      '...OO.......'
+    ]
+  },
+  bobPageboy: {
+    front: [
+      '..OOOOOOOO..',
+      '.OLLLLPPPPO.',
+      'OPLLPPPPSSPO',
+      'OPLSO..OLSPO',
+      'OPO......OSO',
+      '.OO......OO.'
+    ],
+    side: [
+      '..OOOOOOOO..',
+      '.OLLLLPPPSO.',
+      'OPLLPPPPPSSO',
+      'OPPPSSSSPPO.',
+      '.OPPPSSO....',
+      '..OSSO......'
+    ]
+  },
+  pompadourAfro: {
+    front: [
+      '.OOOOOOOOOO.',
+      'OLLLLPPPPSSO',
+      'OPLLPPPPSSPO',
+      'OPLSO..OLSPO',
+      '.OO......OO.'
+    ],
+    side: [
+      '.OOOOOOOOO..',
+      'OLLLLPPPPSOO',
+      'OPLLPPPPPSSO',
+      '.OPPPSSO....',
+      '..OOOO......'
+    ]
+  },
+  spikyCurtains: {
+    front: [
+      'OO..OOOO..OO',
+      'OPLOLLLLPOLO',
+      'OPLLPPPPSSPO',
+      'OPLSO..OLSPO',
+      '.OO......OO.'
+    ],
+    side: [
+      'OO..OOOO..OO',
+      'OPLOLLLLPOLO',
+      'OPLLPPPPPSSO',
+      '.OPPPSSO....',
+      '..OOO.......'
+    ]
+  },
+  braidedCrown: {
+    front: [
+      '.OOOOOOOOOO.',
+      'OLLPPLLLLPPO',
+      'OSSSLLLLSSSO',
+      'OPLSO..OLSPO',
+      '.OO......OO.'
+    ],
+    side: [
+      '..OOOOOOOO..',
+      '.OLLPPLLLLPO',
+      '.OSSSSSSSSPO',
+      'OOSSSSO.....',
+      '.OPLPPO.....',
+      '..OOOO......'
+    ]
+  },
+  buzzFadeTop: {
+    front: [
+      '..OOOOOOOO..',
+      '.OLLLLPPPPO.',
+      '.OPLLPPSSPO.',
+      '.OSO....OSO.'
+    ],
+    side: [
+      '..OOOOOOOO..',
+      '.OLLLLPPPPO.',
+      '.OPLLPPPPSO.',
+      '..OOOO......'
+    ]
+  }
+};
+
+function renderFittedHeadwear(target, baseGrid, frameInfo, preset, palette) {
+  const { gender, baseOrientation, headTopY, headDy, headDx } = frameInfo;
+  const { O, P, S, L } = palette;
+  const pat = preset.patternId || (preset.subType === 'hair' ? 'bobPageboy' : 'beret');
+  const isHair = preset.subType === 'hair';
+
+  // When a hairstyle is equipped, harmonize any built-in hair pixels on the head
+  // so dark slate/brown base hair never clashes with the selected hairstyle color.
+  if (isHair) {
+    for (let y = Math.max(0, headTopY); y <= Math.min(GRID_SIZE - 1, 8 + headDy); y += 1) {
+      for (let x = 8; x <= 23; x += 1) {
+        const c = baseGrid[y]?.[x];
+        if (isSpriteBaseHair(c, y, headDy)) {
+          target[y][x] = y <= headTopY + 2 ? L : (x <= 15 ? P : S);
+        }
+      }
+    }
+  }
+
+  const mapEntry = FITTED_HEADWEAR_MAPS[pat] || (isHair ? FITTED_HEADWEAR_MAPS.bobPageboy : FITTED_HEADWEAR_MAPS.beret);
+  const rows = baseOrientation === 'side' ? mapEntry.side : mapEntry.front;
+  if (!rows || !rows.length) return;
+
+  const width = rows[0].length;
+  const centerX = baseOrientation === 'side'
+    ? 15.5 + headDx
+    : (gender === 'female' ? 15.0 : 15.5);
+  const startX = Math.round(centerX - width / 2);
+
+  // Determine vertical start row so hats/hair sit on the crown without covering the eyes
+  const hasTallCrown = pat === 'slouchHat' || pat === 'puritanCapotain' || pat === 'topHat' || pat === 'boaterFedora';
+  const startY = hasTallCrown ? Math.max(0, headTopY - 1) : headTopY;
+
+  const eyeRow = headTopY + (gender === 'female' ? 5 : 4);
+  const hasBeard = pat === 'slouchHat' || pat === 'frontierBeardHair';
+
+  rows.forEach((rowStr, rIdx) => {
+    const y = startY + rIdx;
+    if (y < 0 || y >= GRID_SIZE) return;
+    for (let cIdx = 0; cIdx < rowStr.length; cIdx += 1) {
+      const ch = rowStr[cIdx];
+      if (!ch || ch === '.' || ch === ' ') continue;
+      const x = startX + cIdx;
+      if (x < 0 || x >= GRID_SIZE) continue;
+
+      // Protect eyes and central face from being overwritten by hair or hat brims
+      if (baseOrientation === 'front') {
+        const faceMinX = gender === 'female' ? 13 : 13;
+        const faceMaxX = gender === 'female' ? 17 : 18;
+        const inCentralFaceX = x >= faceMinX && x <= faceMaxX;
+        if (inCentralFaceX && y >= eyeRow - 1 && y <= eyeRow) {
+          continue;
+        }
+        if (!hasBeard && inCentralFaceX && y >= eyeRow && y <= headTopY + 6) {
+          continue;
+        }
+      } else {
+        // Side view (facing east): face profile is on the east side (x >= 16 + headDx)
+        const inEastFaceX = x >= 16 + headDx && x <= 19 + headDx;
+        if (inEastFaceX && y >= eyeRow - 1 && y <= eyeRow) {
+          continue;
+        }
+        if (!hasBeard && inEastFaceX && y >= eyeRow - 1 && y <= headTopY + 6) {
+          continue;
+        }
+      }
+
+      // Lower cascading hair (below shoulder line) drapes behind/around the torso rather than overwriting central chest
+      if (isHair && !hasBeard && y >= headTopY + 8) {
+        if (baseOrientation === 'front') {
+          const innerChestMin = gender === 'female' ? 13 : 13;
+          const innerChestMax = gender === 'female' ? 17 : 18;
+          if (x >= innerChestMin && x <= innerChestMax && target[y][x]) continue;
+        } else if (x >= 15 + headDx && target[y][x]) {
+          continue;
+        }
+      }
+
+      let color = palette[ch];
+      if (!color) continue;
+      if (ch !== 'O') {
+        color = applyDirectional16BitShading(
+          color,
+          x,
+          y,
+          baseOrientation,
+          'hats',
+          preset.subType || null,
+          ch === 'P' ? 'primary' : ch === 'S' ? 'secondary' : 'highlight'
+        );
+      }
+      target[y][x] = color;
+    }
+  });
+}
+
+function overlayFittedClothing(baseGrid, appearance, baseOrientation = 'front') {
+  const target = baseGrid.map((row) => [...row]);
+  const gender = appearance?.gender === 'female' ? 'female' : 'male';
+  const frameInfo = analyzeBoilerplateFrame(baseGrid, gender, baseOrientation);
+
+  const pantsPresetId = String(appearance?.equippedPresets?.pants || '');
+  const pantsPreset = (INITIAL_CLOTHING_BOILERPLATE.pants || []).find((entry) => entry.id === pantsPresetId);
+  const shoesPresetId = String(appearance?.equippedPresets?.shoes || '');
+  const shoesPreset = (INITIAL_CLOTHING_BOILERPLATE.shoes || []).find((entry) => entry.id === shoesPresetId);
+  const hasShoes = Boolean(shoesPreset && !shoesPreset.isNone);
+  const isSkirt = isSkirtPreset(pantsPreset);
+
+  const drawOrder = isSkirt
+    ? ['shoes', 'pants', 'shirts', 'accessories', 'hats']
+    : ['pants', 'shoes', 'shirts', 'accessories', 'hats'];
+
+  for (const category of drawOrder) {
+    const presetId = String(appearance?.equippedPresets?.[category] || '');
+    const preset = (INITIAL_CLOTHING_BOILERPLATE[category] || []).find((entry) => entry.id === presetId);
+    if (!preset || preset.isNone) continue;
+
+    const dyeId = appearance?.categoryDyes?.[category] || 'default';
+    const palette = resolveGarmentPalette(preset, dyeId);
+
+    if (category === 'pants') {
+      renderFittedPantsOrSkirt(target, baseGrid, frameInfo, preset, palette, hasShoes);
+    } else if (category === 'shoes') {
+      renderFittedShoes(target, baseGrid, frameInfo, preset, palette);
+    } else if (category === 'shirts') {
+      renderFittedShirt(target, baseGrid, frameInfo, preset, palette);
+    } else if (category === 'accessories') {
+      renderFittedAccessory(target, baseGrid, frameInfo, preset, palette);
+    } else if (category === 'hats') {
+      renderFittedHeadwear(target, baseGrid, frameInfo, preset, palette);
+    }
+  }
+
+  return target;
+}
+
+export function getCharacterFrameCount(appearance, view = 'side_right', animMode = 'walk') {
+  const isFront = view === 'front';
+  const gender = appearance?.gender === 'female' ? 'female' : 'male';
+  if (getBoilerplateSpriteSize(gender)) {
+    const usesSouthWalk = gender === 'female' && isFront;
+    if (animMode === 'idle' || (isFront && !usesSouthWalk)) return 1;
+    return getBoilerplateSpriteFrameCount(gender, animMode);
+  }
+  return animMode === 'idle' ? 2 : 6;
+}
+
+export function getCharacterFrameSize(appearance) {
+  const gender = appearance?.gender === 'female' ? 'female' : 'male';
+  return getBoilerplateSpriteSize(gender) ?? GRID_SIZE;
+}
+
+export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'walk', frameIndex = 0) {
+  const gender = appearance?.gender === 'female' ? 'female' : 'male';
+  const isFront = view === 'front';
+  const isSideLeft = view === 'side_left';
+
+  if (isFront) {
+    const effectiveMode = gender === 'female' && animMode === 'walk' ? 'walk' : 'idle';
+    const frameCount = getBoilerplateSpriteFrameCount(gender, effectiveMode);
+    const spriteGrid = getBoilerplateSpriteGrid(gender, 'south', effectiveMode, frameIndex % frameCount);
+    if (!spriteGrid) return getLegacyCharacterFrameGrid(appearance, view, animMode, frameIndex);
+    return overlayFittedClothing(spriteGrid, appearance, 'front');
+  }
+
+  const eastGrid = getBoilerplateSpriteGrid(gender, 'east', animMode, frameIndex);
+  if (!eastGrid) return getLegacyCharacterFrameGrid(appearance, view, animMode, frameIndex);
+  const dressedEast = overlayFittedClothing(eastGrid, appearance, 'side');
+  return isSideLeft ? dressedEast.map((row) => [...row].reverse()) : dressedEast;
+}
+
+export function getCharacterOutfitGrid(appearance, view = 'front') {
+  const gender = appearance?.gender === 'female' ? 'female' : 'male';
+  const isSide = view === 'side' || view === 'side_right' || view === 'side_left';
+  const spriteGrid = getBoilerplateSpriteGrid(gender, isSide ? 'east' : 'south', 'idle', 0);
+  if (!spriteGrid) return buildNeutralCompositeGrid(appearance, isSide ? 'side' : 'front');
+  const dressed = overlayFittedClothing(spriteGrid, appearance, isSide ? 'side' : 'front');
+  return view === 'side_left' ? dressed.map((row) => [...row].reverse()) : dressed;
 }
 
 export function renderCharacterGridToCanvas(firstArg, secondArg, options = {}) {

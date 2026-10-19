@@ -30,6 +30,12 @@ await app.register(staticPlugin, {
   root: join(__dirname, '../frontend')
 });
 
+await app.register(staticPlugin, {
+  root: join(__dirname, '../Sprite'),
+  prefix: '/Sprite/',
+  decorateReply: false
+});
+
 app.get('/health', async () => ({ ok: true }));
 
 await registerWorldRoutes(app);

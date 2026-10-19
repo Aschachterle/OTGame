@@ -1,6 +1,11 @@
 import { Texture } from 'pixi.js';
 import { canonicalJson } from './canonical-json.js?v=pixi_final_1';
-import { getCharacterFrameGrid, drawCharacterGridAt } from './character-designer.js?v=pixi_final_11';
+import {
+  getCharacterFrameCount,
+  getCharacterFrameGrid,
+  getCharacterFrameSize,
+  drawCharacterGridAt
+} from './character-designer.js?v=sprite32_1';
 import { drawOxenAndWagonCart } from './scene-sprites.js?v=pixi_final_1';
 
 function createCanvas(width, height, description) {
@@ -48,11 +53,12 @@ export class PixiTextureFactory {
     const cachedFrames = this.characterCache.get(cacheKey);
     if (cachedFrames) return cachedFrames;
 
-    const frameCount = animationMode === 'idle' ? 2 : 6;
+    const frameCount = getCharacterFrameCount(appearance, view, animationMode);
+    const frameSize = getCharacterFrameSize(appearance);
     const frames = [];
     try {
       for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
-        const { canvas, context } = createCanvas(32, 32, 'character');
+        const { canvas, context } = createCanvas(frameSize, frameSize, 'character');
         const grid = getCharacterFrameGrid(appearance, view, animationMode, frameIndex);
         drawCharacterGridAt(context, grid, 0, 0);
         frames.push(createTexture(canvas));

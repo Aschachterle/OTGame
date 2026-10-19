@@ -31,12 +31,14 @@ import {
   SELECTABLE_ERAS,
   SKIN_TONES,
   buildNeutralCompositeGrid,
+  getCharacterFrameCount,
   getCharacterFrameGrid,
+  getCharacterOutfitGrid,
   getEraById,
   getPresetsForCategoryAndEra,
   renderCharacterGridToCanvas,
   summarizeMemberOutfit
-} from './character-designer.js?v=pixi_final_11';
+} from './character-designer.js?v=sprite32_1';
 import {
   getWeatherOverlayMeta,
   renderGameLandscapeStage,
@@ -844,11 +846,16 @@ export function createUI() {
       const member = party[idx];
       if (!member?.appearance) return;
       const moving = Boolean(state.landscapeMoving || state.travelAnimationActive);
+      const frameCount = getCharacterFrameCount(
+        member.appearance,
+        moving ? 'side_right' : 'front',
+        moving ? 'walk' : 'idle'
+      );
       const grid = getCharacterFrameGrid(
         member.appearance,
         moving ? 'side_right' : 'front',
         moving ? 'walk' : 'idle',
-        (animTick + idx) % (moving ? 6 : 2)
+        (animTick + idx) % frameCount
       );
       renderCharacterGridToCanvas(el, grid, '#030c05');
     });
@@ -863,7 +870,12 @@ export function createUI() {
     party.forEach((member, idx) => {
       const miniCanvas = refs.journeyModalCardEl.querySelector(`[data-member-mini-canvas="${idx}"]`);
       if (miniCanvas instanceof HTMLCanvasElement && member?.appearance) {
-        const frameGrid = getCharacterFrameGrid(member.appearance, 'front', 'idle', (animTick + idx) % 2);
+        const frameGrid = getCharacterFrameGrid(
+          member.appearance,
+          'front',
+          'idle',
+          (animTick + idx) % getCharacterFrameCount(member.appearance, 'front', 'idle')
+        );
         renderCharacterGridToCanvas(miniCanvas, frameGrid, { includeBackdrop: true, backdropId: 'prairie', scrollOffset: animTick });
       }
     });
@@ -871,12 +883,22 @@ export function createUI() {
     if (activeMember?.appearance) {
       const frontCanvas = refs.journeyModalCardEl.querySelector('#creator-front-canvas');
       if (frontCanvas instanceof HTMLCanvasElement) {
-        const frontGrid = getCharacterFrameGrid(activeMember.appearance, 'front', 'idle', animTick % 2);
+        const frontGrid = getCharacterFrameGrid(
+          activeMember.appearance,
+          'front',
+          'idle',
+          animTick % getCharacterFrameCount(activeMember.appearance, 'front', 'idle')
+        );
         renderCharacterGridToCanvas(frontCanvas, frontGrid, { includeBackdrop: true, backdropId: 'prairie', scrollOffset: 0, drawGridLines: true });
       }
       const sideCanvas = refs.journeyModalCardEl.querySelector('#creator-side-canvas');
       if (sideCanvas instanceof HTMLCanvasElement) {
-        const sideGrid = getCharacterFrameGrid(activeMember.appearance, 'side_right', 'walk', animTick % 6);
+        const sideGrid = getCharacterFrameGrid(
+          activeMember.appearance,
+          'side_right',
+          'walk',
+          animTick % getCharacterFrameCount(activeMember.appearance, 'side_right', 'walk')
+        );
         renderCharacterGridToCanvas(sideCanvas, sideGrid, { includeBackdrop: true, backdropId: 'prairie', scrollOffset: animTick * 2, drawGridLines: true });
       }
     }
@@ -905,7 +927,7 @@ export function createUI() {
           [activeCategory]: presetId === '__none__' ? '' : presetId
         }
       };
-      const grid = buildNeutralCompositeGrid(previewAppearance, 'front');
+      const grid = getCharacterOutfitGrid(previewAppearance, 'front');
       renderCharacterGridToCanvas(el, grid, '#020804');
     });
   }

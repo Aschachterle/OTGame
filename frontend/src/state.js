@@ -6,7 +6,7 @@ import {
   getEraById,
   summarizeMemberOutfit,
   syncAllPartyAppearancesToEra
-} from './character-designer.js?v=pixi_final_11';
+} from './character-designer.js?v=sprite32_1';
 
 export const CLOUD_NARRATION_STORAGE_KEY = 'immutable-trail-cloud-narration';
 export const LLM_NARRATION_STORAGE_KEY = 'immutable-trail-llm-narration';

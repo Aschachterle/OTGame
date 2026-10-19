@@ -9,7 +9,7 @@
     "build:frontend": "esbuild frontend/src/pixi-stage-runtime.js --bundle --format=esm --target=es2022 --minify --outfile=frontend/src/pixi-stage-runtime.bundle.js",
     "start": "node dist/index.js",
     "seed": "tsx src/seed.ts",
-    "web": "npm run build:frontend && python3 -m http.server 4173 --directory frontend"
+    "web": "npm run build:frontend && node scripts/web-server.mjs"
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",

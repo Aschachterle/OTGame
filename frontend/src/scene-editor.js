@@ -1,9 +1,11 @@
 import {
   SELECTABLE_ERAS,
+  getCharacterFrameCount,
   getCharacterFrameGrid,
   renderCharacterGridToCanvas,
-  syncAllPartyAppearancesToEra
-} from './character-designer.js?v=pixi_final_11';
+  syncAllPartyAppearancesToEra,
+  preloadBoilerplateSprites
+} from './character-designer.js?v=sprite32_1';
 import { trailMilestones } from './state.js';
 import {
   FERRY_BOARDING_END,
@@ -216,6 +218,8 @@ let previewDepthFt = null;
 let spriteAnimationTimer = null;
 let selectedSpriteFrame = 0;
 
+await preloadBoilerplateSprites();
+
 function stopSpritePlayback() {
   if (spriteAnimationTimer !== null) {
     window.clearInterval(spriteAnimationTimer);
@@ -232,7 +236,16 @@ function renderSpriteViewer() {
 
   const view = spriteViewControl.value;
   const animationMode = spriteAnimationControl.value;
-  const frameCount = animationMode === 'idle' ? 2 : 6;
+  const frameCount = getCharacterFrameCount(member.appearance, view, animationMode);
+  const walkOption = spriteAnimationControl.querySelector('option[value="walk"]');
+  const idleOption = spriteAnimationControl.querySelector('option[value="idle"]');
+  if (walkOption) {
+    walkOption.textContent = `Walk · ${getCharacterFrameCount(member.appearance, view, 'walk')} frames`;
+  }
+  if (idleOption) {
+    const idleFrameCount = getCharacterFrameCount(member.appearance, view, 'idle');
+    idleOption.textContent = `Idle · ${idleFrameCount} frame${idleFrameCount === 1 ? '' : 's'}`;
+  }
   selectedSpriteFrame = ((selectedSpriteFrame % frameCount) + frameCount) % frameCount;
   spriteFrameStrip.replaceChildren();
 
@@ -531,7 +544,9 @@ spritePlayButton.addEventListener('click', () => {
   spritePlayButton.textContent = 'Pause cycle';
   spritePlayButton.setAttribute('aria-pressed', 'true');
   spriteAnimationTimer = window.setInterval(() => {
-    const frameCount = spriteAnimationControl.value === 'idle' ? 2 : 6;
+    const memberIndex = Number(spriteCharacterControl.value) || 0;
+    const member = party[memberIndex] ?? party[0];
+    const frameCount = getCharacterFrameCount(member.appearance, spriteViewControl.value, spriteAnimationControl.value);
     selectedSpriteFrame = (selectedSpriteFrame + 1) % frameCount;
     renderSpriteViewer();
   }, 180);

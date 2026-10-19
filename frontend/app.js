@@ -5,6 +5,9 @@ import { createAudioController } from './src/audio.js';
 import { playHazardAlert, playRetroClick, playWagonClatter } from './src/sfx.js';
 import { createUI } from './src/ui.js?v=pixi_final_9';
 import { createGameController } from './src/game.js';
+import { preloadBoilerplateSprites } from './src/character-designer.js?v=sprite32_1';
+
+await preloadBoilerplateSprites();
 
 const ui = createUI();
 const playerIdentityPromise = getOptionalPlayerIdentity();
