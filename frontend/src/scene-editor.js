@@ -4,7 +4,16 @@ import {
   getCharacterFrameGrid,
   renderCharacterGridToCanvas,
   syncAllPartyAppearancesToEra,
-  preloadBoilerplateSprites
+  preloadBoilerplateSprites,
+  getBaseBoilerplateGrid,
+  getDefaultFrameMask,
+  getFrameCustomMask,
+  getFrameActiveMask,
+  setFrameCustomMask,
+  resetFrameCustomMask,
+  resetAllCustomMasks,
+  exportAllMaskOverrides,
+  importMaskOverrides
 } from './character-designer.js?v=sprite32_1';
 import { trailMilestones } from './state.js';
 import {
@@ -47,6 +56,18 @@ const spritePlayButton = document.querySelector('#sprite-play');
 const spriteFrameStrip = document.querySelector('#sprite-frame-strip');
 const spriteFrameReadout = document.querySelector('#sprite-frame-readout');
 
+const maskEditorCanvas = document.querySelector('#mask-editor-canvas');
+const maskStatusReadout = document.querySelector('#mask-status-readout');
+const maskModeDraw = document.querySelector('#mask-mode-draw');
+const maskModeErase = document.querySelector('#mask-mode-erase');
+const maskBtnReset = document.querySelector('#mask-btn-reset');
+const maskBtnClear = document.querySelector('#mask-btn-clear');
+const maskBtnCopy = document.querySelector('#mask-btn-copy');
+const maskBtnPaste = document.querySelector('#mask-btn-paste');
+const maskTargetReadout = document.querySelector('#mask-target-readout');
+const maskPixelInfo = document.querySelector('#mask-pixel-info');
+const maskOriginInfo = document.querySelector('#mask-origin-info');
+
 if (
   !(canvas instanceof HTMLCanvasElement)
   || !(riverDepthField instanceof HTMLElement)
@@ -58,6 +79,17 @@ if (
   || !(spritePlayButton instanceof HTMLButtonElement)
   || !(spriteFrameStrip instanceof HTMLElement)
   || !(spriteFrameReadout instanceof HTMLOutputElement)
+  || !(maskEditorCanvas instanceof HTMLCanvasElement)
+  || !(maskStatusReadout instanceof HTMLOutputElement)
+  || !(maskModeDraw instanceof HTMLButtonElement)
+  || !(maskModeErase instanceof HTMLButtonElement)
+  || !(maskBtnReset instanceof HTMLButtonElement)
+  || !(maskBtnClear instanceof HTMLButtonElement)
+  || !(maskBtnCopy instanceof HTMLButtonElement)
+  || !(maskBtnPaste instanceof HTMLButtonElement)
+  || !(maskTargetReadout instanceof HTMLElement)
+  || !(maskPixelInfo instanceof HTMLElement)
+  || !(maskOriginInfo instanceof HTMLElement)
 ) {
   throw new Error('Scene editor controls were not found.');
 }
@@ -277,6 +309,7 @@ function renderSpriteViewer() {
   }
 
   spriteFrameReadout.textContent = `${animationMode.toUpperCase()} · FRAME ${selectedSpriteFrame + 1}/${frameCount} · ${member.name}`;
+  renderMaskEditor();
 }
 
 function syncDepthPreview(landmark, isRiverCrossing) {
@@ -556,5 +589,235 @@ riverDepthInput.addEventListener('input', handleDepthPreviewInput);
 riverDepthInput.addEventListener('change', handleDepthPreviewInput);
 riverDepthResetButton.addEventListener('click', resetDepthPreview);
 
+let maskDrawMode = 'draw';
+let isMaskPainting = false;
+let maskHoverCoords = null;
+
+function getActiveMaskTargetInfo() {
+  const memberIndex = Number(spriteCharacterControl.value) || 0;
+  const member = party[memberIndex] ?? party[0];
+  const gender = member?.appearance?.gender === 'female' ? 'female' : 'male';
+  const view = spriteViewControl.value;
+  const animationMode = spriteAnimationControl.value;
+  const frameCount = getCharacterFrameCount(member?.appearance, view, animationMode);
+  const activeFrame = ((selectedSpriteFrame % frameCount) + frameCount) % frameCount;
+  return { member, gender, view, animationMode, frameIndex: activeFrame, frameCount };
+}
+
+function renderMaskEditor() {
+  const target = getActiveMaskTargetInfo();
+  if (!target.member?.appearance) return;
+
+  const baseGrid = getBaseBoilerplateGrid(target.gender, target.view, target.animationMode, target.frameIndex);
+  const activeMaskCoords = getFrameActiveMask(target.gender, target.view, target.animationMode, target.frameIndex, baseGrid);
+  const customMask = getFrameCustomMask(target.gender, target.view, target.animationMode, target.frameIndex);
+  const isCustom = customMask !== null;
+
+  const maskSet = new Set(activeMaskCoords.map(([x, y]) => `${x},${y}`));
+  maskStatusReadout.textContent = `${isCustom ? 'CUSTOM' : 'DEFAULT'} · ${maskSet.size} PIXEL${maskSet.size === 1 ? '' : 'S'}`;
+  maskTargetReadout.textContent = `${target.member.name} (${target.gender}) · ${target.view === 'front' ? 'Front' : 'Side'} · ${target.animationMode.toUpperCase()} Frame ${target.frameIndex + 1}/${target.frameCount}`;
+  maskOriginInfo.textContent = isCustom ? 'Custom override (saved in browser)' : 'Default heuristic mask';
+
+  const ctx = maskEditorCanvas.getContext('2d');
+  if (!ctx) return;
+  const w = maskEditorCanvas.width;
+  const h = maskEditorCanvas.height;
+  const cellSize = w / 32;
+
+  ctx.clearRect(0, 0, w, h);
+
+  // Background checkerboard
+  for (let y = 0; y < 32; y++) {
+    for (let x = 0; x < 32; x++) {
+      ctx.fillStyle = (x + y) % 2 === 0 ? '#09130c' : '#040906';
+      ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+    }
+  }
+
+  // Draw base sprite pixels
+  if (baseGrid) {
+    for (let y = 0; y < 32; y++) {
+      for (let x = 0; x < 32; x++) {
+        const color = baseGrid[y]?.[x];
+        if (color) {
+          ctx.fillStyle = color;
+          ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+        }
+      }
+    }
+  }
+
+  // Draw subtle grid lines
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let i = 0; i <= 32; i++) {
+    ctx.moveTo(i * cellSize, 0);
+    ctx.lineTo(i * cellSize, h);
+    ctx.moveTo(0, i * cellSize);
+    ctx.lineTo(w, i * cellSize);
+  }
+  ctx.stroke();
+
+  // Draw masked pixels (semi-transparent bright cyan/green overlay with crisp border)
+  for (const [mx, my] of activeMaskCoords) {
+    if (mx < 0 || mx >= 32 || my < 0 || my >= 32) continue;
+    ctx.fillStyle = 'rgba(0, 255, 128, 0.45)';
+    ctx.fillRect(mx * cellSize, my * cellSize, cellSize, cellSize);
+    ctx.strokeStyle = 'rgba(0, 255, 128, 0.9)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(mx * cellSize + 0.5, my * cellSize + 0.5, cellSize - 1, cellSize - 1);
+  }
+
+  // Hover cursor highlight
+  if (maskHoverCoords) {
+    const { x: hx, y: hy } = maskHoverCoords;
+    if (hx >= 0 && hx < 32 && hy >= 0 && hy < 32) {
+      ctx.strokeStyle = '#f7e26b';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(hx * cellSize + 0.5, hy * cellSize + 0.5, cellSize - 1, cellSize - 1);
+
+      const isMasked = maskSet.has(`${hx},${hy}`);
+      const basePixel = baseGrid?.[hy]?.[hx] || 'transparent';
+      maskPixelInfo.textContent = `X: ${hx}, Y: ${hy} | ${isMasked ? 'MASKED' : 'UNMASKED'} (${basePixel})`;
+    }
+  }
+}
+
+function applyMaskPixel(x, y, mode) {
+  if (x < 0 || x >= 32 || y < 0 || y >= 32) return;
+  const target = getActiveMaskTargetInfo();
+  const baseGrid = getBaseBoilerplateGrid(target.gender, target.view, target.animationMode, target.frameIndex);
+  const currentCoords = getFrameActiveMask(target.gender, target.view, target.animationMode, target.frameIndex, baseGrid);
+
+  const maskSet = new Set(currentCoords.map(([cx, cy]) => `${cx},${cy}`));
+  const key = `${x},${y}`;
+  if (mode === 'draw') {
+    if (maskSet.has(key)) return;
+    maskSet.add(key);
+  } else {
+    if (!maskSet.has(key)) return;
+    maskSet.delete(key);
+  }
+
+  const newCoords = Array.from(maskSet).map((k) => k.split(',').map(Number));
+  setFrameCustomMask(target.gender, target.view, target.animationMode, target.frameIndex, newCoords);
+
+  renderMaskEditor();
+  renderSpriteViewer();
+  updateState();
+}
+
+function getCanvasCellCoords(evt) {
+  const rect = maskEditorCanvas.getBoundingClientRect();
+  const scaleX = maskEditorCanvas.width / rect.width;
+  const scaleY = maskEditorCanvas.height / rect.height;
+  const px = (evt.clientX - rect.left) * scaleX;
+  const py = (evt.clientY - rect.top) * scaleY;
+  const cellSize = maskEditorCanvas.width / 32;
+  const x = Math.floor(px / cellSize);
+  const y = Math.floor(py / cellSize);
+  return { x: Math.max(0, Math.min(31, x)), y: Math.max(0, Math.min(31, y)) };
+}
+
+maskEditorCanvas.addEventListener('mousedown', (evt) => {
+  evt.preventDefault();
+  isMaskPainting = true;
+  const mode = evt.button === 2 || evt.shiftKey ? 'erase' : maskDrawMode;
+  const { x, y } = getCanvasCellCoords(evt);
+  applyMaskPixel(x, y, mode);
+});
+
+maskEditorCanvas.addEventListener('mousemove', (evt) => {
+  const { x, y } = getCanvasCellCoords(evt);
+  maskHoverCoords = { x, y };
+  if (isMaskPainting) {
+    const mode = evt.buttons === 2 || evt.shiftKey ? 'erase' : maskDrawMode;
+    applyMaskPixel(x, y, mode);
+  } else {
+    renderMaskEditor();
+  }
+});
+
+maskEditorCanvas.addEventListener('contextmenu', (evt) => {
+  evt.preventDefault();
+});
+
+window.addEventListener('mouseup', () => {
+  if (isMaskPainting) {
+    isMaskPainting = false;
+  }
+});
+
+maskEditorCanvas.addEventListener('mouseleave', () => {
+  maskHoverCoords = null;
+  maskPixelInfo.textContent = 'X: --, Y: --';
+  renderMaskEditor();
+});
+
+maskModeDraw.addEventListener('click', () => {
+  maskDrawMode = 'draw';
+  maskModeDraw.classList.add('active');
+  maskModeDraw.setAttribute('aria-pressed', 'true');
+  maskModeErase.classList.remove('active');
+  maskModeErase.setAttribute('aria-pressed', 'false');
+});
+
+maskModeErase.addEventListener('click', () => {
+  maskDrawMode = 'erase';
+  maskModeErase.classList.add('active');
+  maskModeErase.setAttribute('aria-pressed', 'true');
+  maskModeDraw.classList.remove('active');
+  maskModeDraw.setAttribute('aria-pressed', 'false');
+});
+
+maskBtnReset.addEventListener('click', () => {
+  const target = getActiveMaskTargetInfo();
+  resetFrameCustomMask(target.gender, target.view, target.animationMode, target.frameIndex);
+  renderMaskEditor();
+  renderSpriteViewer();
+  updateState();
+});
+
+maskBtnClear.addEventListener('click', () => {
+  const target = getActiveMaskTargetInfo();
+  setFrameCustomMask(target.gender, target.view, target.animationMode, target.frameIndex, []);
+  renderMaskEditor();
+  renderSpriteViewer();
+  updateState();
+});
+
+maskBtnCopy.addEventListener('click', async () => {
+  const target = getActiveMaskTargetInfo();
+  const baseGrid = getBaseBoilerplateGrid(target.gender, target.view, target.animationMode, target.frameIndex);
+  const coords = getFrameActiveMask(target.gender, target.view, target.animationMode, target.frameIndex, baseGrid);
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(coords));
+    maskBtnCopy.textContent = 'Copied!';
+    setTimeout(() => {
+      maskBtnCopy.textContent = 'Copy JSON';
+    }, 1200);
+  } catch (err) {
+    console.error('Failed to copy to clipboard', err);
+  }
+});
+
+maskBtnPaste.addEventListener('click', () => {
+  const input = window.prompt('Paste coordinate array JSON (e.g. [[14, 16], [15, 16]]):');
+  if (!input) return;
+  try {
+    const coords = JSON.parse(input);
+    if (!Array.isArray(coords)) throw new Error('Expected an array of [x, y] coordinates');
+    const target = getActiveMaskTargetInfo();
+    setFrameCustomMask(target.gender, target.view, target.animationMode, target.frameIndex, coords);
+    renderMaskEditor();
+    renderSpriteViewer();
+    updateState();
+  } catch (err) {
+    alert('Invalid JSON coordinate array: ' + err.message);
+  }
+});
+
 updateState();
 renderSpriteViewer();
+renderMaskEditor();

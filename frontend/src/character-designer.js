@@ -1285,6 +1285,150 @@ const SIDE_NEAR_HAND_CONTOURS = {
   }
 };
 
+const CUSTOM_MASKS_STORAGE_KEY = 'ot_custom_sprite_masks';
+const CUSTOM_FRAME_MASKS = new Map();
+
+function normalizeMaskKey(gender, view, animMode, frameIndex) {
+  const normGender = gender === 'female' ? 'female' : 'male';
+  const normView = view === 'front' ? 'front' : 'side';
+  const normAnim = animMode === 'idle' ? 'idle' : 'walk';
+  const normFrame = Math.max(0, Number(frameIndex) || 0);
+  return `${normGender}:${normView}:${normAnim}:${normFrame}`;
+}
+
+function loadCustomMasksFromStorage() {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    const raw = localStorage.getItem(CUSTOM_MASKS_STORAGE_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (data && typeof data === 'object') {
+      for (const [key, coords] of Object.entries(data)) {
+        if (Array.isArray(coords)) {
+          CUSTOM_FRAME_MASKS.set(key, coords);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to parse custom sprite masks from localStorage', err);
+  }
+}
+
+function saveCustomMasksToStorage() {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    const obj = {};
+    for (const [k, v] of CUSTOM_FRAME_MASKS.entries()) {
+      obj[k] = v;
+    }
+    localStorage.setItem(CUSTOM_MASKS_STORAGE_KEY, JSON.stringify(obj));
+  } catch (err) {
+    console.warn('Failed to save custom sprite masks to localStorage', err);
+  }
+}
+
+loadCustomMasksFromStorage();
+
+export function getBaseBoilerplateGrid(gender, view = 'side', animMode = 'walk', frameIndex = 0) {
+  const normGender = gender === 'female' ? 'female' : 'male';
+  const isFront = view === 'front';
+  if (isFront) {
+    const effectiveMode = normGender === 'female' && animMode === 'walk' ? 'walk' : 'idle';
+    const frameCount = getBoilerplateSpriteFrameCount(normGender, effectiveMode);
+    return getBoilerplateSpriteGrid(normGender, 'south', effectiveMode, frameIndex % frameCount);
+  }
+  const frameCount = getBoilerplateSpriteFrameCount(normGender, animMode) || 1;
+  const eastGrid = getBoilerplateSpriteGrid(normGender, 'east', animMode, frameIndex % frameCount);
+  if ((view === 'side_left' || view === 'west') && eastGrid) {
+    return eastGrid.map((row) => [...row].reverse());
+  }
+  return eastGrid;
+}
+
+export function getDefaultFrameMask(gender, view = 'side', animMode = 'walk', frameIndex = 0, baseGrid = null) {
+  const normGender = gender === 'female' ? 'female' : 'male';
+  const normView = view === 'front' ? 'front' : 'side';
+  const normAnim = animMode === 'idle' ? 'idle' : 'walk';
+  const normFrame = Math.max(0, Number(frameIndex) || 0);
+
+  if (normView === 'side') {
+    const contours = normAnim === 'walk'
+      ? SIDE_NEAR_HAND_CONTOURS[normGender]?.walk?.[normFrame % 8] || []
+      : SIDE_NEAR_HAND_CONTOURS[normGender]?.idle || [];
+    return contours.map(([x, y]) => [x, y]);
+  }
+
+  // Front view heuristic: hands swinging beside/over hips at x <= 11 and x >= 19 for y=15..19
+  const grid = baseGrid || getBaseBoilerplateGrid(normGender, 'front', normAnim, normFrame);
+  const coords = [];
+  for (let y = 15; y <= 19; y++) {
+    for (const x of [8, 9, 10, 11, 19, 20, 21, 22]) {
+      if (grid && grid[y]?.[x]) {
+        coords.push([x, y]);
+      }
+    }
+  }
+  return coords;
+}
+
+export function getFrameCustomMask(gender, view = 'side', animMode = 'walk', frameIndex = 0) {
+  const key = normalizeMaskKey(gender, view, animMode, frameIndex);
+  if (CUSTOM_FRAME_MASKS.has(key)) {
+    return CUSTOM_FRAME_MASKS.get(key).map(([x, y]) => [x, y]);
+  }
+  return null;
+}
+
+export function getFrameActiveMask(gender, view = 'side', animMode = 'walk', frameIndex = 0, baseGrid = null) {
+  const custom = getFrameCustomMask(gender, view, animMode, frameIndex);
+  if (custom !== null) return custom;
+  return getDefaultFrameMask(gender, view, animMode, frameIndex, baseGrid);
+}
+
+export function setFrameCustomMask(gender, view = 'side', animMode = 'walk', frameIndex = 0, coords = []) {
+  const key = normalizeMaskKey(gender, view, animMode, frameIndex);
+  const cleaned = (coords || [])
+    .filter(([x, y]) => Number.isInteger(x) && Number.isInteger(y) && x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE)
+    .map(([x, y]) => [x, y]);
+  CUSTOM_FRAME_MASKS.set(key, cleaned);
+  saveCustomMasksToStorage();
+}
+
+export function resetFrameCustomMask(gender, view = 'side', animMode = 'walk', frameIndex = 0) {
+  const key = normalizeMaskKey(gender, view, animMode, frameIndex);
+  const deleted = CUSTOM_FRAME_MASKS.delete(key);
+  saveCustomMasksToStorage();
+  return deleted;
+}
+
+export function resetAllCustomMasks() {
+  CUSTOM_FRAME_MASKS.clear();
+  saveCustomMasksToStorage();
+}
+
+export function exportAllMaskOverrides() {
+  const obj = {};
+  for (const [k, v] of CUSTOM_FRAME_MASKS.entries()) {
+    obj[k] = v;
+  }
+  return JSON.stringify(obj, null, 2);
+}
+
+export function importMaskOverrides(jsonOrObj) {
+  const data = typeof jsonOrObj === 'string' ? JSON.parse(jsonOrObj) : jsonOrObj;
+  if (!data || typeof data !== 'object') return false;
+  for (const [k, coords] of Object.entries(data)) {
+    if (Array.isArray(coords)) {
+      const cleaned = coords
+        .filter(([x, y]) => Number.isInteger(x) && Number.isInteger(y) && x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE)
+        .map(([x, y]) => [x, y]);
+      CUSTOM_FRAME_MASKS.set(k, cleaned);
+    }
+  }
+  saveCustomMasksToStorage();
+  return true;
+}
+
 function analyzeBoilerplateFrame(baseGrid, gender, baseOrientation, animMode = "idle", frameIndex = 0) {
   let headTopY = 1;
   for (let y = 0; y < GRID_SIZE; y += 1) {
@@ -1382,19 +1526,7 @@ function analyzeBoilerplateFrame(baseGrid, gender, baseOrientation, animMode = "
     }
   }
 
-    let nearHandCoords = [];
-  if (baseOrientation === "side") {
-    nearHandCoords = animMode === "walk"
-      ? SIDE_NEAR_HAND_CONTOURS[gender]?.walk?.[frameIndex % 8] || []
-      : SIDE_NEAR_HAND_CONTOURS[gender]?.idle || [];
-  } else {
-    // Front view: hands swinging beside/over hips at x <= 11 and x >= 19 for y=15..19
-    for (let y = 15; y <= 19; y++) {
-      for (const x of [8, 9, 10, 11, 19, 20, 21, 22]) {
-        if (baseGrid[y]?.[x]) nearHandCoords.push([x, y]);
-      }
-    }
-  }
+  const nearHandCoords = getFrameActiveMask(gender, baseOrientation, animMode, frameIndex, baseGrid);
 
   const nearHandMask = new Set();
   const nearHandPixels = [];
@@ -1475,6 +1607,7 @@ function renderFittedPantsOrSkirt(target, baseGrid, frameInfo, preset, palette, 
 
         for (let x = rowLeft; x <= rowRight; x += 1) {
           if (x < 0 || x >= GRID_SIZE) continue;
+          if (frameInfo.nearHandMask?.has(`${x},${y}`)) continue;
           if (ry === 0 || ry === H - 1 || x === rowLeft || x === rowRight) {
             target[y][x] = O;
           } else if ((isShort && ry === H - 2) || (!isShort && (ry === 5 || ry === H - 2))) {
@@ -1493,6 +1626,7 @@ function renderFittedPantsOrSkirt(target, baseGrid, frameInfo, preset, palette, 
         for (let y = skirtBottomY + 1; y < GRID_SIZE; y += 1) {
           for (let x = 8; x <= 23; x += 1) {
             if (!baseGrid[y]?.[x]) continue;
+            if (frameInfo.nearHandMask?.has(`${x},${y}`)) continue;
             const { footMaxY } = getFrontLegSideAndMaxY(baseGrid, frameInfo, x, y);
             const shoeH = hasShoes ? 3 : 0;
             if (footMaxY - y >= shoeH) {
@@ -1525,15 +1659,18 @@ function renderFittedPantsOrSkirt(target, baseGrid, frameInfo, preset, palette, 
       // Clear any stray bare thigh/knee pixels of the base sprite that poke outside the skirt bell
       if (!isShort && ry >= 3) {
         for (let x = 5; x < rowLeft; x += 1) {
+          if (frameInfo.nearHandMask?.has(`${x},${y}`)) continue;
           if (baseGrid[y]?.[x]) target[y][x] = null;
         }
         for (let x = rowRight + 1; x <= 26; x += 1) {
+          if (frameInfo.nearHandMask?.has(`${x},${y}`)) continue;
           if (baseGrid[y]?.[x]) target[y][x] = null;
         }
       }
 
       for (let x = rowLeft; x <= rowRight; x += 1) {
         if (x < 0 || x >= GRID_SIZE) continue;
+        if (frameInfo.nearHandMask?.has(`${x},${y}`)) continue;
         if (ry === 0 || ry === effectiveH - 1 || x === rowLeft || x === rowRight) {
           target[y][x] = O;
         } else if ((isShort && ry === effectiveH - 2) || (!isShort && (ry === 5 || ry === effectiveH - 2))) {
@@ -1552,6 +1689,7 @@ function renderFittedPantsOrSkirt(target, baseGrid, frameInfo, preset, palette, 
       for (let y = skirtFixedBottomY + 1; y < GRID_SIZE; y += 1) {
         for (let x = 5; x <= 26; x += 1) {
           if (!baseGrid[y]?.[x]) continue;
+          if (frameInfo.nearHandMask?.has(`${x},${y}`)) continue;
           if (x < hemLeft || x > hemRight) {
             target[y][x] = null;
             continue;

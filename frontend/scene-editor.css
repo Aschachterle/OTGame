@@ -14,9 +14,9 @@
 body {
   margin: 0;
   min-width: 320px;
-  height: 100vh;
-  height: 100dvh;
-  overflow: hidden;
+  min-height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
   background:
     radial-gradient(ellipse at 12% 0%, rgba(0, 255, 102, 0.09), transparent 42rem),
     #080c0a;
@@ -30,10 +30,9 @@ input {
 
 .editor {
   width: min(1200px, calc(100% - 32px));
-  height: 100%;
-  min-height: 0;
+  min-height: 100%;
   margin: 0 auto;
-  padding: 8px 0;
+  padding: 8px 0 24px;
   display: flex;
   flex-direction: column;
 }
@@ -111,10 +110,11 @@ h2 {
   display: grid;
   grid-template-areas:
     "scene controls"
-    "sprites controls";
+    "sprites controls"
+    "mask controls";
   grid-template-columns: minmax(0, 1.45fr) minmax(330px, 0.9fr);
-  grid-template-rows: minmax(150px, 0.72fr) minmax(220px, 1.28fr);
-  align-items: stretch;
+  grid-template-rows: auto auto auto;
+  align-items: start;
   flex: 1 1 auto;
   gap: 8px;
   min-height: 0;
@@ -122,6 +122,7 @@ h2 {
 
 .preview-panel,
 .sprite-viewer,
+.mask-editor,
 .controls-panel {
   border: 1px solid #26362c;
   background: rgba(13, 20, 15, 0.92);
@@ -149,7 +150,10 @@ h2 {
 
 .controls-panel {
   grid-area: controls;
-  grid-row: 1 / 3;
+  grid-row: 1 / 4;
+  position: sticky;
+  top: 8px;
+  max-height: calc(100vh - 32px);
   width: auto;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -255,6 +259,160 @@ h2 {
   font-size: 8px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.mask-editor {
+  grid-area: mask;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 8px 10px;
+}
+
+.mask-editor-heading {
+  margin-bottom: 4px;
+}
+
+#mask-status-readout {
+  flex: 0 0 auto;
+  color: #00ff66;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.mask-editor-desc {
+  margin: 0 0 8px;
+  color: #8c9e90;
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.mask-editor-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.mask-canvas-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+#mask-editor-canvas {
+  display: block;
+  width: 256px;
+  height: 256px;
+  border: 1px solid #304c38;
+  background: #040906;
+  image-rendering: pixelated;
+  cursor: crosshair;
+  user-select: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.mask-canvas-legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 8px;
+  color: #8c9e90;
+}
+
+.legend-chip {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 1px;
+}
+
+.legend-base {
+  background: #3a4b3d;
+  border: 1px solid #26362c;
+}
+
+.legend-mask {
+  background: rgba(0, 255, 128, 0.65);
+  border: 1px solid #00ff80;
+  box-shadow: 0 0 4px rgba(0, 255, 128, 0.4);
+}
+
+.mask-editor-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 200px;
+  min-width: 190px;
+}
+
+.mask-tool-row {
+  display: flex;
+  gap: 6px;
+}
+
+.mask-tool-btn {
+  flex: 1 1 auto;
+  min-height: 28px;
+  font-size: 10px;
+  transition: all 120ms ease-out;
+}
+
+.mask-tool-btn.active {
+  background: #00ff66;
+  color: #071009;
+  border-color: #00ff66;
+  box-shadow: 0 0 8px rgba(0, 255, 102, 0.3);
+}
+
+.mask-action-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.mask-action-row button {
+  min-height: 26px;
+  padding: 0 6px;
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.mask-readout-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 10px;
+  border: 1px solid #213126;
+  background: #080f0a;
+  border-radius: 2px;
+  font-size: 9px;
+  color: #b9c5ba;
+}
+
+.mask-readout-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.readout-label {
+  color: #6d8071;
+}
+
+#mask-target-readout {
+  color: #00ff66;
+}
+
+#mask-pixel-info {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: #f7e26b;
+}
+
+#mask-origin-info {
+  color: #9cd1a8;
 }
 
 .controls-panel > .eyebrow,
@@ -596,6 +754,8 @@ code {
   }
 
   .controls-panel {
+    position: static;
+    max-height: none;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     overflow: visible;
   }

@@ -70,6 +70,66 @@
         <div id="sprite-frame-strip" class="sprite-frame-strip" aria-label="Animation frames"></div>
       </section>
 
+      <section class="mask-editor" id="mask-editor-section" aria-label="Foreground Z-mask pixel editor">
+        <div class="panel-heading mask-editor-heading">
+          <div>
+            <p class="eyebrow">FOREGROUND Z-MASK</p>
+            <h2>Masked pixel selection editor</h2>
+          </div>
+          <output id="mask-status-readout" aria-live="polite">DEFAULT · 11 PIXELS</output>
+        </div>
+        <p class="mask-editor-desc">
+          Click or drag across the 32×32 grid to modify foreground pixels (such as hands/limbs) that render in front of clothing for the active frame.
+        </p>
+        <div class="mask-editor-body">
+          <div class="mask-canvas-container">
+            <canvas id="mask-editor-canvas" width="256" height="256" aria-label="32 by 32 pixel mask editor"></canvas>
+            <div class="mask-canvas-legend">
+              <span class="legend-chip legend-base"></span><span>Base Sprite</span>
+              <span class="legend-chip legend-mask"></span><span>Masked (Foreground)</span>
+            </div>
+          </div>
+          <div class="mask-editor-controls">
+            <div class="mask-tool-row">
+              <button id="mask-mode-draw" class="mask-tool-btn active" type="button" aria-pressed="true" title="Draw / Add pixels to mask">
+                ✏️ Draw Mask
+              </button>
+              <button id="mask-mode-erase" class="mask-tool-btn secondary-button" type="button" aria-pressed="false" title="Erase pixels from mask">
+                🧹 Erase Mask
+              </button>
+            </div>
+            <div class="mask-action-row">
+              <button id="mask-btn-reset" class="secondary-button" type="button" title="Revert to AI / heuristic default mask for this frame">
+                Reset to default
+              </button>
+              <button id="mask-btn-clear" class="secondary-button" type="button" title="Clear all masked pixels for this frame">
+                Clear mask
+              </button>
+              <button id="mask-btn-copy" class="secondary-button" type="button" title="Copy coordinate array JSON to clipboard">
+                Copy JSON
+              </button>
+              <button id="mask-btn-paste" class="secondary-button" type="button" title="Paste coordinates JSON">
+                Paste JSON
+              </button>
+            </div>
+            <div class="mask-readout-panel">
+              <div class="mask-readout-row">
+                <span class="readout-label">Target Frame:</span>
+                <strong id="mask-target-readout">Male · Side · Walk Frame 1</strong>
+              </div>
+              <div class="mask-readout-row">
+                <span class="readout-label">Pixel under cursor:</span>
+                <span id="mask-pixel-info">X: --, Y: --</span>
+              </div>
+              <div class="mask-readout-row">
+                <span class="readout-label">Mask Source:</span>
+                <span id="mask-origin-info">Default heuristic mask</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <aside class="controls-panel" aria-label="Scene controls">
         <p class="eyebrow">SCENE SETUP</p>
         <label>
