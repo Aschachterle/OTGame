@@ -1240,7 +1240,44 @@ function resolveGarmentPalette(preset, dyeId) {
   return { O, P, S, L, farO, farP, farS, farL };
 }
 
-function analyzeBoilerplateFrame(baseGrid, gender, baseOrientation) {
+const SIDE_NEAR_HAND_CONTOURS = {
+  male: {
+    idle: [
+      [17, 16], [18, 16], [19, 16],
+      [16, 17], [17, 17], [18, 17], [19, 17],
+      [16, 18], [17, 18], [18, 18], [19, 18]
+    ],
+    walk: [
+      [[14, 15], [15, 15], [16, 15], [14, 16], [15, 16], [16, 16], [17, 16], [14, 17], [15, 17], [16, 17], [17, 17]],
+      [[13, 16], [14, 16], [15, 16], [16, 16], [12, 17], [13, 17], [14, 17], [15, 17], [16, 17], [13, 18], [14, 18], [15, 18], [16, 18], [13, 19], [14, 19], [15, 19], [16, 19]],
+      [[12, 16], [13, 16], [14, 16], [12, 17], [13, 17], [14, 17], [15, 17], [12, 18], [13, 18], [14, 18], [15, 18]],
+      [[9, 16], [10, 16], [11, 16], [12, 16], [9, 17], [10, 17], [11, 17], [12, 17], [10, 18], [11, 18], [12, 18], [13, 18], [10, 19], [11, 19], [12, 19], [13, 19]],
+      [[8, 15], [9, 15], [10, 15], [11, 15], [8, 16], [9, 16], [10, 16], [11, 16], [8, 17], [9, 17], [10, 17], [11, 17], [8, 18], [9, 18], [10, 18], [11, 18], [8, 19], [9, 19], [10, 19], [11, 19]],
+      [[9, 15], [10, 15], [11, 15], [12, 15], [9, 16], [10, 16], [11, 16], [12, 16], [9, 17], [10, 17], [11, 17], [12, 17], [10, 18], [11, 18], [12, 18], [13, 18], [10, 19], [11, 19], [12, 19], [13, 19]],
+      [[10, 16], [11, 16], [12, 16], [13, 16], [11, 17], [12, 17], [13, 17], [14, 17], [11, 18], [12, 18], [13, 18], [14, 18], [12, 19], [13, 19], [14, 19], [12, 20], [13, 20], [14, 20]],
+      [[13, 16], [14, 16], [15, 16], [13, 17], [14, 17], [15, 17], [16, 17], [13, 18], [14, 18], [15, 18], [16, 18], [13, 19], [14, 19], [15, 19], [16, 19]]
+    ]
+  },
+  female: {
+    idle: [
+      [15, 16], [16, 16], [17, 16],
+      [14, 17], [15, 17], [16, 17], [17, 17],
+      [14, 18], [15, 18], [16, 18]
+    ],
+    walk: [
+      [[13, 18], [14, 18], [15, 18], [13, 19], [14, 19], [15, 19], [13, 20], [14, 20], [15, 20], [13, 21], [14, 21], [15, 21]],
+      [[13, 17], [14, 17], [15, 17], [16, 17], [13, 18], [14, 18], [15, 18], [16, 18], [13, 19], [14, 19], [15, 19], [16, 19], [13, 20], [14, 20], [15, 20], [16, 20], [13, 21], [14, 21], [15, 21], [16, 21]],
+      [[14, 14], [15, 14], [16, 14], [14, 15], [15, 15], [16, 15], [14, 16], [15, 16], [16, 16], [14, 17], [15, 17], [16, 17]],
+      [[11, 18], [12, 18], [13, 18], [11, 19], [12, 19], [13, 19]],
+      [[10, 16], [11, 16], [9, 17], [10, 17], [11, 17], [9, 18], [10, 18], [11, 18], [9, 19], [10, 19], [11, 19]],
+      [[11, 16], [12, 16], [13, 16], [11, 17], [12, 17], [13, 17], [11, 18], [12, 18], [13, 18], [11, 19], [12, 19], [13, 19]],
+      [[14, 14], [15, 14], [16, 14], [14, 15], [15, 15], [16, 15], [14, 16], [15, 16], [16, 16], [14, 17], [15, 17], [16, 17]],
+      [[13, 17], [14, 17], [15, 17], [16, 17], [13, 18], [14, 18], [15, 18], [16, 18], [13, 19], [14, 19], [15, 19], [16, 19], [13, 20], [14, 20], [15, 20], [16, 20], [13, 21], [14, 21], [15, 21], [16, 21]]
+    ]
+  }
+};
+
+function analyzeBoilerplateFrame(baseGrid, gender, baseOrientation, animMode = "idle", frameIndex = 0) {
   let headTopY = 1;
   for (let y = 0; y < GRID_SIZE; y += 1) {
     if (baseGrid[y]?.some(Boolean)) {
@@ -1337,6 +1374,21 @@ function analyzeBoilerplateFrame(baseGrid, gender, baseOrientation) {
     }
   }
 
+    const nearHandCoords = baseOrientation === "side"
+    ? (animMode === "walk"
+        ? SIDE_NEAR_HAND_CONTOURS[gender]?.walk?.[frameIndex % 8] || []
+        : SIDE_NEAR_HAND_CONTOURS[gender]?.idle || [])
+    : [];
+
+  const nearHandMask = new Set();
+  const nearHandPixels = [];
+  for (const [hx, hy] of nearHandCoords) {
+    if (hx >= 0 && hx < GRID_SIZE && hy >= 0 && hy < GRID_SIZE && baseGrid[hy]?.[hx]) {
+      nearHandMask.add(`${hx},${hy}`);
+      nearHandPixels.push({ x: hx, y: hy, color: baseGrid[hy][hx] });
+    }
+  }
+
   return {
     gender,
     baseOrientation,
@@ -1348,7 +1400,9 @@ function analyzeBoilerplateFrame(baseGrid, gender, baseOrientation) {
     leftFootMaxY,
     rightFootMaxY,
     sideLimb,
-    footBottomY
+    footBottomY,
+    nearHandMask,
+    nearHandPixels
   };
 }
 
@@ -1561,24 +1615,26 @@ function renderFittedPantsOrSkirt(target, baseGrid, frameInfo, preset, palette, 
   }
 
   // Side view trousers / breeches
-  const isMaleIdleWithHandOverHip = gender === 'male' && baseGrid[17]?.[17] === '#f3fbfb';
   for (let y = pelvisTopY; y <= pelvisBottomY; y += 1) {
     if (y < 0 || y >= GRID_SIZE) continue;
-    const minX = (isMaleIdleWithHandOverHip && y >= 17) ? 15 : 12;
-    const maxX = 19;
     let rowMin = GRID_SIZE;
     let rowMax = -1;
-    for (let x = minX; x <= maxX; x += 1) {
-      if (baseGrid[y]?.[x]) {
+    for (let x = 11; x <= 22; x += 1) {
+      if (baseGrid[y]?.[x] && !frameInfo.nearHandMask?.has(`${x},${y}`)) {
         rowMin = Math.min(rowMin, x);
         rowMax = Math.max(rowMax, x);
       }
     }
-    if (rowMax < rowMin) continue;
+    if (rowMax < rowMin) {
+      rowMin = 13;
+      rowMax = 18;
+    } else {
+      rowMin = Math.min(rowMin, 13);
+    }
     for (let x = rowMin; x <= rowMax; x += 1) {
+      if (frameInfo.nearHandMask?.has(`${x},${y}`)) continue;
       const c = baseGrid[y]?.[x];
-      if (!c) continue;
-      if (y === pelvisTopY || x === rowMin || x === rowMax || isSpriteOutline(c)) {
+      if (y === pelvisTopY || x === rowMin || x === rowMax || (c && isSpriteOutline(c))) {
         target[y][x] = O;
       } else if (x >= rowMax - 1) {
         target[y][x] = L;
@@ -1591,7 +1647,26 @@ function renderFittedPantsOrSkirt(target, baseGrid, frameInfo, preset, palette, 
   }
 
   for (let y = pelvisBottomY + 1; y < GRID_SIZE; y += 1) {
+    if (y <= 20) {
+      let legMin = GRID_SIZE;
+      let legMax = -1;
+      for (let x = 11; x <= 22; x += 1) {
+        if (baseGrid[y]?.[x] && !frameInfo.nearHandMask?.has(`${x},${y}`)) {
+          legMin = Math.min(legMin, x);
+          legMax = Math.max(legMax, x);
+        }
+      }
+      if (legMax > legMin) {
+        for (let x = legMin; x <= legMax; x += 1) {
+          if (!baseGrid[y]?.[x] && !frameInfo.nearHandMask?.has(`${x},${y}`)) {
+            target[y][x] = S;
+          }
+        }
+      }
+    }
+
     for (let x = 5; x <= 26; x += 1) {
+      if (frameInfo.nearHandMask?.has(`${x},${y}`)) continue;
       const c = baseGrid[y]?.[x];
       if (!c) continue;
       const limb = sideLimb[y][x] || 'N';
@@ -2810,10 +2885,10 @@ function renderFittedHeadwear(target, baseGrid, frameInfo, preset, palette) {
   });
 }
 
-function overlayFittedClothing(baseGrid, appearance, baseOrientation = 'front') {
+function overlayFittedClothing(baseGrid, appearance, baseOrientation = 'front', animMode = 'idle', frameIndex = 0) {
   const target = baseGrid.map((row) => [...row]);
   const gender = appearance?.gender === 'female' ? 'female' : 'male';
-  const frameInfo = analyzeBoilerplateFrame(baseGrid, gender, baseOrientation);
+  const frameInfo = analyzeBoilerplateFrame(baseGrid, gender, baseOrientation, animMode, frameIndex);
 
   const pantsPresetId = String(appearance?.equippedPresets?.pants || '');
   const pantsPreset = (INITIAL_CLOTHING_BOILERPLATE.pants || []).find((entry) => entry.id === pantsPresetId);
@@ -2847,6 +2922,12 @@ function overlayFittedClothing(baseGrid, appearance, baseOrientation = 'front') 
     }
   }
 
+  if (frameInfo.nearHandPixels && frameInfo.nearHandPixels.length > 0) {
+    for (const { x, y, color } of frameInfo.nearHandPixels) {
+      target[y][x] = color;
+    }
+  }
+
   return target;
 }
 
@@ -2876,12 +2957,13 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
     const frameCount = getBoilerplateSpriteFrameCount(gender, effectiveMode);
     const spriteGrid = getBoilerplateSpriteGrid(gender, 'south', effectiveMode, frameIndex % frameCount);
     if (!spriteGrid) return getLegacyCharacterFrameGrid(appearance, view, animMode, frameIndex);
-    return overlayFittedClothing(spriteGrid, appearance, 'front');
+    return overlayFittedClothing(spriteGrid, appearance, 'front', effectiveMode, frameIndex % frameCount);
   }
 
-  const eastGrid = getBoilerplateSpriteGrid(gender, 'east', animMode, frameIndex);
+  const frameCount = getBoilerplateSpriteFrameCount(gender, animMode) || 1;
+  const eastGrid = getBoilerplateSpriteGrid(gender, 'east', animMode, frameIndex % frameCount);
   if (!eastGrid) return getLegacyCharacterFrameGrid(appearance, view, animMode, frameIndex);
-  const dressedEast = overlayFittedClothing(eastGrid, appearance, 'side');
+  const dressedEast = overlayFittedClothing(eastGrid, appearance, 'side', animMode, frameIndex % frameCount);
   return isSideLeft ? dressedEast.map((row) => [...row].reverse()) : dressedEast;
 }
 
@@ -2890,7 +2972,7 @@ export function getCharacterOutfitGrid(appearance, view = 'front') {
   const isSide = view === 'side' || view === 'side_right' || view === 'side_left';
   const spriteGrid = getBoilerplateSpriteGrid(gender, isSide ? 'east' : 'south', 'idle', 0);
   if (!spriteGrid) return buildNeutralCompositeGrid(appearance, isSide ? 'side' : 'front');
-  const dressed = overlayFittedClothing(spriteGrid, appearance, isSide ? 'side' : 'front');
+  const dressed = overlayFittedClothing(spriteGrid, appearance, isSide ? 'side' : 'front', 'idle', 0);
   return view === 'side_left' ? dressed.map((row) => [...row].reverse()) : dressed;
 }
 
