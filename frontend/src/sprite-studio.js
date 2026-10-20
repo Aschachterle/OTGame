@@ -21,9 +21,27 @@ import {
   setCustomSpriteOverride,
   resetCustomSpriteOverride,
   getAllCustomOverridesObject,
-  saveCustomOverridesToServer
-} from './character-designer.js?v=sprite32_1';
-import { INITIAL_CLOTHING_BOILERPLATE } from './character-presets.js';
+  saveCustomOverridesToServer,
+  clearAllCustomOverridesAndStorage,
+  hasCachedOptions,
+  addCustomClothingItem,
+  renameClothingItem,
+  deleteCustomClothingItem,
+  getAllCustomClothingObject,
+  saveCustomClothingToServer,
+  getStridingLegFootMask,
+  getAllForegroundLimbsMask,
+  getTorsoWaistMask,
+  getHeadBeardHairMask,
+  MASK_SECTIONS,
+  MASK_SECTION_COLORS,
+  getFrameSectionMap,
+  setFrameSectionMap,
+  getAutoDetectedSectionMap,
+  sectionMapToGrid,
+  sectionGridToMap
+} from './character-designer.js?v=clothing_editor_v4';
+import { INITIAL_CLOTHING_BOILERPLATE } from './character-presets.js?v=clothing_editor_v4';
 
 // DOM Elements
 const eraControl = document.querySelector('#era');
@@ -42,6 +60,24 @@ const studioClothingEra = document.querySelector('#studio-clothing-era');
 const studioClothingGender = document.querySelector('#studio-clothing-gender');
 const studioClothingCategory = document.querySelector('#studio-clothing-category');
 const studioClothingPreset = document.querySelector('#studio-clothing-preset');
+const studioClothingBtnRename = document.querySelector('#studio-clothing-btn-rename');
+const studioClothingBtnNew = document.querySelector('#studio-clothing-btn-new');
+const studioClothingBtnDelete = document.querySelector('#studio-clothing-btn-delete');
+
+const dialogNewClothing = document.querySelector('#dialog-new-clothing');
+const formNewClothing = document.querySelector('#form-new-clothing');
+const newClothingName = document.querySelector('#new-clothing-name');
+const newClothingCategory = document.querySelector('#new-clothing-category');
+const newClothingEra = document.querySelector('#new-clothing-era');
+const newClothingGender = document.querySelector('#new-clothing-gender');
+const newClothingTemplate = document.querySelector('#new-clothing-template');
+const btnSubmitNewClothing = document.querySelector('#btn-submit-new-clothing');
+
+const dialogRenameClothing = document.querySelector('#dialog-rename-clothing');
+const formRenameClothing = document.querySelector('#form-rename-clothing');
+const renameClothingInput = document.querySelector('#rename-clothing-input');
+const btnSubmitRenameClothing = document.querySelector('#btn-submit-rename-clothing');
+
 const studioClothingView = document.querySelector('#studio-clothing-view');
 const studioClothingFrame = document.querySelector('#studio-clothing-frame');
 const studioFrameOptAll = document.querySelector('#studio-frame-opt-all');
@@ -58,8 +94,29 @@ const studioBtnApplySkintone = document.querySelector('#studio-btn-apply-skinton
 
 const studioMaskBanner = document.querySelector('#studio-mask-banner');
 const maskBtnAutodetect = document.querySelector('#mask-btn-autodetect');
+const maskBtnAutodetectLeg = document.querySelector('#mask-btn-autodetect-leg');
+const maskBtnAutodetectTorso = document.querySelector('#mask-btn-autodetect-torso');
+const maskBtnAutodetectHead = document.querySelector('#mask-btn-autodetect-head');
+const maskBtnAutodetectAll = document.querySelector('#mask-btn-autodetect-all');
+const maskBtnSwapLimbs = document.querySelector('#mask-btn-swap-limbs');
+const maskBtnCopyFrame = document.querySelector('#mask-btn-copy-frame');
+const maskBtnPasteFrame = document.querySelector('#mask-btn-paste-frame');
 const maskBtnInvert = document.querySelector('#mask-btn-invert');
 const maskBtnClearMask = document.querySelector('#mask-btn-clear-mask');
+
+const maskCoverageReadout = document.querySelector('#mask-coverage-readout');
+const maskCoverageFill = document.querySelector('#mask-coverage-fill');
+const activeSectionBanner = document.querySelector('#active-section-banner');
+const activeSectionChip = document.querySelector('#active-section-chip');
+const activeSectionName = document.querySelector('#active-section-name');
+const activeSectionKey = document.querySelector('#active-section-key');
+const maskOverlayButtons = document.querySelectorAll('[data-mask-overlay]');
+const maskPreviewModeButtons = document.querySelectorAll('[data-preview-mode]');
+
+let activeMaskSection = 'fg_leg';
+let maskOverlayMode = 'solid';
+let maskPreviewMode = 'clothed';
+let copiedFrameSectionMap = null;
 
 const studioBreadcrumbTrail = document.querySelector('#studio-breadcrumb-trail');
 const studioPropagationRule = document.querySelector('#studio-propagation-rule');
@@ -104,8 +161,8 @@ const maskBtnPaste = document.querySelector('#mask-btn-paste');
 const maskBtnSaveProject = document.querySelector('#mask-btn-save-project');
 const maskBtnDownload = document.querySelector('#mask-btn-download');
 const maskBtnLoadFile = document.querySelector('#mask-btn-load-file');
+const studioBtnClearCache = document.querySelector('#studio-btn-clear-cache');
 const maskFileInput = document.querySelector('#mask-file-input');
-const maskSaveStatus = document.querySelector('#mask-save-status');
 const maskPixelInfo = document.querySelector('#mask-pixel-info');
 const maskOriginInfo = document.querySelector('#mask-origin-info');
 
@@ -126,6 +183,7 @@ const previewPresetSelects = {
   shoes: document.querySelector('#preview-select-shoes'),
   accessories: document.querySelector('#preview-select-accessories')
 };
+const basePreviewWearOutfit = document.querySelector('#base-preview-wear-outfit');
 
 // Party Travelers
 const editorPartySpecs = [
@@ -290,21 +348,24 @@ function stopSpritePlayback() {
 }
 
 function startSpritePlayback() {
-  spritePlayButton.textContent = '⏸ Pause Walk Cycle';
-  spritePlayButton.setAttribute('aria-pressed', 'true');
+  if (spritePlayButton) {
+    spritePlayButton.textContent = '⏸ Pause Walk Cycle';
+    spritePlayButton.setAttribute('aria-pressed', 'true');
+  }
   if (previewPlayBtn) {
     previewPlayBtn.textContent = '⏸ Pause Walk Cycle';
     previewPlayBtn.setAttribute('aria-pressed', 'true');
     previewPlayBtn.classList.remove('secondary-button');
   }
   spriteAnimationTimer = window.setInterval(() => {
-    const memberIndex = Number(spriteCharacterControl.value) || 0;
+    const memberIndex = Number(spriteCharacterControl?.value) || 0;
     const member = party[memberIndex] ?? party[0];
-    const previewView = studioModeSelect.value === 'clothing'
-      ? studioClothingView.value
-      : (studioModeSelect.value === 'base'
-          ? (studioBaseDirection.value === 'east' ? 'side' : 'front')
-          : spriteViewControl.value);
+    const mode = document.body?.dataset?.studioMode || studioModeSelect?.value || 'clothing';
+    const previewView = mode === 'clothing'
+      ? (studioClothingView?.value || 'side')
+      : (mode === 'base'
+          ? (studioBaseDirection?.value === 'east' ? 'side' : 'front')
+          : (spriteViewControl?.value || 'side_right'));
     const frameCount = getCharacterFrameCount(member?.appearance, previewView, 'walk') || 8;
     selectedSpriteFrame = (selectedSpriteFrame + 1) % frameCount;
     renderSpriteViewer();
@@ -321,20 +382,24 @@ function toggleSpritePlayback() {
 }
 
 function renderSpriteViewer() {
-  const memberIndex = Number(spriteCharacterControl.value) || 0;
+  const memberIndex = Number(spriteCharacterControl?.value) || 0;
   const member = party[memberIndex] ?? party[0];
-  if (!member?.appearance) return;
+  if (!member?.appearance || !spriteFrameStrip) return;
 
-  const view = spriteViewControl.value;
-  const animationMode = spriteAnimationControl.value;
-  const frameCount = getCharacterFrameCount(member.appearance, view, animationMode);
-  const walkOption = spriteAnimationControl.querySelector('option[value="walk"]');
-  const idleOption = spriteAnimationControl.querySelector('option[value="idle"]');
+  const target = getStudioTargetInfo();
+  const view = target.mode === 'base'
+    ? (target.direction === 'east' ? 'side_right' : 'front')
+    : (spriteViewControl?.value || 'side_right');
+  const animationMode = spriteAnimationControl?.value || 'walk';
+  const effectiveAppearance = buildCustomPreviewAppearance(member.appearance, target);
+  const frameCount = getCharacterFrameCount(effectiveAppearance, view, animationMode) || 1;
+  const walkOption = spriteAnimationControl?.querySelector('option[value="walk"]');
+  const idleOption = spriteAnimationControl?.querySelector('option[value="idle"]');
   if (walkOption) {
-    walkOption.textContent = `Walk · ${getCharacterFrameCount(member.appearance, view, 'walk')} frames`;
+    walkOption.textContent = `Walk · ${getCharacterFrameCount(effectiveAppearance, view, 'walk')} frames`;
   }
   if (idleOption) {
-    const idleFrameCount = getCharacterFrameCount(member.appearance, view, 'idle');
+    const idleFrameCount = getCharacterFrameCount(effectiveAppearance, view, 'idle');
     idleOption.textContent = `Idle · ${idleFrameCount} frame${idleFrameCount === 1 ? '' : 's'}`;
   }
 
@@ -352,7 +417,7 @@ function renderSpriteViewer() {
     frameCanvas.width = 32;
     frameCanvas.height = 32;
     frameCanvas.setAttribute('aria-hidden', 'true');
-    const grid = getCharacterFrameGrid(member.appearance, view, animationMode, frameIndex);
+    const grid = getCharacterFrameGrid(effectiveAppearance, view, animationMode, frameIndex);
     renderCharacterGridToCanvas(frameCanvas, grid, { bgColor: '#020904', includeBackdrop: false });
 
     const label = document.createElement('span');
@@ -366,12 +431,17 @@ function renderSpriteViewer() {
       const frameVal = `${animationMode}:${frameIndex}`;
       if (
         studioClothingFrame
+        && studioClothingCategory
         && (studioClothingFrame.value !== 'all' || isFrameSpecificCategory(studioClothingCategory.value))
         && studioClothingFrame.querySelector(`option[value="${frameVal}"]`)
       ) {
         studioClothingFrame.value = frameVal;
       }
-      if (studioBaseFrame && studioBaseFrame.querySelector(`option[value="${frameVal}"]`)) {
+      if (
+        studioBaseFrame
+        && !(studioBaseApplyAll && studioBaseApplyAll.checked)
+        && studioBaseFrame.querySelector(`option[value="${frameVal}"]`)
+      ) {
         studioBaseFrame.value = frameVal;
       }
       renderSpriteViewer();
@@ -379,7 +449,12 @@ function renderSpriteViewer() {
     spriteFrameStrip.append(tile);
   }
 
-  spriteFrameReadout.textContent = `${animationMode.toUpperCase()} · FRAME ${selectedSpriteFrame + 1}/${frameCount} · ${member.name}`;
+  if (spriteFrameReadout) {
+    const stripTitle = target.mode === 'base'
+      ? (target.gender === 'female' ? '32Woman' : '32Man')
+      : member.name;
+    spriteFrameReadout.textContent = `${animationMode.toUpperCase()} · FRAME ${selectedSpriteFrame + 1}/${frameCount} · ${stripTitle}`;
+  }
   renderStudioEditor();
 }
 
@@ -397,10 +472,12 @@ function setActiveBrushColor(hexColor) {
   if (!hexColor) return;
   const clean = hexColor.toLowerCase();
   studioBrushColor = clean;
-  if (/^#[0-9a-f]{6}$/i.test(clean)) {
+  if (studioActiveColor && /^#[0-9a-f]{6}$/i.test(clean)) {
     studioActiveColor.value = clean;
   }
-  studioHexInput.value = clean.toUpperCase();
+  if (studioHexInput) {
+    studioHexInput.value = clean.toUpperCase();
+  }
   if (studioColorNameReadout) {
     studioColorNameReadout.textContent = lookupColorName(clean);
   }
@@ -495,6 +572,7 @@ function setActiveTool(tool) {
     { btn: studioToolFill, id: 'fill' }
   ];
   for (const t of tools) {
+    if (!t.btn) continue;
     if (t.id === tool) {
       t.btn.classList.add('active');
       t.btn.classList.remove('secondary-button');
@@ -507,21 +585,38 @@ function setActiveTool(tool) {
   }
 }
 
+function selectActiveMaskSection(sectionId) {
+  const section = MASK_SECTIONS.find((s) => s.id === sectionId);
+  if (!section) return;
+  activeMaskSection = sectionId;
+  if (activeSectionChip) activeSectionChip.style.background = section.color;
+  if (activeSectionName) activeSectionName.textContent = section.label;
+  if (activeSectionKey) activeSectionKey.textContent = `[Key ${section.shortcut}]`;
+
+  document.querySelectorAll('#mask-section-palette .section-brush-btn').forEach((btn) => {
+    btn.classList.toggle('active', btn.getAttribute('data-section-id') === sectionId);
+  });
+
+  if (activeStudioTool === 'eraser' || activeStudioTool === 'picker') {
+    setActiveTool('pencil');
+  }
+}
+
 // ============================================================================
 // UNDO / REDO SYSTEM
 // ============================================================================
 function captureTargetStateSnapshot() {
   const target = getStudioTargetInfo();
   if (target.mode === 'mask') {
-    const customMask = getFrameCustomMask(target.gender, target.view, target.animMode, target.frameIndex);
+    const baseGrid = getBaseBoilerplateGrid(target.gender, target.view, target.animMode, target.frameIndex);
+    const sectionMap = getFrameSectionMap(target.gender, target.view, target.animMode, target.frameIndex, baseGrid);
     return {
       mode: 'mask',
       gender: target.gender,
       view: target.view,
       animMode: target.animMode,
       frameIndex: target.frameIndex,
-      hadCustomMask: customMask !== null,
-      maskCoords: customMask ? customMask.map((pt) => [...pt]) : null
+      sectionMap: JSON.parse(JSON.stringify(sectionMap))
     };
   }
 
@@ -531,11 +626,20 @@ function captureTargetStateSnapshot() {
     for (let f = 0; f < 8; f++) {
       const fKey = `clothing:${target.presetId}:${target.view}:walk:${f}`;
       const fGrid = getCustomSpriteOverride(fKey);
-      if (fGrid) frameBackups[fKey] = fGrid.map((r) => [...r]);
+      frameBackups[fKey] = fGrid ? fGrid.map((r) => [...r]) : null;
     }
     const idleKey = `clothing:${target.presetId}:${target.view}:idle:0`;
     const idleGrid = getCustomSpriteOverride(idleKey);
-    if (idleGrid) frameBackups[idleKey] = idleGrid.map((r) => [...r]);
+    frameBackups[idleKey] = idleGrid ? idleGrid.map((r) => [...r]) : null;
+  } else if (target.mode === 'base') {
+    for (let f = 0; f < 8; f++) {
+      const fKey = `base:${target.gender}:${target.direction}:walk:${f}`;
+      const fGrid = getCustomSpriteOverride(fKey);
+      frameBackups[fKey] = fGrid ? fGrid.map((r) => [...r]) : null;
+    }
+    const idleKey = `base:${target.gender}:${target.direction}:idle:0`;
+    const idleGrid = getCustomSpriteOverride(idleKey);
+    frameBackups[idleKey] = idleGrid ? idleGrid.map((r) => [...r]) : null;
   }
   return {
     mode: target.mode,
@@ -549,7 +653,9 @@ function captureTargetStateSnapshot() {
 function restoreTargetStateSnapshot(snapshot) {
   if (!snapshot) return;
   if (snapshot.mode === 'mask') {
-    if (snapshot.hadCustomMask && snapshot.maskCoords) {
+    if (snapshot.sectionMap) {
+      setFrameSectionMap(snapshot.gender, snapshot.view, snapshot.animMode, snapshot.frameIndex, snapshot.sectionMap);
+    } else if (snapshot.hadCustomMask && snapshot.maskCoords) {
       setFrameCustomMask(snapshot.gender, snapshot.view, snapshot.animMode, snapshot.frameIndex, snapshot.maskCoords);
     } else {
       resetFrameCustomMask(snapshot.gender, snapshot.view, snapshot.animMode, snapshot.frameIndex);
@@ -562,7 +668,11 @@ function restoreTargetStateSnapshot(snapshot) {
     }
     if (snapshot.frameBackups) {
       for (const [fKey, fGrid] of Object.entries(snapshot.frameBackups)) {
-        setCustomSpriteOverride(fKey, fGrid);
+        if (fGrid) {
+          setCustomSpriteOverride(fKey, fGrid);
+        } else {
+          resetCustomSpriteOverride(fKey);
+        }
       }
     }
   }
@@ -603,6 +713,7 @@ function performUndo() {
   restoreTargetStateSnapshot(prevSnapshot);
   updateUndoRedoButtons();
   renderSpriteViewer();
+  renderStudioEditor();
   showSaveStatus('Undid last action', false);
 }
 
@@ -614,6 +725,7 @@ function performRedo() {
   restoreTargetStateSnapshot(nextSnapshot);
   updateUndoRedoButtons();
   renderSpriteViewer();
+  renderStudioEditor();
   showSaveStatus('Redid action', false);
 }
 
@@ -621,6 +733,7 @@ function performRedo() {
 // SMART CATEGORY FRAME RULES & TRAVELER DEFAULTS SYNC
 // ============================================================================
 function syncCategoryFrameBehavior() {
+  if (!studioClothingCategory || !studioClothingFrame) return;
   const category = studioClothingCategory.value;
   const perFrameRequired = isFrameSpecificCategory(category);
 
@@ -631,7 +744,7 @@ function syncCategoryFrameBehavior() {
 
   if (perFrameRequired) {
     if (studioClothingFrame.value === 'all') {
-      const animMode = spriteAnimationControl.value || 'walk';
+      const animMode = spriteAnimationControl?.value || 'walk';
       const frameIdx = animMode === 'idle' ? 0 : (selectedSpriteFrame % 8);
       const nextVal = `${animMode}:${frameIdx}`;
       studioClothingFrame.value = studioClothingFrame.querySelector(`option[value="${nextVal}"]`)
@@ -651,6 +764,7 @@ function syncCategoryFrameBehavior() {
 }
 
 function populateClothingPresets() {
+  if (!studioClothingPreset || !studioClothingEra || !studioClothingGender || !studioClothingCategory) return;
   const selectedEraFilter = studioClothingEra.value;
   const selectedGender = studioClothingGender.value;
   const category = studioClothingCategory.value;
@@ -716,7 +830,7 @@ function populateClothingPresets() {
 }
 
 function syncStudioToActiveTravelerDefaults() {
-  const memberIndex = Number(spriteCharacterControl.value) || 0;
+  const memberIndex = Number(spriteCharacterControl?.value) || 0;
   const member = party[memberIndex] ?? party[0];
   if (!member?.appearance) return;
 
@@ -730,10 +844,10 @@ function syncStudioToActiveTravelerDefaults() {
 
   populateClothingPresets();
 
-  const activeCat = studioClothingCategory.value;
-  const equippedPresetId = member.appearance.equippedPresets?.[activeCat];
-  if (equippedPresetId && studioClothingPreset) {
-    if (studioClothingPreset.querySelector(`option[value="${equippedPresetId}"]`)) {
+  if (studioClothingCategory && studioClothingPreset) {
+    const activeCat = studioClothingCategory.value;
+    const equippedPresetId = member.appearance.equippedPresets?.[activeCat];
+    if (equippedPresetId && studioClothingPreset.querySelector(`option[value="${equippedPresetId}"]`)) {
       studioClothingPreset.value = equippedPresetId;
     }
   }
@@ -805,6 +919,25 @@ function buildCustomPreviewAppearance(baseAppearance, target) {
     row.classList.toggle('active-editing-slot', target.mode === 'clothing' && target.category === slot);
   });
 
+  // In Base Sprite Studio mode, default to bare body unless 'Overlay Default Pioneer Outfit' is checked!
+  if (target.mode === 'base' && basePreviewWearOutfit) {
+    if (!basePreviewWearOutfit.checked) {
+      for (const cat of categories) {
+        const nonePreset = (INITIAL_CLOTHING_BOILERPLATE[cat] || []).find((p) => p.isNone);
+        equipped[cat] = nonePreset ? nonePreset.id : '';
+      }
+    } else {
+      const refTraveler = party.find((m) => m.appearance?.gender === target.gender) || party[0];
+      Object.assign(equipped, refTraveler?.appearance?.equippedPresets || {});
+    }
+    return {
+      ...baseAppearance,
+      gender: target.gender,
+      skinToneId: testPlayerSkinTone || baseAppearance?.skinToneId || 'warm_ivory',
+      equippedPresets: equipped
+    };
+  }
+
   for (const cat of categories) {
     const wearChecked = previewWearCheckboxes[cat] ? previewWearCheckboxes[cat].checked : true;
     if (!wearChecked) {
@@ -833,16 +966,16 @@ function buildCustomPreviewAppearance(baseAppearance, target) {
 // TARGET & WORKING GRID RESOLUTION
 // ============================================================================
 function getStudioTargetInfo() {
-  const mode = studioModeSelect.value;
-  const memberIndex = Number(spriteCharacterControl.value) || 0;
+  const mode = document.body?.dataset?.studioMode || studioModeSelect?.value || 'clothing';
+  const memberIndex = Number(spriteCharacterControl?.value) || 0;
   const member = party[memberIndex] ?? party[0];
 
   if (mode === 'clothing') {
-    const category = studioClothingCategory.value;
-    const presetId = studioClothingPreset.value;
-    const view = studioClothingView.value;
+    const category = studioClothingCategory?.value || 'hats';
+    const presetId = studioClothingPreset?.value || '';
+    const view = studioClothingView?.value || 'side';
     const perFrameRequired = isFrameSpecificCategory(category);
-    const rawFrameVal = studioClothingFrame.value || (perFrameRequired ? 'walk:0' : 'all');
+    const rawFrameVal = studioClothingFrame?.value || (perFrameRequired ? 'walk:0' : 'all');
     const isAllFrames = !perFrameRequired && rawFrameVal === 'all';
 
     let animMode = 'walk';
@@ -850,7 +983,7 @@ function getStudioTargetInfo() {
     let key = '';
     if (isAllFrames) {
       key = `clothing:${presetId}:${view}`;
-      animMode = spriteAnimationControl.value || 'walk';
+      animMode = spriteAnimationControl?.value || 'walk';
       frameIndex = selectedSpriteFrame;
     } else {
       const [aMode, fStr] = (rawFrameVal === 'all' ? 'walk:0' : rawFrameVal).split(':');
@@ -867,34 +1000,36 @@ function getStudioTargetInfo() {
   }
 
   if (mode === 'base') {
-    const gender = studioBaseGender.value;
-    const direction = studioBaseDirection.value;
-    const rawVal = studioBaseFrame.value || 'all';
-    const isApplyAllChecked = studioBaseApplyAll ? studioBaseApplyAll.checked : true;
+    const gender = studioBaseGender?.value || 'male';
+    const direction = studioBaseDirection?.value || 'east';
+    const rawVal = studioBaseFrame?.value || 'all';
+    const isApplyAllChecked = studioBaseApplyAll ? studioBaseApplyAll.checked : (rawVal === 'all');
     const isAllFrames = rawVal === 'all' || isApplyAllChecked;
 
     let animMode = 'walk';
     let frameIndex = 0;
     let key = '';
     if (isAllFrames) {
-      key = `base:${gender}:${direction}`;
-      animMode = spriteAnimationControl.value || 'walk';
+      animMode = spriteAnimationControl?.value || 'walk';
       frameIndex = selectedSpriteFrame;
+      key = `base:${gender}:${direction}:${animMode}:${frameIndex}`;
     } else {
       const [aMode, fStr] = rawVal.split(':');
       animMode = aMode || 'walk';
       frameIndex = Number(fStr) || 0;
       key = `base:${gender}:${direction}:${animMode}:${frameIndex}`;
     }
-    const frameLabel = isAllFrames ? 'All Frames (Universal)' : `${animMode.toUpperCase()} Frame ${frameIndex + 1}`;
+    const frameLabel = isAllFrames
+      ? `All Frames (Viewing ${animMode.toUpperCase()} #${frameIndex + 1})`
+      : `${animMode.toUpperCase()} Frame ${frameIndex + 1}`;
     const name = `${gender === 'female' ? '32Woman' : '32Man'} · ${direction === 'east' ? 'Side' : 'Front'} · ${frameLabel}`;
     return { mode, member, gender, direction, animMode, frameIndex, isAllFrames, key, name };
   }
 
   // mode === 'mask'
   const gender = member?.appearance?.gender === 'female' ? 'female' : 'male';
-  const view = spriteViewControl.value;
-  const animMode = spriteAnimationControl.value;
+  const view = spriteViewControl?.value || 'side_right';
+  const animMode = spriteAnimationControl?.value || 'walk';
   const frameCount = getCharacterFrameCount(member?.appearance, view, animMode);
   const activeFrame = ((selectedSpriteFrame % frameCount) + frameCount) % frameCount;
   const key = `mask:${gender}:${view}:${animMode}:${activeFrame}`;
@@ -927,25 +1062,15 @@ function getStudioWorkingGrid(target) {
     }
   }
   if (target.mode === 'base') {
-    if (target.isAllFrames) {
-      const customUniversal = getCustomSpriteOverride(target.key);
-      if (customUniversal) return customUniversal;
-      const fKey = `base:${target.gender}:${target.direction}:${target.animMode}:${target.frameIndex}`;
-      const customFrame = getCustomSpriteOverride(fKey);
-      if (customFrame) return customFrame;
-      const boilerplate = getBaseBoilerplateGrid(target.gender, target.direction === 'south' ? 'front' : 'side', target.animMode, target.frameIndex, target.member?.appearance?.skinToneId);
-      if (boilerplate) return boilerplate.map((row) => [...row]);
-      return Array.from({ length: 32 }, () => Array(32).fill(null));
-    } else {
-      const customFrame = getCustomSpriteOverride(target.key);
-      if (customFrame) return customFrame;
-      const universalKey = `base:${target.gender}:${target.direction}`;
-      const customUniversal = getCustomSpriteOverride(universalKey);
-      if (customUniversal) return customUniversal;
-      const boilerplate = getBaseBoilerplateGrid(target.gender, target.direction === 'south' ? 'front' : 'side', target.animMode, target.frameIndex, target.member?.appearance?.skinToneId);
-      if (boilerplate) return boilerplate.map((row) => [...row]);
-      return Array.from({ length: 32 }, () => Array(32).fill(null));
-    }
+    const fKey = `base:${target.gender}:${target.direction}:${target.animMode}:${target.frameIndex}`;
+    const customFrame = getCustomSpriteOverride(fKey);
+    if (customFrame) return customFrame;
+    const universalKey = `base:${target.gender}:${target.direction}`;
+    const customUniversal = getCustomSpriteOverride(universalKey);
+    if (customUniversal) return customUniversal;
+    const boilerplate = getBaseBoilerplateGrid(target.gender, target.direction === 'south' ? 'front' : 'side', target.animMode, target.frameIndex);
+    if (boilerplate) return boilerplate.map((row) => [...row]);
+    return Array.from({ length: 32 }, () => Array(32).fill(null));
   }
   return null;
 }
@@ -1037,7 +1162,7 @@ function updateContextBreadcrumbAndRule(target) {
 function renderStudioEditor() {
   syncCategoryFrameBehavior();
   const target = getStudioTargetInfo();
-  studioTargetName.textContent = target.name;
+  if (studioTargetName) studioTargetName.textContent = target.name;
   updateContextBreadcrumbAndRule(target);
 
   // Sync mode tab buttons
@@ -1048,29 +1173,33 @@ function renderStudioEditor() {
   });
 
   if (target.mode === 'clothing') {
-    studioClothingControls.hidden = false;
-    studioBaseControls.hidden = true;
-    studioMaskBanner.hidden = true;
-    studioColorPanel.hidden = false;
-    maskCanvasLegend.hidden = true;
-    studioShowUnderlay.parentElement.hidden = false;
-    studioCanvasTitle.textContent = '32×32 CLOTHING EDITOR';
+    if (studioClothingControls) studioClothingControls.hidden = false;
+    if (studioBaseControls) studioBaseControls.hidden = true;
+    if (studioMaskBanner) studioMaskBanner.hidden = true;
+    if (studioColorPanel) studioColorPanel.hidden = false;
+    if (maskCanvasLegend) maskCanvasLegend.hidden = true;
+    if (studioShowUnderlay?.parentElement) studioShowUnderlay.parentElement.hidden = false;
+    if (studioCanvasTitle) studioCanvasTitle.textContent = '32×32 CLOTHING EDITOR';
+    if (studioClothingBtnDelete) {
+      const isCustomItem = Boolean(target.preset?.isCustom);
+      studioClothingBtnDelete.hidden = !isCustomItem;
+    }
   } else if (target.mode === 'base') {
-    studioClothingControls.hidden = true;
-    studioBaseControls.hidden = false;
-    studioMaskBanner.hidden = true;
-    studioColorPanel.hidden = false;
-    maskCanvasLegend.hidden = true;
-    studioShowUnderlay.parentElement.hidden = true;
-    studioCanvasTitle.textContent = '32×32 BASE SPRITE EDITOR';
+    if (studioClothingControls) studioClothingControls.hidden = true;
+    if (studioBaseControls) studioBaseControls.hidden = false;
+    if (studioMaskBanner) studioMaskBanner.hidden = true;
+    if (studioColorPanel) studioColorPanel.hidden = false;
+    if (maskCanvasLegend) maskCanvasLegend.hidden = true;
+    if (studioShowUnderlay?.parentElement) studioShowUnderlay.parentElement.hidden = true;
+    if (studioCanvasTitle) studioCanvasTitle.textContent = '32×32 BASE SPRITE EDITOR';
   } else {
-    studioClothingControls.hidden = true;
-    studioBaseControls.hidden = true;
-    studioMaskBanner.hidden = false;
-    studioColorPanel.hidden = true;
-    maskCanvasLegend.hidden = false;
-    studioShowUnderlay.parentElement.hidden = true;
-    studioCanvasTitle.textContent = '32×32 DEPTH Z-MASK EDITOR';
+    if (studioClothingControls) studioClothingControls.hidden = true;
+    if (studioBaseControls) studioBaseControls.hidden = true;
+    if (studioMaskBanner) studioMaskBanner.hidden = false;
+    if (studioColorPanel) studioColorPanel.hidden = true;
+    if (maskCanvasLegend) maskCanvasLegend.hidden = false;
+    if (studioShowUnderlay?.parentElement) studioShowUnderlay.parentElement.hidden = true;
+    if (studioCanvasTitle) studioCanvasTitle.textContent = '32×32 DEPTH Z-MASK EDITOR';
   }
 
   if (studioFrameStepperLabel) {
@@ -1081,7 +1210,7 @@ function renderStudioEditor() {
     }
   }
 
-  const ctx = maskEditorCanvas.getContext('2d');
+  const ctx = maskEditorCanvas?.getContext('2d');
   if (!ctx) return;
   const w = maskEditorCanvas.width;
   const h = maskEditorCanvas.height;
@@ -1091,7 +1220,7 @@ function renderStudioEditor() {
   drawBackdropOnCanvas(ctx, w, h, editorBgMode);
 
   // Draw underlay if clothing mode and checked
-  if (target.mode === 'clothing' && studioShowUnderlay.checked) {
+  if (target.mode === 'clothing' && studioShowUnderlay?.checked) {
     const underlayGender = target.preset?.gender === 'female' ? 'female' : 'male';
     const underlayFrame = target.isAllFrames ? selectedSpriteFrame : target.frameIndex;
     const underlayGrid = getBaseBoilerplateGrid(underlayGender, target.view, target.animMode, underlayFrame);
@@ -1119,19 +1248,124 @@ function renderStudioEditor() {
 
   if (target.mode === 'mask') {
     const baseGrid = getBaseBoilerplateGrid(target.gender, target.view, target.animMode, target.frameIndex);
-    const activeMaskCoords = getFrameActiveMask(target.gender, target.view, target.animMode, target.frameIndex, baseGrid);
+    const sectionMap = getFrameSectionMap(target.gender, target.view, target.animMode, target.frameIndex, baseGrid);
+    const sectionGrid = sectionMapToGrid(sectionMap);
     const customMask = getFrameCustomMask(target.gender, target.view, target.animMode, target.frameIndex);
     isCustom = customMask !== null;
-    const maskSet = new Set(activeMaskCoords.map(([x, y]) => `${x},${y}`));
-    pixelCount = maskSet.size;
 
+    // Update section counts on palette buttons
+    for (const s of MASK_SECTIONS) {
+      const cnt = (sectionMap[s.id] || []).length;
+      const cntBadge = document.querySelector(`#count-${s.id}`);
+      if (cntBadge) cntBadge.textContent = `${cnt} px`;
+    }
+
+    // Compute mapping coverage
+    let totalBodyPixels = 0;
+    let mappedBodyPixels = 0;
     if (baseGrid) {
       for (let y = 0; y < 32; y++) {
         for (let x = 0; x < 32; x++) {
-          const col = baseGrid[y]?.[x];
-          if (col) {
+          if (baseGrid[y]?.[x]) {
+            totalBodyPixels++;
+            if (sectionGrid[y]?.[x]) mappedBodyPixels++;
+          }
+        }
+      }
+    }
+    pixelCount = mappedBodyPixels;
+    const unassignedBodyPixels = Math.max(0, totalBodyPixels - mappedBodyPixels);
+    const coveragePct = totalBodyPixels > 0 ? Math.round((mappedBodyPixels / totalBodyPixels) * 100) : 100;
+
+    if (maskCoverageReadout) {
+      if (unassignedBodyPixels === 0) {
+        maskCoverageReadout.textContent = `Mapped: ${mappedBodyPixels}/${totalBodyPixels} px (100% Fully Mapped ✨)`;
+        maskCoverageReadout.classList.add('complete');
+      } else {
+        maskCoverageReadout.textContent = `Mapped: ${mappedBodyPixels}/${totalBodyPixels} px (${coveragePct}% · ${unassignedBodyPixels} unassigned)`;
+        maskCoverageReadout.classList.remove('complete');
+      }
+    }
+    if (maskCoverageFill) {
+      maskCoverageFill.style.width = `${coveragePct}%`;
+      maskCoverageFill.style.background = coveragePct === 100
+        ? 'linear-gradient(90deg, #00d4ff, #00ff66)'
+        : 'linear-gradient(90deg, #ffcc00, #ff6600)';
+    }
+
+    // Draw canvas based on maskOverlayMode: 'solid' | 'blended' | 'base'
+    if (maskOverlayMode === 'base') {
+      if (baseGrid) {
+        for (let y = 0; y < 32; y++) {
+          for (let x = 0; x < 32; x++) {
+            const col = baseGrid[y]?.[x];
+            if (col) {
+              ctx.fillStyle = col;
+              ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+            }
+          }
+        }
+      }
+    } else if (maskOverlayMode === 'blended') {
+      if (baseGrid) {
+        for (let y = 0; y < 32; y++) {
+          for (let x = 0; x < 32; x++) {
+            const col = baseGrid[y]?.[x];
+            if (col) {
+              ctx.fillStyle = col;
+              ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+            }
+          }
+        }
+      }
+      for (let y = 0; y < 32; y++) {
+        for (let x = 0; x < 32; x++) {
+          const secId = sectionGrid[y]?.[x];
+          if (secId && MASK_SECTION_COLORS[secId]) {
+            const col = MASK_SECTION_COLORS[secId];
+            ctx.globalAlpha = 0.62;
             ctx.fillStyle = col;
             ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+            ctx.globalAlpha = 1.0;
+            ctx.strokeStyle = col;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x * cellSize + 0.5, y * cellSize + 0.5, cellSize - 1, cellSize - 1);
+          }
+        }
+      }
+    } else {
+      // Solid Map: show all 10 distinct colors on screen simultaneously
+      if (baseGrid) {
+        for (let y = 0; y < 32; y++) {
+          for (let x = 0; x < 32; x++) {
+            const baseCol = baseGrid[y]?.[x];
+            const secId = sectionGrid[y]?.[x];
+            if (secId && MASK_SECTION_COLORS[secId]) {
+              ctx.fillStyle = MASK_SECTION_COLORS[secId];
+              ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+              ctx.strokeStyle = 'rgba(0, 0, 0, 0.22)';
+              ctx.lineWidth = 1;
+              ctx.strokeRect(x * cellSize, y * cellSize, cellSize, cellSize);
+            } else if (baseCol) {
+              // Highlight unassigned body pixel so user spots missing mappings instantly
+              ctx.fillStyle = '#3a3a3a';
+              ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+              ctx.fillStyle = '#ff3333';
+              ctx.fillRect(x * cellSize + cellSize * 0.28, y * cellSize + cellSize * 0.28, cellSize * 0.44, cellSize * 0.44);
+            }
+          }
+        }
+      }
+      for (let y = 0; y < 32; y++) {
+        for (let x = 0; x < 32; x++) {
+          if (!baseGrid?.[y]?.[x]) {
+            const secId = sectionGrid[y]?.[x];
+            if (secId && MASK_SECTION_COLORS[secId]) {
+              ctx.globalAlpha = 0.75;
+              ctx.fillStyle = MASK_SECTION_COLORS[secId];
+              ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+              ctx.globalAlpha = 1.0;
+            }
           }
         }
       }
@@ -1150,29 +1384,29 @@ function renderStudioEditor() {
       ctx.stroke();
     }
 
-    for (const [mx, my] of activeMaskCoords) {
-      if (mx < 0 || mx >= 32 || my < 0 || my >= 32) continue;
-      ctx.fillStyle = 'rgba(0, 255, 128, 0.48)';
-      ctx.fillRect(mx * cellSize, my * cellSize, cellSize, cellSize);
-      ctx.strokeStyle = '#00b862';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(mx * cellSize + 0.5, my * cellSize + 0.5, cellSize - 1, cellSize - 1);
-    }
-
-    if (studioHoverCoords) {
+    if (studioHoverCoords && maskPixelInfo) {
       const { x: hx, y: hy } = studioHoverCoords;
       if (hx >= 0 && hx < 32 && hy >= 0 && hy < 32) {
         ctx.strokeStyle = hoverStrokeColor;
         ctx.lineWidth = 1.5;
         ctx.strokeRect(hx * cellSize + 0.5, hy * cellSize + 0.5, cellSize - 1, cellSize - 1);
-        const isMasked = maskSet.has(`${hx},${hy}`);
+        const secId = sectionGrid[hy]?.[hx];
+        const sec = secId ? MASK_SECTIONS.find((s) => s.id === secId) : null;
         const basePixel = baseGrid?.[hy]?.[hx] || 'transparent';
-        maskPixelInfo.textContent = `X: ${hx}, Y: ${hy} · ${isMasked ? 'MASKED (In Front)' : 'UNMASKED'} (${basePixel})`;
+        if (sec) {
+          maskPixelInfo.textContent = `X: ${hx}, Y: ${hy} · Section: ${sec.label} (${sec.color}) · Base: ${basePixel}`;
+        } else if (basePixel !== 'transparent') {
+          maskPixelInfo.textContent = `X: ${hx}, Y: ${hy} · Section: ⚠️ UNASSIGNED BODY PIXEL · Base: ${basePixel}`;
+        } else {
+          maskPixelInfo.textContent = `X: ${hx}, Y: ${hy} · Section: None · Base: ${basePixel}`;
+        }
       }
     }
   } else {
     const customFrame = getCustomSpriteOverride(target.key);
-    const customOrientation = target.mode === 'clothing' ? getCustomSpriteOverride(`clothing:${target.presetId}:${target.view}`) : null;
+    const customOrientation = target.mode === 'clothing'
+      ? getCustomSpriteOverride(`clothing:${target.presetId}:${target.view}`)
+      : getCustomSpriteOverride(`base:${target.gender}:${target.direction}`);
     isCustom = customFrame !== null || customOrientation !== null;
     const grid = getStudioWorkingGrid(target);
 
@@ -1204,7 +1438,7 @@ function renderStudioEditor() {
       ctx.stroke();
     }
 
-    if (studioHoverCoords) {
+    if (studioHoverCoords && maskPixelInfo) {
       const { x: hx, y: hy } = studioHoverCoords;
       if (hx >= 0 && hx < 32 && hy >= 0 && hy < 32) {
         ctx.strokeStyle = hoverStrokeColor;
@@ -1242,8 +1476,8 @@ function renderStudioEditor() {
   } else {
     originLabel = isCustom ? 'Custom Base Frame Override' : 'Default Base Sprite';
   }
-  maskStatusReadout.textContent = `${isCustom ? 'CUSTOM' : 'DEFAULT'} · ${pixelCount} PX`;
-  maskOriginInfo.textContent = originLabel;
+  if (maskStatusReadout) maskStatusReadout.textContent = `${isCustom ? 'CUSTOM' : 'DEFAULT'} · ${pixelCount} PX`;
+  if (maskOriginInfo) maskOriginInfo.textContent = originLabel;
 
   // Render Live Clothed Preview with selected Preview Background
   const previewMember = target.member ?? party[0];
@@ -1251,13 +1485,13 @@ function renderStudioEditor() {
     ? target.view
     : target.mode === 'base'
       ? (target.direction === 'east' ? 'side' : 'front')
-      : spriteViewControl.value;
+      : (spriteViewControl?.value || 'side_right');
   const isPlayingCycle = spriteAnimationTimer !== null;
   const previewAnimMode = isPlayingCycle
     ? 'walk'
     : ((target.mode === 'clothing' || target.mode === 'base')
         ? target.animMode
-        : spriteAnimationControl.value);
+        : (spriteAnimationControl?.value || 'walk'));
   const frameCount = getCharacterFrameCount(previewMember?.appearance, previewView, previewAnimMode) || 8;
   const previewFrame = isPlayingCycle
     ? (((selectedSpriteFrame % frameCount) + frameCount) % frameCount)
@@ -1273,27 +1507,29 @@ function renderStudioEditor() {
     previewFrame
   );
 
-  if (previewBgMode === 'prairie') {
-    renderCharacterGridToCanvas(maskPreviewCanvas, clothedGrid, {
-      bgColor: '#020904',
-      includeBackdrop: true,
-      backdropId: 'prairie'
-    });
-  } else {
-    const pCtx = maskPreviewCanvas.getContext('2d');
-    if (pCtx) {
-      const pw = maskPreviewCanvas.width;
-      const ph = maskPreviewCanvas.height;
-      const pCell = pw / 32;
-      pCtx.clearRect(0, 0, pw, ph);
-      drawBackdropOnCanvas(pCtx, pw, ph, previewBgMode);
-      if (clothedGrid) {
-        for (let y = 0; y < 32; y++) {
-          for (let x = 0; x < 32; x++) {
-            const c = clothedGrid[y]?.[x];
-            if (c) {
-              pCtx.fillStyle = c;
-              pCtx.fillRect(x * pCell, y * pCell, pCell, pCell);
+  if (maskPreviewCanvas) {
+    if (previewBgMode === 'prairie') {
+      renderCharacterGridToCanvas(maskPreviewCanvas, clothedGrid, {
+        bgColor: '#020904',
+        includeBackdrop: true,
+        backdropId: 'prairie'
+      });
+    } else {
+      const pCtx = maskPreviewCanvas.getContext('2d');
+      if (pCtx) {
+        const pw = maskPreviewCanvas.width;
+        const ph = maskPreviewCanvas.height;
+        const pCell = pw / 32;
+        pCtx.clearRect(0, 0, pw, ph);
+        drawBackdropOnCanvas(pCtx, pw, ph, previewBgMode);
+        if (clothedGrid) {
+          for (let y = 0; y < 32; y++) {
+            for (let x = 0; x < 32; x++) {
+              const c = clothedGrid[y]?.[x];
+              if (c) {
+                pCtx.fillStyle = c;
+                pCtx.fillRect(x * pCell, y * pCell, pCell, pCell);
+              }
             }
           }
         }
@@ -1301,7 +1537,13 @@ function renderStudioEditor() {
     }
   }
 
-  maskOutfitSummary.textContent = summarizeMemberOutfit({ appearance: previewAppearance, name: previewMember.name });
+  if (maskOutfitSummary) {
+    if (target.mode === 'base' && basePreviewWearOutfit && !basePreviewWearOutfit.checked) {
+      maskOutfitSummary.textContent = `Bare Base Sprite · Skin: ${lookupSkinToneName(testPlayerSkinTone)}`;
+    } else {
+      maskOutfitSummary.textContent = summarizeMemberOutfit({ appearance: previewAppearance, name: previewMember.name });
+    }
+  }
 }
 
 // ============================================================================
@@ -1346,18 +1588,39 @@ function applyStudioPixel(x, y, isRightClick = false) {
 
   if (target.mode === 'mask') {
     const baseGrid = getBaseBoilerplateGrid(target.gender, target.view, target.animMode, target.frameIndex);
-    const currentCoords = getFrameActiveMask(target.gender, target.view, target.animMode, target.frameIndex, baseGrid);
-    const maskSet = new Set(currentCoords.map(([cx, cy]) => `${cx},${cy}`));
-    const key = `${x},${y}`;
-    if (activeStudioTool === 'eraser' || isRightClick) {
-      if (!maskSet.has(key)) return;
-      maskSet.delete(key);
-    } else {
-      if (maskSet.has(key)) return;
-      maskSet.add(key);
+    const sectionMap = getFrameSectionMap(target.gender, target.view, target.animMode, target.frameIndex, baseGrid);
+    const sectionGrid = sectionMapToGrid(sectionMap);
+
+    if (activeStudioTool === 'picker') {
+      const pickedSec = sectionGrid[y]?.[x];
+      if (pickedSec) {
+        selectActiveMaskSection(pickedSec);
+        showSaveStatus(`Selected section: ${pickedSec}`, false);
+      }
+      setActiveTool('pencil');
+      renderStudioEditor();
+      return;
     }
-    const newCoords = Array.from(maskSet).map((k) => k.split(',').map(Number));
-    setFrameCustomMask(target.gender, target.view, target.animMode, target.frameIndex, newCoords);
+
+    if (activeStudioTool === 'fill') {
+      const targetVal = sectionGrid[y]?.[x] ?? null;
+      const replaceVal = (activeStudioTool === 'eraser' || isRightClick) ? null : activeMaskSection;
+      if (targetVal !== replaceVal) {
+        floodFill(sectionGrid, x, y, replaceVal);
+        const updatedMap = sectionGridToMap(sectionGrid);
+        setFrameSectionMap(target.gender, target.view, target.animMode, target.frameIndex, updatedMap);
+      }
+    } else if (activeStudioTool === 'eraser' || isRightClick) {
+      if (sectionGrid[y]?.[x] === null) return;
+      sectionGrid[y][x] = null;
+      const updatedMap = sectionGridToMap(sectionGrid);
+      setFrameSectionMap(target.gender, target.view, target.animMode, target.frameIndex, updatedMap);
+    } else {
+      if (sectionGrid[y]?.[x] === activeMaskSection) return;
+      sectionGrid[y][x] = activeMaskSection;
+      const updatedMap = sectionGridToMap(sectionGrid);
+      setFrameSectionMap(target.gender, target.view, target.animMode, target.frameIndex, updatedMap);
+    }
   } else {
     const grid = getStudioWorkingGrid(target);
 
@@ -1392,11 +1655,11 @@ function applyStudioPixel(x, y, isRightClick = false) {
       }
       resetCustomSpriteOverride(`clothing:${target.presetId}:${target.view}:idle:0`);
     } else if (target.mode === 'base' && target.isAllFrames) {
-      // Propagate the pixel edit to all 8 walk frames and idle frame
+      // Propagate the pixel edit to all 8 walk frames and idle frame while preserving each frame's pose
       const fillColor = (activeStudioTool === 'eraser' || isRightClick) ? null : studioBrushColor;
       for (let f = 0; f < 8; f++) {
         const fKey = `base:${target.gender}:${target.direction}:walk:${f}`;
-        const fGrid = getCustomSpriteOverride(fKey) || getBaseBoilerplateGrid(target.gender, target.direction === 'south' ? 'front' : 'side', 'walk', f, target.member?.appearance?.skinToneId);
+        const fGrid = getCustomSpriteOverride(fKey) || getBaseBoilerplateGrid(target.gender, target.direction === 'south' ? 'front' : 'side', 'walk', f);
         if (fGrid) {
           const copy = fGrid.map((r) => [...r]);
           if (activeStudioTool === 'fill') floodFill(copy, x, y, fillColor);
@@ -1406,7 +1669,7 @@ function applyStudioPixel(x, y, isRightClick = false) {
         }
       }
       const idleKey = `base:${target.gender}:${target.direction}:idle:0`;
-      const idleGrid = getCustomSpriteOverride(idleKey) || getBaseBoilerplateGrid(target.gender, target.direction === 'south' ? 'front' : 'side', 'idle', 0, target.member?.appearance?.skinToneId);
+      const idleGrid = getCustomSpriteOverride(idleKey) || getBaseBoilerplateGrid(target.gender, target.direction === 'south' ? 'front' : 'side', 'idle', 0);
       if (idleGrid) {
         const copy = idleGrid.map((r) => [...r]);
         if (activeStudioTool === 'fill') floodFill(copy, x, y, fillColor);
@@ -1418,6 +1681,7 @@ function applyStudioPixel(x, y, isRightClick = false) {
   }
 
   renderSpriteViewer();
+  renderStudioEditor();
 }
 
 function getCanvasCellCoords(evt) {
@@ -1432,7 +1696,7 @@ function getCanvasCellCoords(evt) {
   return { x: Math.max(0, Math.min(31, x)), y: Math.max(0, Math.min(31, y)) };
 }
 
-maskEditorCanvas.addEventListener('mousedown', (evt) => {
+maskEditorCanvas?.addEventListener('mousedown', (evt) => {
   if (activeStudioTool !== 'picker') {
     pendingStrokeSnapshot = captureTargetStateSnapshot();
   }
@@ -1445,7 +1709,7 @@ maskEditorCanvas.addEventListener('mousedown', (evt) => {
   }
 });
 
-maskEditorCanvas.addEventListener('mousemove', (evt) => {
+maskEditorCanvas?.addEventListener('mousemove', (evt) => {
   const { x, y } = getCanvasCellCoords(evt);
   studioHoverCoords = { x, y };
   if (isStudioPainting && activeStudioTool !== 'picker' && activeStudioTool !== 'fill') {
@@ -1462,16 +1726,17 @@ window.addEventListener('mouseup', () => {
       commitUndoSnapshotIfChanged(pendingStrokeSnapshot);
       pendingStrokeSnapshot = null;
     }
+    renderStudioEditor();
   }
 });
 
-maskEditorCanvas.addEventListener('mouseleave', () => {
+maskEditorCanvas?.addEventListener('mouseleave', () => {
   studioHoverCoords = null;
-  maskPixelInfo.textContent = 'Hover canvas to inspect';
+  if (maskPixelInfo) maskPixelInfo.textContent = 'Hover canvas to inspect';
   renderStudioEditor();
 });
 
-maskEditorCanvas.addEventListener('contextmenu', (evt) => {
+maskEditorCanvas?.addEventListener('contextmenu', (evt) => {
   evt.preventDefault();
 });
 
@@ -1483,9 +1748,31 @@ window.addEventListener('keydown', (evt) => {
     evt.preventDefault();
     if (evt.shiftKey) performRedo();
     else performUndo();
+    return;
   } else if ((evt.metaKey || evt.ctrlKey) && evt.key.toLowerCase() === 'y') {
     evt.preventDefault();
     performRedo();
+    return;
+  }
+
+  const target = getStudioTargetInfo();
+  if (target.mode === 'mask') {
+    const key = evt.key;
+    const sec = MASK_SECTIONS.find((s) => s.shortcut === key || s.shortcut.toLowerCase() === key.toLowerCase());
+    if (sec) {
+      evt.preventDefault();
+      selectActiveMaskSection(sec.id);
+      return;
+    }
+    if (key.toLowerCase() === 'b' || key.toLowerCase() === 'p') {
+      setActiveTool('pencil');
+    } else if (key.toLowerCase() === 'e' || key.toLowerCase() === 'x') {
+      setActiveTool('eraser');
+    } else if (key.toLowerCase() === 'i') {
+      setActiveTool('picker');
+    } else if (key.toLowerCase() === 'g') {
+      setActiveTool('fill');
+    }
   }
 });
 
@@ -1495,14 +1782,14 @@ window.addEventListener('keydown', (evt) => {
 modeTabButtons.forEach((btn) => {
   btn.addEventListener('click', () => {
     const mode = btn.getAttribute('data-mode');
-    if (mode) {
+    if (mode && studioModeSelect) {
       studioModeSelect.value = mode;
       renderStudioEditor();
     }
   });
 });
 
-studioModeSelect.addEventListener('change', () => {
+studioModeSelect?.addEventListener('change', () => {
   renderStudioEditor();
 });
 
@@ -1523,37 +1810,99 @@ document.querySelectorAll('[data-preview-bg]').forEach((btn) => {
   });
 });
 
-// Z-Mask Helper Buttons
-if (maskBtnAutodetect) {
-  maskBtnAutodetect.addEventListener('click', () => {
-    const before = captureTargetStateSnapshot();
-    const target = getStudioTargetInfo();
-    resetFrameCustomMask(target.gender, target.view, target.animMode, target.frameIndex);
-    commitUndoSnapshotIfChanged(before);
-    renderSpriteViewer();
-    showSaveStatus('Restored auto-detected hand Z-mask pixels!', false);
+// 10-Section Palette Click Handlers
+document.querySelectorAll('#mask-section-palette .section-brush-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const secId = btn.getAttribute('data-section-id');
+    if (secId) {
+      selectActiveMaskSection(secId);
+    }
   });
-}
+});
 
-if (maskBtnInvert) {
-  maskBtnInvert.addEventListener('click', () => {
+// Mask Display & Preview Mode Toggles
+maskOverlayButtons.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    maskOverlayMode = btn.getAttribute('data-mask-overlay') || 'solid';
+    maskOverlayButtons.forEach((b) => b.classList.toggle('active', b === btn));
+    renderStudioEditor();
+  });
+});
+
+maskPreviewModeButtons.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    maskPreviewMode = btn.getAttribute('data-preview-mode') || 'clothed';
+    maskPreviewModeButtons.forEach((b) => b.classList.toggle('active', b === btn));
+    renderStudioEditor();
+  });
+});
+
+// 10-Section Action Helpers
+if (maskBtnAutodetectAll) {
+  maskBtnAutodetectAll.addEventListener('click', () => {
     const before = captureTargetStateSnapshot();
     const target = getStudioTargetInfo();
     const baseGrid = getBaseBoilerplateGrid(target.gender, target.view, target.animMode, target.frameIndex);
-    const currentCoords = getFrameActiveMask(target.gender, target.view, target.animMode, target.frameIndex, baseGrid);
-    const maskSet = new Set(currentCoords.map(([cx, cy]) => `${cx},${cy}`));
-    const inverted = [];
-    for (let y = 0; y < 32; y++) {
-      for (let x = 0; x < 32; x++) {
-        if (baseGrid?.[y]?.[x] && !maskSet.has(`${x},${y}`)) {
-          inverted.push([x, y]);
-        }
-      }
-    }
-    setFrameCustomMask(target.gender, target.view, target.animMode, target.frameIndex, inverted);
+    const autoMap = getAutoDetectedSectionMap(target.gender, target.view, target.animMode, target.frameIndex, baseGrid);
+    setFrameSectionMap(target.gender, target.view, target.animMode, target.frameIndex, autoMap);
     commitUndoSnapshotIfChanged(before);
     renderSpriteViewer();
-    showSaveStatus('Inverted Z-mask on body pixels!', false);
+    renderStudioEditor();
+    showSaveStatus('Auto-detected and mapped all 10 anatomical sections!', false);
+  });
+}
+
+if (maskBtnSwapLimbs) {
+  maskBtnSwapLimbs.addEventListener('click', () => {
+    const before = captureTargetStateSnapshot();
+    const target = getStudioTargetInfo();
+    const baseGrid = getBaseBoilerplateGrid(target.gender, target.view, target.animMode, target.frameIndex);
+    const sectionMap = getFrameSectionMap(target.gender, target.view, target.animMode, target.frameIndex, baseGrid);
+    const swapped = {
+      ...sectionMap,
+      fg_sleeve: sectionMap.bg_sleeve || [],
+      bg_sleeve: sectionMap.fg_sleeve || [],
+      fg_arm: sectionMap.bg_arm || [],
+      bg_arm: sectionMap.fg_arm || [],
+      fg_hand: sectionMap.bg_hand || [],
+      bg_hand: sectionMap.fg_hand || [],
+      fg_leg: sectionMap.bg_leg || [],
+      bg_leg: sectionMap.fg_leg || [],
+      fg_boot: sectionMap.bg_boot || [],
+      bg_boot: sectionMap.fg_boot || [],
+      fg_foot: sectionMap.bg_foot || [],
+      bg_foot: sectionMap.fg_foot || []
+    };
+    setFrameSectionMap(target.gender, target.view, target.animMode, target.frameIndex, swapped);
+    commitUndoSnapshotIfChanged(before);
+    renderSpriteViewer();
+    renderStudioEditor();
+    showSaveStatus('Swapped Near and Far limbs (foreground <-> background)!', false);
+  });
+}
+
+if (maskBtnCopyFrame) {
+  maskBtnCopyFrame.addEventListener('click', () => {
+    const target = getStudioTargetInfo();
+    const baseGrid = getBaseBoilerplateGrid(target.gender, target.view, target.animMode, target.frameIndex);
+    copiedFrameSectionMap = getFrameSectionMap(target.gender, target.view, target.animMode, target.frameIndex, baseGrid);
+    showSaveStatus(`Copied section map for ${target.animMode.toUpperCase()} Frame ${target.frameIndex + 1}!`, false);
+  });
+}
+
+if (maskBtnPasteFrame) {
+  maskBtnPasteFrame.addEventListener('click', () => {
+    if (!copiedFrameSectionMap) {
+      showSaveStatus('No frame section map copied yet! Click "Copy Frame Map" first.', true);
+      return;
+    }
+    const before = captureTargetStateSnapshot();
+    const target = getStudioTargetInfo();
+    setFrameSectionMap(target.gender, target.view, target.animMode, target.frameIndex, copiedFrameSectionMap);
+    commitUndoSnapshotIfChanged(before);
+    renderSpriteViewer();
+    renderStudioEditor();
+    showSaveStatus(`Pasted section map into ${target.animMode.toUpperCase()} Frame ${target.frameIndex + 1}!`, false);
   });
 }
 
@@ -1561,14 +1910,17 @@ if (maskBtnClearMask) {
   maskBtnClearMask.addEventListener('click', () => {
     const before = captureTargetStateSnapshot();
     const target = getStudioTargetInfo();
-    setFrameCustomMask(target.gender, target.view, target.animMode, target.frameIndex, []);
+    const emptyMap = {};
+    for (const s of MASK_SECTIONS) emptyMap[s.id] = [];
+    setFrameSectionMap(target.gender, target.view, target.animMode, target.frameIndex, emptyMap);
     commitUndoSnapshotIfChanged(before);
     renderSpriteViewer();
-    showSaveStatus('Cleared Z-mask for this frame!', false);
+    renderStudioEditor();
+    showSaveStatus('Cleared section map for this frame!', false);
   });
 }
 
-eraControl.addEventListener('change', () => {
+eraControl?.addEventListener('change', () => {
   selectedEra = eraControl.value;
   syncAllPartyAppearancesToEra(party, selectedEra);
   if (studioClothingEra && studioClothingEra.value !== 'all') {
@@ -1578,47 +1930,47 @@ eraControl.addEventListener('change', () => {
   renderSpriteViewer();
 });
 
-spriteCharacterControl.addEventListener('change', () => {
+spriteCharacterControl?.addEventListener('change', () => {
   stopSpritePlayback();
   selectedSpriteFrame = 0;
   syncStudioToActiveTravelerDefaults();
   renderSpriteViewer();
 });
 
-spriteViewControl.addEventListener('change', () => {
+spriteViewControl?.addEventListener('change', () => {
   stopSpritePlayback();
   selectedSpriteFrame = 0;
   const isFront = spriteViewControl.value === 'front';
-  studioClothingView.value = isFront ? 'front' : 'side';
-  studioBaseDirection.value = isFront ? 'south' : 'east';
+  if (studioClothingView) studioClothingView.value = isFront ? 'front' : 'side';
+  if (studioBaseDirection) studioBaseDirection.value = isFront ? 'south' : 'east';
   renderSpriteViewer();
 });
 
-spriteAnimationControl.addEventListener('change', () => {
+spriteAnimationControl?.addEventListener('change', () => {
   stopSpritePlayback();
   selectedSpriteFrame = 0;
   renderSpriteViewer();
 });
 
-spritePlayButton.addEventListener('click', toggleSpritePlayback);
+spritePlayButton?.addEventListener('click', toggleSpritePlayback);
 if (previewPlayBtn) previewPlayBtn.addEventListener('click', toggleSpritePlayback);
 
-studioToolPencil.addEventListener('click', () => setActiveTool('pencil'));
-studioToolEraser.addEventListener('click', () => setActiveTool('eraser'));
-studioToolPicker.addEventListener('click', () => setActiveTool('picker'));
-studioToolFill.addEventListener('click', () => setActiveTool('fill'));
+studioToolPencil?.addEventListener('click', () => setActiveTool('pencil'));
+studioToolEraser?.addEventListener('click', () => setActiveTool('eraser'));
+studioToolPicker?.addEventListener('click', () => setActiveTool('picker'));
+studioToolFill?.addEventListener('click', () => setActiveTool('fill'));
 
 if (studioBtnUndo) studioBtnUndo.addEventListener('click', performUndo);
 if (studioBtnRedo) studioBtnRedo.addEventListener('click', performRedo);
 
-studioActiveColor.addEventListener('input', () => {
+studioActiveColor?.addEventListener('input', () => {
   setActiveBrushColor(studioActiveColor.value);
   if (activeStudioTool === 'eraser' || activeStudioTool === 'picker') {
     setActiveTool('pencil');
   }
 });
 
-studioHexInput.addEventListener('input', () => {
+studioHexInput?.addEventListener('input', () => {
   const hex = studioHexInput.value.trim();
   if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
     setActiveBrushColor(hex);
@@ -1630,18 +1982,20 @@ studioHexInput.addEventListener('input', () => {
 
 function stepStudioFrame(delta) {
   stopSpritePlayback();
-  const mode = studioModeSelect.value;
+  const mode = document.body?.dataset?.studioMode || studioModeSelect?.value || 'clothing';
   const nextIdx = (selectedSpriteFrame + delta + 8) % 8;
   selectedSpriteFrame = nextIdx;
 
   if (mode === 'clothing') {
-    if (studioClothingFrame.value !== 'all' || isFrameSpecificCategory(studioClothingCategory.value)) {
+    if (studioClothingFrame && studioClothingCategory && (studioClothingFrame.value !== 'all' || isFrameSpecificCategory(studioClothingCategory.value))) {
       studioClothingFrame.value = `walk:${nextIdx}`;
-      spriteAnimationControl.value = 'walk';
+      if (spriteAnimationControl) spriteAnimationControl.value = 'walk';
     }
   } else if (mode === 'base') {
-    studioBaseFrame.value = `walk:${nextIdx}`;
-    spriteAnimationControl.value = 'walk';
+    if (studioBaseFrame && !(studioBaseApplyAll && studioBaseApplyAll.checked)) {
+      studioBaseFrame.value = `walk:${nextIdx}`;
+    }
+    if (spriteAnimationControl) spriteAnimationControl.value = 'walk';
   }
   renderSpriteViewer();
 }
@@ -1649,12 +2003,12 @@ function stepStudioFrame(delta) {
 if (studioPrevFrame) studioPrevFrame.addEventListener('click', () => stepStudioFrame(-1));
 if (studioNextFrame) studioNextFrame.addEventListener('click', () => stepStudioFrame(1));
 
-studioClothingEra.addEventListener('change', () => {
+studioClothingEra?.addEventListener('change', () => {
   populateClothingPresets();
   renderStudioEditor();
 });
 
-studioClothingGender.addEventListener('change', () => {
+studioClothingGender?.addEventListener('change', () => {
   if (studioBaseGender && (studioClothingGender.value === 'male' || studioClothingGender.value === 'female')) {
     studioBaseGender.value = studioClothingGender.value;
   }
@@ -1662,66 +2016,257 @@ studioClothingGender.addEventListener('change', () => {
   renderStudioEditor();
 });
 
-studioClothingCategory.addEventListener('change', () => {
+studioClothingCategory?.addEventListener('change', () => {
   populateClothingPresets();
-  const memberIndex = Number(spriteCharacterControl.value) || 0;
+  const memberIndex = Number(spriteCharacterControl?.value) || 0;
   const member = party[memberIndex] ?? party[0];
   const activeCat = studioClothingCategory.value;
   const equippedPresetId = member?.appearance?.equippedPresets?.[activeCat];
-  if (equippedPresetId && studioClothingPreset.querySelector(`option[value="${equippedPresetId}"]`)) {
+  if (equippedPresetId && studioClothingPreset?.querySelector(`option[value="${equippedPresetId}"]`)) {
     studioClothingPreset.value = equippedPresetId;
   }
   renderStudioEditor();
 });
 
-studioClothingPreset.addEventListener('change', () => {
+studioClothingPreset?.addEventListener('change', () => {
   renderStudioEditor();
 });
 
-studioClothingView.addEventListener('change', () => {
+// Clothing Preset Action Listeners: Add New, Rename, Delete
+document.querySelectorAll('[data-close-dialog]').forEach((btn) => {
+  btn.addEventListener('click', (evt) => {
+    evt.preventDefault();
+    const dialogId = btn.getAttribute('data-close-dialog');
+    const dlg = document.getElementById(dialogId);
+    dlg?.close();
+  });
+});
+
+function performRenameClothing() {
+  const activeCat = studioClothingCategory?.value || 'shirts';
+  const presetId = studioClothingPreset?.value;
+  const newName = renameClothingInput?.value?.trim();
+  if (!presetId || !newName) return;
+
+  renameClothingItem(presetId, newName);
+  populateClothingPresets();
+  if (studioClothingPreset) {
+    studioClothingPreset.value = presetId;
+  }
+  dialogRenameClothing?.close();
+  renderSpriteViewer();
+  renderStudioEditor();
+  showSaveStatus(`Renamed item to "${newName}"!`, false);
+}
+
+function performCreateNewClothing() {
+  const name = newClothingName?.value?.trim();
+  const category = newClothingCategory?.value || studioClothingCategory?.value || 'shirts';
+  const era = newClothingEra?.value || studioClothingEra?.value || 'oregon_trail';
+  const gender = newClothingGender?.value || 'unisex';
+  const templateMode = newClothingTemplate?.value || 'blank';
+  const basePresetId = templateMode === 'clone' ? studioClothingPreset?.value : null;
+
+  if (!name) return;
+
+  const newItem = addCustomClothingItem({
+    name,
+    category,
+    era,
+    gender,
+    basePresetId
+  });
+
+  if (basePresetId) {
+    for (let f = 0; f < 8; f++) {
+      for (const view of ['side', 'front']) {
+        const srcWalk = getCustomSpriteOverride(`clothing:${basePresetId}:${view}:walk:${f}`);
+        if (srcWalk) setCustomSpriteOverride(`clothing:${newItem.id}:${view}:walk:${f}`, srcWalk);
+      }
+    }
+    for (const view of ['side', 'front']) {
+      const srcIdle = getCustomSpriteOverride(`clothing:${basePresetId}:${view}:idle:0`);
+      if (srcIdle) setCustomSpriteOverride(`clothing:${newItem.id}:${view}:idle:0`, srcIdle);
+      const srcUniversal = getCustomSpriteOverride(`clothing:${basePresetId}:${view}`);
+      if (srcUniversal) setCustomSpriteOverride(`clothing:${newItem.id}:${view}`, srcUniversal);
+    }
+  }
+
+  if (studioClothingCategory) studioClothingCategory.value = category;
+  if (studioClothingEra) studioClothingEra.value = era;
+  if (studioClothingGender) {
+    studioClothingGender.value = gender === 'unisex' ? 'all' : gender;
+  }
+  populateClothingPresets();
+  if (studioClothingPreset) {
+    studioClothingPreset.value = newItem.id;
+  }
+
+  dialogNewClothing?.close();
+  renderSpriteViewer();
+  renderStudioEditor();
+  showSaveStatus(`Created new item "${newItem.name}"!`, false);
+}
+
+studioClothingBtnRename?.addEventListener('click', (evt) => {
+  evt.preventDefault();
+  evt.stopPropagation();
+  const activeCat = studioClothingCategory?.value || 'shirts';
+  const presetId = studioClothingPreset?.value;
+  const preset = (INITIAL_CLOTHING_BOILERPLATE[activeCat] || []).find((p) => p.id === presetId);
+  if (!preset) return;
+
+  if (dialogRenameClothing && typeof dialogRenameClothing.showModal === 'function') {
+    if (renameClothingInput) {
+      renameClothingInput.value = preset.name;
+    }
+    dialogRenameClothing.showModal();
+    renameClothingInput?.focus();
+    renameClothingInput?.select();
+  } else {
+    const promptName = prompt('Enter new name for clothing item:', preset.name);
+    if (promptName && promptName.trim()) {
+      if (renameClothingInput) renameClothingInput.value = promptName.trim();
+      performRenameClothing();
+    }
+  }
+});
+
+formRenameClothing?.addEventListener('submit', (evt) => {
+  evt.preventDefault();
+  performRenameClothing();
+});
+
+btnSubmitRenameClothing?.addEventListener('click', (evt) => {
+  evt.preventDefault();
+  performRenameClothing();
+});
+
+studioClothingBtnNew?.addEventListener('click', (evt) => {
+  evt.preventDefault();
+  evt.stopPropagation();
+  if (newClothingName) newClothingName.value = '';
+  if (newClothingCategory && studioClothingCategory) {
+    newClothingCategory.value = studioClothingCategory.value;
+  }
+  if (newClothingEra && studioClothingEra) {
+    newClothingEra.value = studioClothingEra.value !== 'all' ? studioClothingEra.value : 'oregon_trail';
+  }
+  if (newClothingGender && studioClothingGender) {
+    newClothingGender.value = (studioClothingGender.value === 'male' || studioClothingGender.value === 'female')
+      ? studioClothingGender.value
+      : 'unisex';
+  }
+  if (newClothingTemplate) {
+    newClothingTemplate.value = 'blank';
+  }
+
+  if (dialogNewClothing && typeof dialogNewClothing.showModal === 'function') {
+    dialogNewClothing.showModal();
+    newClothingName?.focus();
+  } else {
+    const promptName = prompt('Enter name for new clothing item:');
+    if (promptName && promptName.trim()) {
+      if (newClothingName) newClothingName.value = promptName.trim();
+      performCreateNewClothing();
+    }
+  }
+});
+
+formNewClothing?.addEventListener('submit', (evt) => {
+  evt.preventDefault();
+  performCreateNewClothing();
+});
+
+btnSubmitNewClothing?.addEventListener('click', (evt) => {
+  evt.preventDefault();
+  performCreateNewClothing();
+});
+
+studioClothingBtnDelete?.addEventListener('click', () => {
+  const activeCat = studioClothingCategory?.value || 'shirts';
+  const presetId = studioClothingPreset?.value;
+  const preset = (INITIAL_CLOTHING_BOILERPLATE[activeCat] || []).find((p) => p.id === presetId);
+  if (!preset || !preset.isCustom) return;
+
+  const ok = confirm(`Delete custom clothing item "${preset.name}"?`);
+  if (!ok) return;
+
+  for (let f = 0; f < 8; f++) {
+    for (const view of ['side', 'front']) {
+      resetCustomSpriteOverride(`clothing:${presetId}:${view}:walk:${f}`);
+    }
+  }
+  for (const view of ['side', 'front']) {
+    resetCustomSpriteOverride(`clothing:${presetId}:${view}:idle:0`);
+    resetCustomSpriteOverride(`clothing:${presetId}:${view}`);
+  }
+
+  deleteCustomClothingItem(presetId);
+  populateClothingPresets();
+  renderSpriteViewer();
+  renderStudioEditor();
+  showSaveStatus(`Deleted custom clothing item "${preset.name}"!`, false);
+});
+
+studioClothingView?.addEventListener('change', () => {
   const isFront = studioClothingView.value === 'front';
-  spriteViewControl.value = isFront ? 'front' : 'side_right';
-  studioBaseDirection.value = isFront ? 'south' : 'east';
+  if (spriteViewControl) spriteViewControl.value = isFront ? 'front' : 'side_right';
+  if (studioBaseDirection) studioBaseDirection.value = isFront ? 'south' : 'east';
   renderSpriteViewer();
 });
 
-studioClothingFrame.addEventListener('change', () => {
+studioClothingFrame?.addEventListener('change', () => {
   if (studioClothingFrame.value !== 'all') {
     const [animMode, frameStr] = studioClothingFrame.value.split(':');
     const frameIndex = Number(frameStr) || 0;
     selectedSpriteFrame = frameIndex;
-    if (spriteAnimationControl.value !== animMode) {
+    if (spriteAnimationControl && spriteAnimationControl.value !== animMode) {
       spriteAnimationControl.value = animMode;
     }
   }
   renderSpriteViewer();
 });
 
-studioBaseGender.addEventListener('change', () => {
+studioBaseGender?.addEventListener('change', () => {
   if (studioClothingGender) studioClothingGender.value = studioBaseGender.value;
   populateClothingPresets();
+  renderSpriteViewer();
   renderStudioEditor();
 });
 
-studioBaseDirection.addEventListener('change', () => {
+studioBaseDirection?.addEventListener('change', () => {
   const isFront = studioBaseDirection.value === 'south';
-  spriteViewControl.value = isFront ? 'front' : 'side_right';
-  studioClothingView.value = isFront ? 'front' : 'side';
+  if (spriteViewControl) spriteViewControl.value = isFront ? 'front' : 'side_right';
+  if (studioClothingView) studioClothingView.value = isFront ? 'front' : 'side';
   renderSpriteViewer();
+  renderStudioEditor();
 });
 
-studioBaseFrame.addEventListener('change', () => {
-  const [animMode, frameStr] = studioBaseFrame.value.split(':');
-  const frameIndex = Number(frameStr) || 0;
-  selectedSpriteFrame = frameIndex;
-  if (spriteAnimationControl.value !== animMode) {
-    spriteAnimationControl.value = animMode;
+studioBaseFrame?.addEventListener('change', () => {
+  if (studioBaseFrame.value === 'all') {
+    if (studioBaseApplyAll) studioBaseApplyAll.checked = true;
+  } else {
+    if (studioBaseApplyAll) studioBaseApplyAll.checked = false;
+    const [animMode, frameStr] = studioBaseFrame.value.split(':');
+    const frameIndex = Number(frameStr) || 0;
+    selectedSpriteFrame = frameIndex;
+    if (spriteAnimationControl && spriteAnimationControl.value !== animMode) {
+      spriteAnimationControl.value = animMode;
+    }
   }
   renderSpriteViewer();
+  renderStudioEditor();
 });
 
-studioShowUnderlay.addEventListener('change', () => renderStudioEditor());
+studioShowUnderlay?.addEventListener('change', () => renderStudioEditor());
 if (studioShowGrid) studioShowGrid.addEventListener('change', () => renderStudioEditor());
+if (basePreviewWearOutfit) {
+  basePreviewWearOutfit.addEventListener('change', () => {
+    renderSpriteViewer();
+    renderStudioEditor();
+  });
+}
 
 for (const cat of ['hats', 'shirts', 'pants', 'shoes', 'accessories']) {
   previewWearCheckboxes[cat]?.addEventListener('change', () => renderStudioEditor());
@@ -1735,9 +2280,16 @@ for (const cat of ['hats', 'shirts', 'pants', 'shoes', 'accessories']) {
 
 if (previewOutfitSolo) {
   previewOutfitSolo.addEventListener('click', () => {
-    const activeCat = studioClothingCategory.value;
-    for (const cat of ['hats', 'shirts', 'pants', 'shoes', 'accessories']) {
-      if (previewWearCheckboxes[cat]) previewWearCheckboxes[cat].checked = (cat === activeCat);
+    const target = getStudioTargetInfo();
+    if (target.mode === 'base') {
+      for (const cat of ['hats', 'shirts', 'pants', 'shoes', 'accessories']) {
+        if (previewWearCheckboxes[cat]) previewWearCheckboxes[cat].checked = false;
+      }
+    } else {
+      const activeCat = studioClothingCategory?.value || 'hats';
+      for (const cat of ['hats', 'shirts', 'pants', 'shoes', 'accessories']) {
+        if (previewWearCheckboxes[cat]) previewWearCheckboxes[cat].checked = (cat === activeCat);
+      }
     }
     renderStudioEditor();
   });
@@ -1762,15 +2314,12 @@ if (previewOutfitNone) {
 }
 
 function showSaveStatus(message, isError = false) {
-  maskSaveStatus.textContent = message;
-  maskSaveStatus.className = `save-status-banner ${isError ? 'error' : 'success'}`;
-  maskSaveStatus.hidden = false;
-  setTimeout(() => {
-    maskSaveStatus.hidden = true;
-  }, 4500);
+  if (isError) {
+    console.error(message);
+  }
 }
 
-studioBtnReset.addEventListener('click', () => {
+studioBtnReset?.addEventListener('click', () => {
   const before = captureTargetStateSnapshot();
   const target = getStudioTargetInfo();
   if (target.mode === 'mask') {
@@ -1783,15 +2332,25 @@ studioBtnReset.addEventListener('click', () => {
       }
       resetCustomSpriteOverride(`clothing:${target.presetId}:${target.view}:idle:0`);
     }
+  } else if (target.mode === 'base') {
+    resetCustomSpriteOverride(target.key);
+    resetCustomSpriteOverride(`base:${target.gender}:${target.direction}`);
+    if (target.isAllFrames) {
+      for (let f = 0; f < 8; f++) {
+        resetCustomSpriteOverride(`base:${target.gender}:${target.direction}:walk:${f}`);
+      }
+      resetCustomSpriteOverride(`base:${target.gender}:${target.direction}:idle:0`);
+    }
   } else {
     resetCustomSpriteOverride(target.key);
   }
   commitUndoSnapshotIfChanged(before);
   renderSpriteViewer();
+  renderStudioEditor();
   showSaveStatus(`Reset ${target.name} to default!`, false);
 });
 
-studioBtnClear.addEventListener('click', () => {
+studioBtnClear?.addEventListener('click', () => {
   const before = captureTargetStateSnapshot();
   const target = getStudioTargetInfo();
   if (target.mode === 'mask') {
@@ -1804,28 +2363,35 @@ studioBtnClear.addEventListener('click', () => {
         resetCustomSpriteOverride(`clothing:${target.presetId}:${target.view}:walk:${f}`);
       }
       resetCustomSpriteOverride(`clothing:${target.presetId}:${target.view}:idle:0`);
+    } else if (target.mode === 'base' && target.isAllFrames) {
+      for (let f = 0; f < 8; f++) {
+        setCustomSpriteOverride(`base:${target.gender}:${target.direction}:walk:${f}`, emptyGrid);
+      }
+      setCustomSpriteOverride(`base:${target.gender}:${target.direction}:idle:0`, emptyGrid);
     }
   }
   commitUndoSnapshotIfChanged(before);
   renderSpriteViewer();
+  renderStudioEditor();
   showSaveStatus(`Cleared layer for ${target.name}!`, false);
 });
 
-maskBtnCopy.addEventListener('click', async () => {
+maskBtnCopy?.addEventListener('click', async () => {
   const data = {
     overrides: getAllCustomOverridesObject(),
-    masks: getAllCustomMasksObject()
+    masks: getAllCustomMasksObject(),
+    customClothing: getAllCustomClothingObject()
   };
   try {
     await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
-    showSaveStatus('Copied custom sprites & masks JSON to clipboard!', false);
+    showSaveStatus('Copied custom sprites, masks & clothing to clipboard!', false);
   } catch {
     prompt('Copy custom sprites JSON:', JSON.stringify(data));
   }
 });
 
-maskBtnPaste.addEventListener('click', () => {
-  const input = prompt('Paste custom sprites & masks JSON:');
+maskBtnPaste?.addEventListener('click', () => {
+  const input = prompt('Paste custom sprites, masks & clothing JSON:');
   if (!input) return;
   try {
     const parsed = JSON.parse(input);
@@ -1835,7 +2401,7 @@ maskBtnPaste.addEventListener('click', () => {
         setCustomSpriteOverride(k, v);
         count++;
       }
-    } else if (!parsed.masks && typeof parsed === 'object') {
+    } else if (!parsed.masks && !parsed.customClothing && typeof parsed === 'object') {
       for (const [k, v] of Object.entries(parsed)) {
         setCustomSpriteOverride(k, v);
         count++;
@@ -1844,8 +2410,23 @@ maskBtnPaste.addEventListener('click', () => {
     if (parsed.masks) {
       importMaskOverrides(parsed.masks);
     }
+    if (parsed.customClothing && typeof parsed.customClothing === 'object') {
+      if (parsed.customClothing.items) {
+        for (const item of Object.values(parsed.customClothing.items)) {
+          if (item && item.category) {
+            addCustomClothingItem(item);
+          }
+        }
+      }
+      if (parsed.customClothing.nameOverrides) {
+        for (const [id, newName] of Object.entries(parsed.customClothing.nameOverrides)) {
+          renameClothingItem(id, newName);
+        }
+      }
+      populateClothingPresets();
+    }
     renderSpriteViewer();
-    showSaveStatus(`Imported ${count} sprite override(s)!`, false);
+    showSaveStatus(`Imported ${count} sprite override(s) and custom clothing!`, false);
   } catch (err) {
     alert('Invalid JSON: ' + err.message);
   }
@@ -1854,7 +2435,8 @@ maskBtnPaste.addEventListener('click', () => {
 function downloadSpriteStudioJsonFile() {
   const data = {
     overrides: getAllCustomOverridesObject(),
-    masks: getAllCustomMasksObject()
+    masks: getAllCustomMasksObject(),
+    customClothing: getAllCustomClothingObject()
   };
   const jsonStr = JSON.stringify(data, null, 2);
   const blob = new Blob([jsonStr], { type: 'application/json' });
@@ -1868,17 +2450,19 @@ function downloadSpriteStudioJsonFile() {
   URL.revokeObjectURL(url);
 }
 
-maskBtnSaveProject.addEventListener('click', async () => {
+maskBtnSaveProject?.addEventListener('click', async () => {
   maskBtnSaveProject.disabled = true;
   maskBtnSaveProject.textContent = '⏳ Saving...';
   try {
-    const [overridesRes, masksRes] = await Promise.allSettled([
+    const [overridesRes, masksRes, clothingRes] = await Promise.allSettled([
       saveCustomOverridesToServer(),
-      saveCustomMasksToServer()
+      saveCustomMasksToServer(),
+      saveCustomClothingToServer()
     ]);
     const overridesCount = overridesRes.status === 'fulfilled' ? (overridesRes.value?.count ?? 0) : 0;
     const masksCount = masksRes.status === 'fulfilled' ? (masksRes.value?.count ?? 0) : 0;
-    showSaveStatus(`Saved ${overridesCount} sprite override(s) and ${masksCount} mask(s) to project files!`, false);
+    const clothingCount = clothingRes.status === 'fulfilled' ? (clothingRes.value?.count ?? 0) : 0;
+    showSaveStatus(`Saved ${overridesCount} sprite override(s), ${masksCount} mask(s), and ${clothingCount} custom clothing item(s) to project files!`, false);
   } catch (err) {
     console.warn('Could not save via dev server endpoint, falling back to download:', err);
     downloadSpriteStudioJsonFile();
@@ -1889,16 +2473,16 @@ maskBtnSaveProject.addEventListener('click', async () => {
   }
 });
 
-maskBtnDownload.addEventListener('click', () => {
+maskBtnDownload?.addEventListener('click', () => {
   downloadSpriteStudioJsonFile();
   showSaveStatus('Downloaded custom-sprites-and-masks.json!', false);
 });
 
-maskBtnLoadFile.addEventListener('click', () => {
-  maskFileInput.click();
+maskBtnLoadFile?.addEventListener('click', () => {
+  maskFileInput?.click();
 });
 
-maskFileInput.addEventListener('change', async (evt) => {
+maskFileInput?.addEventListener('change', async (evt) => {
   const file = evt.target?.files?.[0];
   if (!file) return;
   try {
@@ -1910,7 +2494,7 @@ maskFileInput.addEventListener('change', async (evt) => {
         setCustomSpriteOverride(k, v);
         count++;
       }
-    } else if (!parsed.masks && typeof parsed === 'object') {
+    } else if (!parsed.masks && !parsed.customClothing && typeof parsed === 'object') {
       for (const [k, v] of Object.entries(parsed)) {
         setCustomSpriteOverride(k, v);
         count++;
@@ -1918,6 +2502,21 @@ maskFileInput.addEventListener('change', async (evt) => {
     }
     if (parsed.masks) {
       importMaskOverrides(parsed.masks);
+    }
+    if (parsed.customClothing && typeof parsed.customClothing === 'object') {
+      if (parsed.customClothing.items) {
+        for (const item of Object.values(parsed.customClothing.items)) {
+          if (item && item.category) {
+            addCustomClothingItem(item);
+          }
+        }
+      }
+      if (parsed.customClothing.nameOverrides) {
+        for (const [id, newName] of Object.entries(parsed.customClothing.nameOverrides)) {
+          renameClothingItem(id, newName);
+        }
+      }
+      populateClothingPresets();
     }
     renderSpriteViewer();
     showSaveStatus(`Loaded ${count} sprite override(s) from ${file.name}!`, false);
@@ -1928,6 +2527,24 @@ maskFileInput.addEventListener('change', async (evt) => {
   }
 });
 
+if (studioBtnClearCache) {
+  studioBtnClearCache.addEventListener('click', () => {
+    const ok = confirm('Clear all cached overrides, drafts, and UI selections from browser storage? This will restore clean project defaults.');
+    if (!ok) return;
+    clearAllCustomOverridesAndStorage();
+    undoStack.length = 0;
+    redoStack.length = 0;
+    updateUndoRedoButtons();
+    syncStudioToActiveTravelerDefaults();
+    testPlayerSkinTone = 'warm_ivory';
+    document.querySelectorAll('[data-test-skintone]').forEach((b) => {
+      b.classList.toggle('active', b.getAttribute('data-test-skintone') === 'warm_ivory');
+    });
+    renderSpriteViewer();
+    renderStudioEditor();
+    showSaveStatus('Cleared all cached options and restored project defaults!', false);
+  });
+}
 
 if (studioBtnApplySkintone) {
   studioBtnApplySkintone.addEventListener('click', () => {
@@ -1935,7 +2552,6 @@ if (studioBtnApplySkintone) {
     const target = getStudioTargetInfo();
     const chosenSkinTone = studioBaseSkintone ? studioBaseSkintone.value : 'warm_ivory';
 
-    // Recolor all walk frames 0..7
     for (let f = 0; f < 8; f++) {
       const fKey = `base:${target.gender}:${target.direction}:walk:${f}`;
       const fGrid = getCustomSpriteOverride(fKey) || getBaseBoilerplateGrid(target.gender, target.direction === 'south' ? 'front' : 'side', 'walk', f);
@@ -1945,7 +2561,6 @@ if (studioBtnApplySkintone) {
       }
     }
 
-    // Recolor idle frame
     const idleKey = `base:${target.gender}:${target.direction}:idle:0`;
     const idleGrid = getCustomSpriteOverride(idleKey) || getBaseBoilerplateGrid(target.gender, target.direction === 'south' ? 'front' : 'side', 'idle', 0);
     if (idleGrid) {
@@ -1953,7 +2568,6 @@ if (studioBtnApplySkintone) {
       setCustomSpriteOverride(idleKey, recolored);
     }
 
-    // Update active traveler appearance so live preview reflects new skin tone
     if (target.member?.appearance) {
       target.member.appearance.skinToneId = chosenSkinTone;
     }
@@ -1966,10 +2580,17 @@ if (studioBtnApplySkintone) {
 
 if (studioBaseApplyAll) {
   studioBaseApplyAll.addEventListener('change', () => {
+    if (studioBaseFrame) {
+      if (studioBaseApplyAll.checked) {
+        studioBaseFrame.value = 'all';
+      } else if (studioBaseFrame.value === 'all') {
+        studioBaseFrame.value = `walk:${selectedSpriteFrame % 8}`;
+      }
+    }
+    renderSpriteViewer();
     renderStudioEditor();
   });
 }
-
 
 // Skin Painter Buttons
 document.querySelectorAll('.skin-role-btn').forEach((btn) => {
@@ -1990,6 +2611,7 @@ document.querySelectorAll('[data-test-skintone]').forEach((btn) => {
   btn.addEventListener('click', () => {
     testPlayerSkinTone = btn.getAttribute('data-test-skintone') || 'warm_ivory';
     document.querySelectorAll('[data-test-skintone]').forEach((b) => b.classList.toggle('active', b === btn));
+    renderSpriteViewer();
     renderStudioEditor();
     showSaveStatus(`Testing player skin tone: ${lookupSkinToneName(testPlayerSkinTone)}`, false);
   });
@@ -2012,4 +2634,7 @@ renderPresetColorPalette();
 populatePreviewOutfitSelectors();
 syncStudioToActiveTravelerDefaults();
 updateUndoRedoButtons();
+if (document.querySelector('#mask-section-palette')) {
+  selectActiveMaskSection(activeMaskSection);
+}
 renderSpriteViewer();

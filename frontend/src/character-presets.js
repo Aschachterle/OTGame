@@ -13,6 +13,8 @@
  * - Front View & Side Profile (Right & Left) + 4-Frame Walk Cycle.
  */
 
+import { CUSTOM_CLOTHING_DATA } from './custom-clothing.js';
+
 const GRID_SIZE = 32;
 
 const GENDERS = [
@@ -550,24 +552,26 @@ const PATTERNS = {
     '...........OOOOSSSSO............',
     '..............OOOOOO............'
   ],
-  // Exact Pioneer Brown Workshirt + Dark Suspenders + Silver Clips from Reference Image 1
+  // Exact Pioneer Workshirt + Dark Leather Suspenders + Silver Buckle Slides
   fringedBuckskinFront: [
-    '.........OOLLPPPPPPSSOO.........',
-    '.........OLPOSPPPPSOPSO.........',
-    '.........OLBOSPPPPSOBSO.........',
-    '.........OLBOSPPPPSOBSO.........',
-    '.........OLBOSPPPPSOBSO.........',
-    '.........OOOOLPPPPLOOOO.........',
-    '............OOOOOOOO............'
+    '............OLL..LLOO...........',
+    '...........OSPPLLPPSPO..........',
+    '...........OSPOLLPOSPO..........',
+    '...........OLPPLLPPLPO..........',
+    '...........OSPOLLPOSPO..........',
+    '...........OSPPLLPPSPO..........',
+    '...........OSPOLLPOSPO..........',
+    '...........OSSSLLSSSO...........'
   ],
   fringedBuckskinSide: [
     '............OOLLLLOO............',
-    '...........OSLOPPSPO............',
-    '...........OSLOPPSPO............',
-    '...........OSLOPPSPO............',
-    '...........OSLOPPSPO............',
-    '...........OOOOPPLPO............',
-    '..............OOOOOO............'
+    '...........OLLLLSSPO............',
+    '...........OLLLSSPO.............',
+    '...........OLLLSLPO.............',
+    '...........OSLLSSPO.............',
+    '...........OSLLSSPO.............',
+    '...........OSLLSSPO.............',
+    '...........OOOOLLOOO............'
   ],
   prairieLongSkirtFront: [
     '............OOOOOOOO............',
@@ -1765,7 +1769,7 @@ const INITIAL_CLOTHING_BOILERPLATE = {
     // OREGON TRAIL
     makeItemPreset('shirt_oregon_calico_bodice', 'Pioneer Calico Dress Bodice', 'oregon_trail', 12, PATTERNS.calicoBodiceFront, 12, PATTERNS.calicoBodiceSide, { O: '#2c1e31', P: '#31a2f2', S: '#1e579c', L: '#ffffff' }, 'female'),
     makeItemPreset('shirt_oregon_gingham_blouse', 'Prairie Rose Gingham Blouse', 'oregon_trail', 12, PATTERNS.calicoBodiceFront, 12, PATTERNS.calicoBodiceSide, { O: '#442434', P: '#ac2847', S: '#6b2643', L: '#f6d6bd' }, 'female'),
-    makeItemPreset('shirt_oregon_buckskin_jacket', 'Pioneer Workshirt & Suspenders', 'oregon_trail', 13, PATTERNS.fringedBuckskinFront, 13, PATTERNS.fringedBuckskinSide, { O: '#140c1c', P: '#743f39', S: '#3b1e14', L: '#c2c3c7' }, 'male'),
+    makeItemPreset('shirt_oregon_buckskin_jacket', 'Pioneer Workshirt & Suspenders', 'oregon_trail', 9, PATTERNS.fringedBuckskinFront, 9, PATTERNS.fringedBuckskinSide, { O: '#140c1c', P: '#c89658', S: '#2e1810', L: '#dcdfe4' }, 'male'),
     makeItemPreset('shirt_oregon_red_flannel', 'Homesteader Red Plaid Workshirt', 'oregon_trail', 13, PATTERNS.suitJacketFront, 13, PATTERNS.suitJacketSide, { O: '#2c1e31', P: '#ec273f', S: '#663931', L: '#f6d6bd' }, 'male'),
 
     // 1500s
@@ -2121,6 +2125,226 @@ const INITIAL_CLOTHING_BOILERPLATE = {
   ]
 };
 
+const CUSTOM_CLOTHING_STORAGE_KEY = 'ot_custom_clothing_items';
+const CLOTHING_NAME_OVERRIDES_STORAGE_KEY = 'ot_clothing_name_overrides';
+
+const CUSTOM_CLOTHING_ITEMS = new Map();
+const CLOTHING_NAME_OVERRIDES = new Map();
+
+function loadCustomClothingFromStorage() {
+  if (CUSTOM_CLOTHING_DATA && typeof CUSTOM_CLOTHING_DATA === 'object') {
+    if (CUSTOM_CLOTHING_DATA.items && typeof CUSTOM_CLOTHING_DATA.items === 'object') {
+      for (const [id, item] of Object.entries(CUSTOM_CLOTHING_DATA.items)) {
+        if (item && item.category && Array.isArray(INITIAL_CLOTHING_BOILERPLATE[item.category])) {
+          CUSTOM_CLOTHING_ITEMS.set(id, item);
+          const existingIdx = INITIAL_CLOTHING_BOILERPLATE[item.category].findIndex((p) => p.id === id);
+          if (existingIdx >= 0) {
+            INITIAL_CLOTHING_BOILERPLATE[item.category][existingIdx] = item;
+          } else {
+            INITIAL_CLOTHING_BOILERPLATE[item.category].push(item);
+          }
+        }
+      }
+    }
+    if (CUSTOM_CLOTHING_DATA.nameOverrides && typeof CUSTOM_CLOTHING_DATA.nameOverrides === 'object') {
+      for (const [id, newName] of Object.entries(CUSTOM_CLOTHING_DATA.nameOverrides)) {
+        CLOTHING_NAME_OVERRIDES.set(id, newName);
+        for (const catList of Object.values(INITIAL_CLOTHING_BOILERPLATE)) {
+          const found = catList.find((p) => p.id === id);
+          if (found) found.name = newName;
+        }
+      }
+    }
+  }
+
+  if (typeof localStorage === 'undefined') return;
+  try {
+    const rawItems = localStorage.getItem(CUSTOM_CLOTHING_STORAGE_KEY);
+    if (rawItems) {
+      const itemsObj = JSON.parse(rawItems);
+      if (itemsObj && typeof itemsObj === 'object') {
+        for (const [id, item] of Object.entries(itemsObj)) {
+          if (item && item.category && Array.isArray(INITIAL_CLOTHING_BOILERPLATE[item.category])) {
+            CUSTOM_CLOTHING_ITEMS.set(id, item);
+            const existingIdx = INITIAL_CLOTHING_BOILERPLATE[item.category].findIndex((p) => p.id === id);
+            if (existingIdx >= 0) {
+              INITIAL_CLOTHING_BOILERPLATE[item.category][existingIdx] = item;
+            } else {
+              INITIAL_CLOTHING_BOILERPLATE[item.category].push(item);
+            }
+          }
+        }
+      }
+    }
+
+    const rawNames = localStorage.getItem(CLOTHING_NAME_OVERRIDES_STORAGE_KEY);
+    if (rawNames) {
+      const namesObj = JSON.parse(rawNames);
+      if (namesObj && typeof namesObj === 'object') {
+        for (const [id, newName] of Object.entries(namesObj)) {
+          CLOTHING_NAME_OVERRIDES.set(id, newName);
+          for (const catList of Object.values(INITIAL_CLOTHING_BOILERPLATE)) {
+            const found = catList.find((p) => p.id === id);
+            if (found) found.name = newName;
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to load custom clothing from localStorage', err);
+  }
+}
+
+function saveCustomClothingToStorage() {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    const itemsObj = Object.fromEntries(CUSTOM_CLOTHING_ITEMS);
+    const namesObj = Object.fromEntries(CLOTHING_NAME_OVERRIDES);
+    localStorage.setItem(CUSTOM_CLOTHING_STORAGE_KEY, JSON.stringify(itemsObj));
+    localStorage.setItem(CLOTHING_NAME_OVERRIDES_STORAGE_KEY, JSON.stringify(namesObj));
+  } catch (err) {
+    console.warn('Failed to save custom clothing to localStorage', err);
+  }
+}
+
+loadCustomClothingFromStorage();
+
+export function addCustomClothingItem({ name, category, era = 'oregon_trail', gender = 'unisex', subType = null, basePresetId = null }) {
+  if (!name || !category || !INITIAL_CLOTHING_BOILERPLATE[category]) {
+    throw new Error('Valid name and clothing category are required.');
+  }
+
+  const cleanName = name.trim();
+  const slug = cleanName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 24);
+  const prefix = category === 'hats' ? (subType === 'hair' ? 'hair' : 'hat') : category.slice(0, -1);
+  const id = `${prefix}_${era}_${slug || 'item'}_${Date.now().toString(36)}`;
+
+  let newItem = null;
+  const basePreset = basePresetId ? (INITIAL_CLOTHING_BOILERPLATE[category] || []).find((p) => p.id === basePresetId) : null;
+
+  if (basePreset) {
+    newItem = {
+      ...basePreset,
+      id,
+      name: cleanName,
+      era,
+      gender,
+      category,
+      isCustom: true,
+      front: (basePreset.front || []).map((pt) => [...pt]),
+      side: (basePreset.side || []).map((pt) => [...pt]),
+      palette: { ...(basePreset.palette || { O: '#140c1c', P: '#c89658', S: '#2e1810', L: '#dcdfe4' }) }
+    };
+  } else {
+    newItem = {
+      id,
+      name: cleanName,
+      era,
+      gender,
+      category,
+      subType: category === 'hats' ? (subType || 'hat') : undefined,
+      patternId: 'custom',
+      palette: { O: '#140c1c', P: '#c89658', S: '#2e1810', L: '#dcdfe4' },
+      frontStartY: 9,
+      sideStartY: 9,
+      frontRows: [],
+      sideRows: [],
+      author: 'Custom',
+      front: [],
+      side: [],
+      isCustom: true
+    };
+  }
+
+  INITIAL_CLOTHING_BOILERPLATE[category].push(newItem);
+  CUSTOM_CLOTHING_ITEMS.set(id, newItem);
+  saveCustomClothingToStorage();
+
+  return newItem;
+}
+
+export function renameClothingItem(presetId, newName) {
+  if (!presetId || !newName) return null;
+  const cleanName = newName.trim();
+  if (!cleanName) return null;
+
+  let foundPreset = null;
+  for (const catList of Object.values(INITIAL_CLOTHING_BOILERPLATE)) {
+    const item = catList.find((p) => p.id === presetId);
+    if (item) {
+      item.name = cleanName;
+      foundPreset = item;
+      break;
+    }
+  }
+
+  CLOTHING_NAME_OVERRIDES.set(presetId, cleanName);
+  if (CUSTOM_CLOTHING_ITEMS.has(presetId)) {
+    const customItem = CUSTOM_CLOTHING_ITEMS.get(presetId);
+    customItem.name = cleanName;
+  }
+
+  saveCustomClothingToStorage();
+  return foundPreset;
+}
+
+export function deleteCustomClothingItem(presetId) {
+  if (!presetId) return false;
+  let deleted = false;
+
+  for (const [, catList] of Object.entries(INITIAL_CLOTHING_BOILERPLATE)) {
+    const idx = catList.findIndex((p) => p.id === presetId);
+    if (idx >= 0) {
+      catList.splice(idx, 1);
+      deleted = true;
+      break;
+    }
+  }
+
+  CUSTOM_CLOTHING_ITEMS.delete(presetId);
+  CLOTHING_NAME_OVERRIDES.delete(presetId);
+  saveCustomClothingToStorage();
+  return deleted;
+}
+
+export function getAllCustomClothingObject() {
+  return {
+    items: Object.fromEntries(CUSTOM_CLOTHING_ITEMS),
+    nameOverrides: Object.fromEntries(CLOTHING_NAME_OVERRIDES)
+  };
+}
+
+export async function saveCustomClothingToServer() {
+  const payload = getAllCustomClothingObject();
+  const response = await fetch('/api/dev/save-custom-clothing', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    throw new Error(`Server returned status ${response.status}`);
+  }
+  return await response.json();
+}
+
+export function clearAllCustomClothingStorage() {
+  CUSTOM_CLOTHING_ITEMS.clear();
+  CLOTHING_NAME_OVERRIDES.clear();
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.removeItem(CUSTOM_CLOTHING_STORAGE_KEY);
+      localStorage.removeItem(CLOTHING_NAME_OVERRIDES_STORAGE_KEY);
+    } catch (err) {
+      console.warn('Failed to clear custom clothing from localStorage', err);
+    }
+  }
+  loadCustomClothingFromStorage();
+}
+
 globalThis.CHARACTER_BOILERPLATE = {
   GRID_SIZE,
   GENDERS,
@@ -2134,4 +2358,14 @@ globalThis.CHARACTER_BOILERPLATE = {
 };
 
 export const CHARACTER_BOILERPLATE = globalThis.CHARACTER_BOILERPLATE;
-export { GRID_SIZE, GENDERS, ERAS, CATEGORIES, PRESET_COLOR_DYES, SKIN_TONES, BASE_BODY_TEMPLATES, INITIAL_CLOTHING_BOILERPLATE, buildPixelsFromRowMap };
+export {
+  GRID_SIZE,
+  GENDERS,
+  ERAS,
+  CATEGORIES,
+  PRESET_COLOR_DYES,
+  SKIN_TONES,
+  BASE_BODY_TEMPLATES,
+  INITIAL_CLOTHING_BOILERPLATE,
+  buildPixelsFromRowMap
+};

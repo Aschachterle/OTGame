@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Anatomy &amp; Depth Mask Studio — Immutable Trail</title>
+  <link rel="stylesheet" href="./sprite-studio.css?v=mask_sections_v1">
+</head>
+<body data-studio-mode="mask">
+  <main class="studio-app">
+    <!-- Top Application Navigation Bar -->
+    <header class="app-header">
+      <div class="brand-block">
+        <p class="eyebrow">IMMUTABLE TRAIL / 10-SECTION DEPTH &amp; ANATOMY WORKBENCH</p>
+        <h1>🎨 Multi-Section Depth &amp; Anatomy Mask Studio</h1>
+      </div>
+
+      <nav class="app-nav" aria-label="Developer tools navigation">
+        <a class="nav-tab" href="./scene-editor.html">🌄 Trail Scene</a>
+        <a class="nav-tab" href="./base-studio.html">🧍 Base Sprites</a>
+        <a class="nav-tab" href="./sprite-studio.html">👗 Clothing Studio</a>
+        <a class="nav-tab active" href="./mask-studio.html" aria-current="page">🎨 Z-Mask Studio</a>
+        <a class="nav-tab game-link" href="./index.html">🎮 Return to Game</a>
+      </nav>
+
+      <div class="save-toolbar">
+        <button id="mask-btn-save-project" class="primary-save-btn" type="button" title="Write all custom Z-masks and section maps directly to project files">
+          💾 Save to Project
+        </button>
+        <button id="mask-btn-download" class="secondary-button" type="button" title="Download custom masks JSON file">
+          ⬇️ Export JSON
+        </button>
+        <button id="mask-btn-load-file" class="secondary-button" type="button" title="Load custom masks from a JSON file">
+          📂 Load JSON
+        </button>
+        <button id="mask-btn-copy" class="secondary-button" type="button" title="Copy mask JSON to clipboard">
+          📋 Copy
+        </button>
+        <button id="mask-btn-paste" class="secondary-button" type="button" title="Paste mask JSON">
+          📥 Paste
+        </button>
+        <button id="studio-btn-clear-cache" class="secondary-button clear-cache-btn" type="button" title="Clear all browser-cached overrides and masks, restoring clean project defaults">
+          🧹 Clear Cached Options
+        </button>
+        <input id="mask-file-input" type="file" accept=".json,application/json" hidden>
+      </div>
+    </header>
+
+    <!-- Hidden mode select locked to 'mask' -->
+    <select id="studio-mode-select" hidden>
+      <option value="mask" selected>Foreground Z-Mask</option>
+    </select>
+
+    <!-- Step 1: Character & Walk Frame Strip -->
+    <section class="character-strip-panel" aria-label="Character Selection and Walk Frame Strip">
+      <div class="strip-controls-row">
+        <div class="strip-selectors">
+          <label>
+            <span>1. Traveler (Auto-syncs Gender &amp; Outfit)</span>
+            <select id="sprite-character" aria-label="Character"></select>
+          </label>
+          <label>
+            <span>2. Era Outfit</span>
+            <select id="era" aria-label="Historical Era"></select>
+          </label>
+          <label>
+            <span>3. Facing</span>
+            <select id="sprite-view" aria-label="Sprite facing">
+              <option value="side_right" selected>Side Profile</option>
+              <option value="front">Front View</option>
+            </select>
+          </label>
+          <label>
+            <span>4. Animation Cycle</span>
+            <select id="sprite-animation" aria-label="Sprite animation">
+              <option value="walk" selected>Walk · 8 frames</option>
+              <option value="idle">Idle · 1 frame</option>
+            </select>
+          </label>
+          <button id="sprite-play" class="secondary-button play-cycle-btn" type="button" aria-pressed="false">▶ Play Walk Cycle</button>
+        </div>
+        <output id="sprite-frame-readout" class="strip-readout" aria-live="polite">WALK · FRAME 1/8</output>
+      </div>
+
+      <div id="sprite-frame-strip" class="sprite-frame-strip" aria-label="Animation frames"></div>
+    </section>
+
+    <!-- Step 2: Active Target Context Breadcrumb -->
+    <section class="context-breadcrumb-bar" aria-label="Editing Context">
+      <div class="breadcrumb-main">
+        <span class="breadcrumb-eyebrow">EDITING ANATOMICAL MASK:</span>
+        <div id="studio-breadcrumb-trail" class="breadcrumb-trail">
+          🎨 10-Section Depth Mask › Jedediah (Male) › Side Profile › WALK Frame 1
+        </div>
+        <output id="mask-status-readout" class="status-badge">10 SECTIONS · 100% MAPPED</output>
+      </div>
+      <div id="studio-propagation-rule" class="propagation-rule-pill">
+        ℹ️ 10 Anatomical Sections: All sections are visible and editable at once in distinct colors so you can verify 100% sprite mapping coverage across each frame.
+      </div>
+    </section>
+
+    <!-- Step 3: 3-Column Focused Z-Mask Workspace -->
+    <section class="studio-workspace-grid" aria-label="Z-Mask Canvas, Mask Actions, and Live Clothed Preview">
+      <!-- COLUMN 1: 32×32 DEPTH Z-MASK CANVAS -->
+      <div class="studio-col studio-col-canvas">
+        <div class="studio-col-header">
+          <span id="studio-canvas-title" class="col-title">32×32 SECTION MASK EDITOR</span>
+          <strong id="studio-target-name" class="target-short-name">Frame 1 Section Map</strong>
+        </div>
+
+        <!-- Display / Overlay Mode Pills -->
+        <div class="backdrop-switcher-row" style="margin-bottom: 4px;">
+          <span class="backdrop-label">Display:</span>
+          <div class="backdrop-pills mask-overlay-pills" role="group" aria-label="Section map display mode">
+            <button type="button" class="bg-pill active" data-mask-overlay="solid" title="Solid 10-color section map">🎨 Solid Map</button>
+            <button type="button" class="bg-pill" data-mask-overlay="blended" title="Base sprite with 60% colored section overlays">🎛️ Blended Overlay</button>
+            <button type="button" class="bg-pill" data-mask-overlay="base" title="Base sprite only for reference">🧍 Base Sprite</button>
+          </div>
+        </div>
+
+        <div class="canvas-stage-box">
+          <canvas id="mask-editor-canvas" width="288" height="288" aria-label="32 by 32 multi-section mask editor"></canvas>
+        </div>
+
+        <!-- Sprite Mapping Coverage Progress -->
+        <div class="coverage-panel" aria-label="Sprite mapping coverage">
+          <div class="coverage-header-row">
+            <span style="font-weight: 700; color: #7fa88c;">Sprite Mapping Coverage:</span>
+            <span id="mask-coverage-readout" class="coverage-readout complete">Mapped: 0/0 px (100% ✨)</span>
+          </div>
+          <div class="coverage-bar-track">
+            <div id="mask-coverage-fill" class="coverage-bar-fill" style="width: 100%;"></div>
+          </div>
+        </div>
+
+        <!-- 14-Section Color Legend -->
+        <div id="mask-canvas-legend" class="mask-canvas-legend ten-sections">
+          <span class="legend-item"><span class="section-color-chip" style="background:#ffd166"></span>Head</span>
+          <span class="legend-item"><span class="section-color-chip" style="background:#f78c6c"></span>Torso</span>
+          <span class="legend-item"><span class="section-color-chip" style="background:#80ed99"></span>FG Short Sleeve</span>
+          <span class="legend-item"><span class="section-color-chip" style="background:#06d6a0"></span>FG Forearm</span>
+          <span class="legend-item"><span class="section-color-chip" style="background:#2a6f97"></span>BG Short Sleeve</span>
+          <span class="legend-item"><span class="section-color-chip" style="background:#118ab2"></span>BG Forearm</span>
+          <span class="legend-item"><span class="section-color-chip" style="background:#00e5ff"></span>FG Hand</span>
+          <span class="legend-item"><span class="section-color-chip" style="background:#073b4c"></span>BG Hand</span>
+          <span class="legend-item"><span class="section-color-chip" style="background:#9d4edd"></span>FG Leg &amp; waist</span>
+          <span class="legend-item"><span class="section-color-chip" style="background:#4361ee"></span>FG Boot Length</span>
+          <span class="legend-item"><span class="section-color-chip" style="background:#5a189a"></span>BG Leg</span>
+          <span class="legend-item"><span class="section-color-chip" style="background:#3f37c9"></span>BG Boot Length</span>
+          <span class="legend-item"><span class="section-color-chip" style="background:#ff007f"></span>FG Foot</span>
+          <span class="legend-item"><span class="section-color-chip" style="background:#9b1d64"></span>BG Foot</span>
+        </div>
+
+        <!-- Multi-Backdrop Switcher for Editor Canvas -->
+        <div class="backdrop-switcher-row">
+          <span class="backdrop-label">Canvas BG:</span>
+          <div class="backdrop-pills" role="group" aria-label="Editor canvas background">
+            <button type="button" class="bg-pill active" data-editor-bg="dark-grid" title="Dark transparency checkerboard">🏁 Dark</button>
+            <button type="button" class="bg-pill" data-editor-bg="light-grid" title="Light transparency checkerboard">🔲 Light</button>
+            <button type="button" class="bg-pill" data-editor-bg="white" title="Pure white background (#FFFFFF)">⬜ White</button>
+            <button type="button" class="bg-pill" data-editor-bg="black" title="Pure black background (#000000)">⬛ Black</button>
+          </div>
+        </div>
+
+        <!-- Frame Stepper Bar -->
+        <div class="studio-frame-stepper">
+          <button id="studio-prev-frame" class="secondary-button stepper-btn" type="button">◀ Prev Frame</button>
+          <span id="studio-frame-stepper-label" class="stepper-readout">WALK Frame 1</span>
+          <button id="studio-next-frame" class="secondary-button stepper-btn" type="button">Next Frame ▶</button>
+        </div>
+
+        <div class="studio-canvas-underlay-row">
+          <label class="toggle-check-label">
+            <input id="studio-show-grid" type="checkbox" checked>
+            <span>Show 32×32 Pixel Grid Lines</span>
+          </label>
+        </div>
+
+        <div class="mask-readout-panel">
+          <div class="mask-readout-row">
+            <span class="readout-label">Cursor:</span>
+            <span id="mask-pixel-info">Hover canvas to inspect</span>
+          </div>
+          <div class="mask-readout-row">
+            <span class="readout-label">Section Source:</span>
+            <span id="mask-origin-info">Auto-Detected 10 Sections</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- COLUMN 2: 10-SECTION BRUSH & MAPPING TOOLS -->
+      <div class="studio-col studio-col-tools">
+        <div class="studio-col-header">
+          <span class="col-title">10-SECTION BRUSH &amp; TOOLS</span>
+          <span class="shortcut-hint">Keys 1-0 pick section · Right-click erases</span>
+        </div>
+
+        <!-- Active Section Banner -->
+        <div id="active-section-banner" class="active-section-banner">
+          <span class="section-color-chip" id="active-section-chip" style="background: #9d4edd;"></span>
+          <strong id="active-section-name">Foreground Leg and waist</strong>
+          <span class="section-key-hint" id="active-section-key">[Key 7]</span>
+        </div>
+
+        <!-- Tool Selection -->
+        <div class="studio-tool-bar" style="grid-template-columns: repeat(4, 1fr);">
+          <button id="studio-tool-pencil" class="mask-tool-btn active" type="button" aria-pressed="true" title="Paint active section onto pixels (Shortcut: B or P)">
+            ✏️ Paint
+          </button>
+          <button id="studio-tool-eraser" class="mask-tool-btn secondary-button" type="button" aria-pressed="false" title="Erase section / unassign pixel (Shortcut: E or X)">
+            🧹 Erase
+          </button>
+          <button id="studio-tool-picker" class="mask-tool-btn secondary-button" type="button" aria-pressed="false" title="Eyedropper: Pick section from canvas pixel (Shortcut: I)">
+            💧 Pick
+          </button>
+          <button id="studio-tool-fill" class="mask-tool-btn secondary-button" type="button" aria-pressed="false" title="Flood fill contiguous section or unassigned pixels (Shortcut: G)">
+            🪣 Fill
+          </button>
+        </div>
+
+        <!-- History -->
+        <div class="studio-history-bar" style="grid-template-columns: 1fr 1fr;">
+          <button id="studio-btn-undo" class="secondary-button" type="button" disabled title="Undo last edit (Ctrl+Z)">
+            ↩️ Undo
+          </button>
+          <button id="studio-btn-redo" class="secondary-button" type="button" disabled title="Redo edit (Ctrl+Y)">
+            ↪️ Redo
+          </button>
+        </div>
+
+        <!-- 10 Section Palette Buttons -->
+        <div class="studio-palette-section" style="padding: 8px;">
+          <div class="studio-palette-header">
+            <span>Choose Section Brush (Click or Press 1–0):</span>
+          </div>
+
+          <div id="mask-section-palette" class="section-palette-grid">
+            <button class="section-brush-btn" type="button" data-section-id="head" data-shortcut="1" title="Head: Face, hair, skull &amp; chin [Key 1]">
+              <span class="section-color-chip" style="background:#ffd166"></span>
+              <span class="section-btn-name">Head</span>
+              <span class="section-btn-key">1</span>
+              <span class="section-btn-count" id="count-head">0 px</span>
+            </button>
+
+            <button class="section-brush-btn" type="button" data-section-id="torso" data-shortcut="2" title="Torso: Chest, ribs &amp; upper back [Key 2]">
+              <span class="section-color-chip" style="background:#f78c6c"></span>
+              <span class="section-btn-name">Torso</span>
+              <span class="section-btn-key">2</span>
+              <span class="section-btn-count" id="count-torso">0 px</span>
+            </button>
+
+            <button class="section-brush-btn" type="button" data-section-id="fg_sleeve" data-shortcut="3" title="FG Short Sleeve: Shoulder &amp; bicep covered by shirt [Key 3]">
+              <span class="section-color-chip" style="background:#80ed99"></span>
+              <span class="section-btn-name">FG Short Sleeve</span>
+              <span class="section-btn-key">3</span>
+              <span class="section-btn-count" id="count-fg_sleeve">0 px</span>
+            </button>
+
+            <button class="section-brush-btn" type="button" data-section-id="fg_arm" data-shortcut="4" title="FG Forearm: Elbow &amp; lower arm past short sleeve [Key 4]">
+              <span class="section-color-chip" style="background:#06d6a0"></span>
+              <span class="section-btn-name">FG Forearm</span>
+              <span class="section-btn-key">4</span>
+              <span class="section-btn-count" id="count-fg_arm">0 px</span>
+            </button>
+
+            <button class="section-brush-btn" type="button" data-section-id="bg_sleeve" data-shortcut="5" title="BG Short Sleeve: Far shoulder &amp; bicep covered by shirt [Key 5]">
+              <span class="section-color-chip" style="background:#2a6f97"></span>
+              <span class="section-btn-name">BG Short Sleeve</span>
+              <span class="section-btn-key">5</span>
+              <span class="section-btn-count" id="count-bg_sleeve">0 px</span>
+            </button>
+
+            <button class="section-brush-btn" type="button" data-section-id="bg_arm" data-shortcut="6" title="BG Forearm: Far elbow &amp; lower arm behind torso [Key 6]">
+              <span class="section-color-chip" style="background:#118ab2"></span>
+              <span class="section-btn-name">BG Forearm</span>
+              <span class="section-btn-key">6</span>
+              <span class="section-btn-count" id="count-bg_arm">0 px</span>
+            </button>
+
+            <button class="section-brush-btn" type="button" data-section-id="fg_hand" data-shortcut="7" title="Foreground Hand: Near hand &amp; fingers in front of clothes [Key 7]">
+              <span class="section-color-chip" style="background:#00e5ff"></span>
+              <span class="section-btn-name">FG Hand</span>
+              <span class="section-btn-key">7</span>
+              <span class="section-btn-count" id="count-fg_hand">0 px</span>
+            </button>
+
+            <button class="section-brush-btn" type="button" data-section-id="bg_hand" data-shortcut="8" title="Background Hand: Far hand &amp; fingers behind body [Key 8]">
+              <span class="section-color-chip" style="background:#073b4c"></span>
+              <span class="section-btn-name">BG Hand</span>
+              <span class="section-btn-key">8</span>
+              <span class="section-btn-count" id="count-bg_hand">0 px</span>
+            </button>
+
+            <button class="section-brush-btn active" type="button" data-section-id="fg_leg" data-shortcut="9" title="FG Leg &amp; waist: Waist/pelvis &amp; near thigh above boot [Key 9]">
+              <span class="section-color-chip" style="background:#9d4edd"></span>
+              <span class="section-btn-name">FG Leg &amp; waist</span>
+              <span class="section-btn-key">9</span>
+              <span class="section-btn-count" id="count-fg_leg">0 px</span>
+            </button>
+
+            <button class="section-brush-btn" type="button" data-section-id="fg_boot" data-shortcut="0" title="FG Boot Length: Near knee, shin &amp; calf boot length [Key 0]">
+              <span class="section-color-chip" style="background:#4361ee"></span>
+              <span class="section-btn-name">FG Boot Length</span>
+              <span class="section-btn-key">0</span>
+              <span class="section-btn-count" id="count-fg_boot">0 px</span>
+            </button>
+
+            <button class="section-brush-btn" type="button" data-section-id="bg_leg" data-shortcut="-" title="BG Leg: Far thigh &amp; pelvis behind skirt/body [Key -]">
+              <span class="section-color-chip" style="background:#5a189a"></span>
+              <span class="section-btn-name">BG Leg</span>
+              <span class="section-btn-key">-</span>
+              <span class="section-btn-count" id="count-bg_leg">0 px</span>
+            </button>
+
+            <button class="section-brush-btn" type="button" data-section-id="bg_boot" data-shortcut="=" title="BG Boot Length: Far knee, shin &amp; calf behind body [Key =]">
+              <span class="section-color-chip" style="background:#3f37c9"></span>
+              <span class="section-btn-name">BG Boot Length</span>
+              <span class="section-btn-key">=</span>
+              <span class="section-btn-count" id="count-bg_boot">0 px</span>
+            </button>
+
+            <button class="section-brush-btn" type="button" data-section-id="fg_foot" data-shortcut="o" title="Foreground Foot: Near ankle, heel, boot sole &amp; toe [Key O]">
+              <span class="section-color-chip" style="background:#ff007f"></span>
+              <span class="section-btn-name">FG Foot</span>
+              <span class="section-btn-key">O</span>
+              <span class="section-btn-count" id="count-fg_foot">0 px</span>
+            </button>
+
+            <button class="section-brush-btn" type="button" data-section-id="bg_foot" data-shortcut="p" title="Background Foot: Far ankle, heel, boot sole &amp; toe [Key P]">
+              <span class="section-color-chip" style="background:#9b1d64"></span>
+              <span class="section-btn-name">BG Foot</span>
+              <span class="section-btn-key">P</span>
+              <span class="section-btn-count" id="count-bg_foot">0 px</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Automation & Mapping Helpers -->
+        <div class="studio-palette-section" style="gap: 6px; padding: 10px;">
+          <div class="studio-palette-header">
+            <span>1-Click Mapping &amp; Anatomy Helpers</span>
+          </div>
+          <button id="mask-btn-autodetect-all" class="secondary-button" type="button" style="min-height: 32px; font-weight: 700; color: #00ffaa; border-color: #00aa66;" title="Auto-detect and map all 10 anatomical sections on this frame">
+            🪄 Auto-Map All 10 Sections (1-Click)
+          </button>
+          <button id="mask-btn-swap-limbs" class="secondary-button" type="button" style="min-height: 30px; font-size: 11px;" title="Swap Foreground and Background limb assignments (near <-> far)">
+            🔄 Swap Near &amp; Far Limbs
+          </button>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+            <button id="mask-btn-copy-frame" class="secondary-button" type="button" style="min-height: 28px; font-size: 10.5px;" title="Copy section map of this frame">
+              📋 Copy Frame Map
+            </button>
+            <button id="mask-btn-paste-frame" class="secondary-button" type="button" style="min-height: 28px; font-size: 10.5px;" title="Paste copied section map into this frame">
+              📥 Paste Frame Map
+            </button>
+          </div>
+          <button id="mask-btn-clear-mask" class="secondary-button" type="button" style="min-height: 28px; font-size: 11px; color: #ff8080;" title="Clear all section assignments for this frame">
+            🗑️ Clear Frame Map
+          </button>
+          <button id="studio-btn-reset" class="secondary-button" type="button" hidden>Reset</button>
+          <button id="studio-btn-clear" class="secondary-button" type="button" hidden>Clear</button>
+        </div>
+
+        <!-- Info / Depth Rules Reference -->
+        <div class="studio-palette-section" style="padding: 10px; line-height: 1.45; color: #a5c3ad; font-size: 10.5px;">
+          <strong style="color: #ffd166; display: block; margin-bottom: 4px;">Anatomical Depth Rules:</strong>
+          <ul style="margin: 0; padding-left: 14px; display: flex; flex-direction: column; gap: 4px;">
+            <li><span style="color:#00e5ff; font-weight: 700;">FG Hand &amp; Arm:</span> Swings in front of shirts and jackets.</li>
+            <li><span style="color:#9d4edd; font-weight: 700;">FG Leg &amp; Waist:</span> Stays in front of skirts and tunics.</li>
+            <li><span style="color:#ff007f; font-weight: 700;">FG Foot:</span> Never gets clipped or hidden by hem outlines.</li>
+            <li><span style="color:#118ab2; font-weight: 700;">BG Limbs:</span> Render naturally behind torso and clothing garments.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- COLUMN 3: LIVE CLOTHED PREVIEW -->
+      <div class="studio-col studio-col-preview">
+        <div class="studio-col-header">
+          <span class="col-title">LIVE CLOTHED PREVIEW</span>
+          <button id="preview-play-btn" class="secondary-button" type="button" aria-pressed="false">▶ Play Walk Cycle</button>
+        </div>
+
+        <!-- Preview Mode Switcher -->
+        <div class="backdrop-switcher-row" style="margin-bottom: 4px;">
+          <span class="backdrop-label">Mode:</span>
+          <div class="backdrop-pills" role="group" aria-label="Preview display mode">
+            <button type="button" class="bg-pill active" data-preview-mode="clothed" title="Clothed traveler preview with depth masking">👕 Clothed</button>
+            <button type="button" class="bg-pill" data-preview-mode="sections" title="Animated 10-section map">🎨 Animated Map</button>
+          </div>
+        </div>
+
+        <div class="canvas-stage-box">
+          <canvas id="mask-preview-canvas" width="288" height="288" aria-label="32 by 32 pixel clothed occlusion preview"></canvas>
+        </div>
+
+        <!-- Multi-Backdrop Switcher for Preview Canvas -->
+        <div class="backdrop-switcher-row">
+          <span class="backdrop-label">Preview BG:</span>
+          <div class="backdrop-pills" role="group" aria-label="Preview canvas background">
+            <button type="button" class="bg-pill active" data-preview-bg="dark-grid" title="Dark transparency checkerboard">🏁 Dark</button>
+            <button type="button" class="bg-pill" data-preview-bg="light-grid" title="Light transparency checkerboard">🔲 Light</button>
+            <button type="button" class="bg-pill" data-preview-bg="white" title="Pure white background (#FFFFFF)">⬜ White</button>
+            <button type="button" class="bg-pill" data-preview-bg="black" title="Pure black background (#000000)">⬛ Black</button>
+            <button type="button" class="bg-pill" data-preview-bg="prairie" title="Animated prairie trail backdrop">🌄 Trail Scene</button>
+          </div>
+        </div>
+
+        <input id="mask-preview-backdrop" type="checkbox" hidden>
+
+        <!-- Preview Outfit Toggles to Test Occlusion Against Garments -->
+        <div class="studio-outfit-customizer">
+          <div class="studio-outfit-header">
+            <span class="studio-outfit-title">Test Outfit Layers</span>
+            <div class="studio-outfit-quick-btns">
+              <button id="preview-outfit-all" class="mini-pill-btn" type="button">👕 Wear All</button>
+              <button id="preview-outfit-none" class="mini-pill-btn" type="button">🧍 Bare Body</button>
+            </div>
+          </div>
+
+          <div class="studio-outfit-slots">
+            <div class="studio-outfit-slot-row" data-slot="shirts">
+              <label class="slot-toggle-label">
+                <input type="checkbox" id="preview-wear-shirts" checked>
+                <span>👕 Shirt</span>
+              </label>
+              <select id="preview-select-shirts" class="slot-preset-select" aria-label="Preview shirt preset"></select>
+            </div>
+            <div class="studio-outfit-slot-row" data-slot="pants">
+              <label class="slot-toggle-label">
+                <input type="checkbox" id="preview-wear-pants" checked>
+                <span>👖 Pants</span>
+              </label>
+              <select id="preview-select-pants" class="slot-preset-select" aria-label="Preview pants preset"></select>
+            </div>
+            <div class="studio-outfit-slot-row" data-slot="hats">
+              <label class="slot-toggle-label">
+                <input type="checkbox" id="preview-wear-hats" checked>
+                <span>👒 Hat</span>
+              </label>
+              <select id="preview-select-hats" class="slot-preset-select" aria-label="Preview hat preset"></select>
+            </div>
+            <div class="studio-outfit-slot-row" data-slot="shoes">
+              <label class="slot-toggle-label">
+                <input type="checkbox" id="preview-wear-shoes" checked>
+                <span>🥾 Shoes</span>
+              </label>
+              <select id="preview-select-shoes" class="slot-preset-select" aria-label="Preview shoes preset"></select>
+            </div>
+            <div class="studio-outfit-slot-row" data-slot="accessories">
+              <label class="slot-toggle-label">
+                <input type="checkbox" id="preview-wear-accessories" checked>
+                <span>🧣 Acc.</span>
+              </label>
+              <select id="preview-select-accessories" class="slot-preset-select" aria-label="Preview accessory preset"></select>
+            </div>
+          </div>
+
+          <div id="mask-outfit-summary" class="mask-outfit-summary"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="./src/sprite-studio.js?v=mask_sections_v1"></script>
+</body>
+</html>

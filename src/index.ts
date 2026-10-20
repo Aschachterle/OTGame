@@ -53,6 +53,34 @@ app.post('/api/dev/save-sprite-masks', async (request, reply) => {
   return { ok: true, count: Object.keys(body).length };
 });
 
+app.post('/api/dev/save-sprite-overrides', async (request, reply) => {
+  const body = request.body as Record<string, unknown>;
+  if (!body || typeof body !== 'object') {
+    return reply.status(400).send({ ok: false, error: 'Invalid body' });
+  }
+  const jsContent = `// Automatically saved custom clothing and sprite overrides from the Trail Scene Editor\nexport const CUSTOM_SPRITE_OVERRIDES_DATA = ${JSON.stringify(body, null, 2)};\n`;
+  const jsonContent = JSON.stringify(body, null, 2);
+  const targetJs = join(__dirname, '../frontend/src/custom-sprite-overrides.js');
+  const targetJson = join(__dirname, '../frontend/src/custom-sprite-overrides.json');
+  await writeFile(targetJs, jsContent, 'utf-8');
+  await writeFile(targetJson, jsonContent, 'utf-8');
+  return { ok: true, count: Object.keys(body).length };
+});
+
+app.post('/api/dev/save-custom-clothing', async (request, reply) => {
+  const body = request.body as Record<string, unknown>;
+  if (!body || typeof body !== 'object') {
+    return reply.status(400).send({ ok: false, error: 'Invalid body' });
+  }
+  const jsContent = `// Automatically saved custom clothing items and name overrides\nexport const CUSTOM_CLOTHING_DATA = ${JSON.stringify(body, null, 2)};\n`;
+  const jsonContent = JSON.stringify(body, null, 2);
+  const targetJs = join(__dirname, '../frontend/src/custom-clothing.js');
+  const targetJson = join(__dirname, '../frontend/src/custom-clothing.json');
+  await writeFile(targetJs, jsContent, 'utf-8');
+  await writeFile(targetJson, jsonContent, 'utf-8');
+  return { ok: true, count: Object.keys((body as any).items || {}).length };
+});
+
 await registerWorldRoutes(app);
 await registerEventRoutes(app);
 await registerNarrationRoutes(app);

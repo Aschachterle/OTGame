@@ -3,26 +3,28 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Pixel Art &amp; Sprite Studio — Immutable Trail</title>
-  <link rel="stylesheet" href="./sprite-studio.css?v=studio_split_1">
+  <title>Clothing Item Studio — Immutable Trail</title>
+  <link rel="stylesheet" href="./sprite-studio.css?v=studio_pages_2">
 </head>
-<body>
+<body data-studio-mode="clothing">
   <main class="studio-app">
     <!-- Top Application Navigation Bar -->
     <header class="app-header">
       <div class="brand-block">
-        <p class="eyebrow">IMMUTABLE TRAIL / PIXEL ART WORKBENCH</p>
-        <h1>Sprite &amp; Clothing Pixel Studio</h1>
+        <p class="eyebrow">IMMUTABLE TRAIL / GARMENT &amp; OUTFIT WORKBENCH</p>
+        <h1>👗 Clothing Item Pixel Studio</h1>
       </div>
 
       <nav class="app-nav" aria-label="Developer tools navigation">
-        <a class="nav-tab" href="./scene-editor.html">🌄 Trail Scene Preview</a>
-        <a class="nav-tab active" href="./sprite-studio.html" aria-current="page">🎨 Pixel Art Studio</a>
+        <a class="nav-tab" href="./scene-editor.html">🌄 Trail Scene</a>
+        <a class="nav-tab" href="./base-studio.html">🧍 Base Sprites</a>
+        <a class="nav-tab active" href="./sprite-studio.html" aria-current="page">👗 Clothing Studio</a>
+        <a class="nav-tab" href="./mask-studio.html">✋ Z-Mask Studio</a>
         <a class="nav-tab game-link" href="./index.html">🎮 Return to Game</a>
       </nav>
 
       <div class="save-toolbar">
-        <button id="mask-btn-save-project" class="primary-save-btn" type="button" title="Write all custom clothing, sprite, and mask overrides directly to project files">
+        <button id="mask-btn-save-project" class="primary-save-btn" type="button" title="Write all custom clothing overrides directly to project files">
           💾 Save to Project
         </button>
         <button id="mask-btn-download" class="secondary-button" type="button" title="Download custom overrides JSON file">
@@ -37,18 +39,24 @@
         <button id="mask-btn-paste" class="secondary-button" type="button" title="Paste pixel data JSON">
           📥 Paste
         </button>
+        <button id="studio-btn-clear-cache" class="secondary-button clear-cache-btn" type="button" title="Clear all browser-cached overrides and drafts, restoring clean project defaults">
+          🧹 Clear Cached Options
+        </button>
         <input id="mask-file-input" type="file" accept=".json,application/json" hidden>
       </div>
     </header>
 
-    <div id="mask-save-status" class="save-status-banner" hidden></div>
+    <!-- Hidden mode select locked to 'clothing' -->
+    <select id="studio-mode-select" hidden>
+      <option value="clothing" selected>Clothing Item</option>
+    </select>
 
-    <!-- Step 1: Character & Animation Strip Bar -->
-    <section class="character-strip-panel" aria-label="Traveler Reference and Animation Strip">
+    <!-- Step 1: Traveler Reference & Garment Selection Bar -->
+    <section class="character-strip-panel" aria-label="Traveler Reference and Garment Selection">
       <div class="strip-controls-row">
         <div class="strip-selectors">
           <label>
-            <span>Active Traveler (Auto-syncs Gender &amp; Defaults)</span>
+            <span>Quick Traveler Preset (Auto-syncs Gender &amp; Outfit)</span>
             <select id="sprite-character" aria-label="Character"></select>
           </label>
           <label>
@@ -77,40 +85,8 @@
       <div id="sprite-frame-strip" class="sprite-frame-strip" aria-label="Animation frames"></div>
     </section>
 
-    <!-- Step 2: Prominent Studio Mode Tabs -->
-    <section class="studio-mode-tabs-section" aria-label="Editor Mode Selection">
-      <div class="mode-tabs-bar" role="tablist" aria-label="Pixel Studio Edit Mode">
-        <button id="tab-mode-clothing" class="mode-tab-btn active" type="button" role="tab" aria-selected="true" data-mode="clothing">
-          <span class="tab-icon">👗</span>
-          <span class="tab-text">
-            <strong>Clothing Items</strong>
-            <small>Edit hats, hair, shirts, pants, boots &amp; accessories</small>
-          </span>
-        </button>
-        <button id="tab-mode-base" class="mode-tab-btn" type="button" role="tab" aria-selected="false" data-mode="base">
-          <span class="tab-icon">🧍</span>
-          <span class="tab-text">
-            <strong>Base Body Sprites</strong>
-            <small>Edit underlying 32Man &amp; 32Woman anatomy frames</small>
-          </span>
-        </button>
-        <button id="tab-mode-mask" class="mode-tab-btn" type="button" role="tab" aria-selected="false" data-mode="mask">
-          <span class="tab-icon">✋</span>
-          <span class="tab-text">
-            <strong>Depth Z-Mask (Hand Occlusion)</strong>
-            <small>Mark hand/foreground pixels that stay in front of clothes</small>
-          </span>
-        </button>
-      </div>
-
-      <!-- Hidden select kept in sync for state compatibility -->
-      <select id="studio-mode-select" hidden>
-        <option value="clothing" selected>Clothing Item</option>
-        <option value="base">Character Base Sprite</option>
-        <option value="mask">Foreground Z-Mask</option>
-      </select>
-
-      <!-- Sub-controls for Clothing Mode -->
+    <!-- Step 2: Dedicated Garment Filter Bar -->
+    <section class="studio-mode-tabs-section" aria-label="Garment Selection Controls">
       <div id="studio-clothing-controls" class="studio-filter-bar">
         <label>
           <span>1. Era Filter</span>
@@ -153,10 +129,25 @@
             <option value="accessories">🧣 Accessories (1-Frame Default)</option>
           </select>
         </label>
-        <label class="preset-select-label">
-          <span>4. Garment Preset (Era → Gender)</span>
-          <select id="studio-clothing-preset"></select>
-        </label>
+        <div class="preset-select-wrapper">
+          <div class="preset-label-header">
+            <span class="preset-label-title">4. Garment Preset (Era → Gender)</span>
+            <div class="preset-action-btns">
+              <button id="studio-clothing-btn-rename" class="secondary-button preset-btn" type="button" title="Rename the currently selected clothing item">
+                ✏️ Rename
+              </button>
+              <button id="studio-clothing-btn-new" class="secondary-button preset-btn highlight-btn" type="button" title="Add a new custom clothing item to this slot">
+                ➕ New Item
+              </button>
+              <button id="studio-clothing-btn-delete" class="secondary-button preset-btn delete-btn" type="button" title="Delete this custom clothing item" hidden>
+                🗑️ Delete
+              </button>
+            </div>
+          </div>
+          <div class="preset-input-row">
+            <select id="studio-clothing-preset" aria-label="Garment Preset"></select>
+          </div>
+        </div>
         <label>
           <span>5. Facing</span>
           <select id="studio-clothing-view">
@@ -183,72 +174,12 @@
           </select>
         </label>
       </div>
-
-      <!-- Sub-controls for Base Body Mode -->
-      <div id="studio-base-controls" class="studio-filter-bar" hidden>
-        <label>
-          <span>1. Body Gender</span>
-          <select id="studio-base-gender">
-            <option value="male" selected>Male (32Man)</option>
-            <option value="female">Female (32Woman)</option>
-          </select>
-        </label>
-        <label>
-          <span>2. Orientation</span>
-          <select id="studio-base-direction">
-            <option value="east" selected>Side Profile (East)</option>
-            <option value="south">Front View (South)</option>
-          </select>
-        </label>
-        <label class="frame-select-label">
-          <span>3. Animation Frame</span>
-          <select id="studio-base-frame">
-            <option value="all" id="studio-base-frame-opt-all" selected>All Frames (Apply to all 8 walk frames &amp; idle)</option>
-            <option value="walk:0">Walk Frame 1 Only</option>
-            <option value="walk:1">Walk Frame 2 Only</option>
-            <option value="walk:2">Walk Frame 3 Only</option>
-            <option value="walk:3">Walk Frame 4 Only</option>
-            <option value="walk:4">Walk Frame 5 Only</option>
-            <option value="walk:5">Walk Frame 6 Only</option>
-            <option value="walk:6">Walk Frame 7 Only</option>
-            <option value="walk:7">Walk Frame 8 Only</option>
-            <option value="idle:0">Idle Frame 1 Only</option>
-          </select>
-        </label>
-        <label class="toggle-check-label" style="align-self: center; margin-top: 14px;">
-          <input id="studio-base-apply-all" type="checkbox" checked>
-          <span>Apply edits to all frames</span>
-        </label>
-
-      </div>
-
-      <!-- Explanatory Guide Banner for Depth Z-Mask Mode -->
-      <div id="studio-mask-banner" class="mask-guide-banner" hidden>
-        <div class="mask-guide-text">
-          <strong>✋ Depth Z-Masking Mode:</strong> Mark pixels where the character's hands or held gear stay <em>in front of</em> clothing layers. Click any pixel on the 32×32 canvas to toggle its foreground mask status.
-          <div class="mask-legend-inline">
-            <span class="legend-chip legend-base"></span><span>Base Body Pixel</span>
-            <span class="legend-chip legend-mask"></span><span>Foreground Z-Mask (Renders over clothes)</span>
-          </div>
-        </div>
-        <div class="mask-helper-actions">
-          <button id="mask-btn-autodetect" class="secondary-button" type="button" title="Restore the default heuristic hand mask for this frame">
-            🪄 Auto-Detect Hand Pixels
-          </button>
-          <button id="mask-btn-invert" class="secondary-button" type="button" title="Invert masked and unmasked body pixels on this frame">
-            🔄 Invert Mask
-          </button>
-          <button id="mask-btn-clear-mask" class="secondary-button" type="button" title="Remove all Z-mask pixels on this frame">
-            🗑️ Clear Mask
-          </button>
-        </div>
-      </div>
     </section>
 
-    <!-- Step 3: Active Target Context Breadcrumb & Frame Rule Explanation -->
+    <!-- Step 3: Active Target Context Breadcrumb -->
     <section class="context-breadcrumb-bar" aria-label="Editing Context">
       <div class="breadcrumb-main">
-        <span class="breadcrumb-eyebrow">EDITING TARGET:</span>
+        <span class="breadcrumb-eyebrow">EDITING GARMENT:</span>
         <div id="studio-breadcrumb-trail" class="breadcrumb-trail">
           Jedediah (Male) › 👒 Hair / Hat › Pioneer Slouch Hat › Side Profile › All Frames
         </div>
@@ -259,17 +190,17 @@
       </div>
     </section>
 
-    <!-- Step 4: 3-Column Studio Workspace -->
-    <section class="studio-workspace-grid" aria-label="Pixel Canvas, Tools, and Live Preview">
-      <!-- COLUMN 1: 32×32 PIXEL EDITOR CANVAS -->
+    <!-- Step 4: 3-Column Clothing Studio Workspace -->
+    <section class="studio-workspace-grid" aria-label="Garment Canvas, Tools, and Live Clothed Preview">
+      <!-- COLUMN 1: 32×32 GARMENT PIXEL EDITOR -->
       <div class="studio-col studio-col-canvas">
         <div class="studio-col-header">
-          <span id="studio-canvas-title" class="col-title">32×32 PIXEL EDITOR</span>
+          <span id="studio-canvas-title" class="col-title">32×32 CLOTHING EDITOR</span>
           <strong id="studio-target-name" class="target-short-name">Pioneer Slouch Hat</strong>
         </div>
 
         <div class="canvas-stage-box">
-          <canvas id="mask-editor-canvas" width="288" height="288" aria-label="32 by 32 pixel editor"></canvas>
+          <canvas id="mask-editor-canvas" width="288" height="288" aria-label="32 by 32 garment pixel editor"></canvas>
         </div>
 
         <!-- Multi-Backdrop Switcher for Editor Canvas -->
@@ -278,7 +209,7 @@
           <div class="backdrop-pills" role="group" aria-label="Editor canvas background">
             <button type="button" class="bg-pill active" data-editor-bg="dark-grid" title="Dark transparency checkerboard">🏁 Dark</button>
             <button type="button" class="bg-pill" data-editor-bg="light-grid" title="Light transparency checkerboard">🔲 Light</button>
-            <button type="button" class="bg-pill" data-editor-bg="white" title="Pure white background (#FFFFFF) for checking dark outlines">⬜ White</button>
+            <button type="button" class="bg-pill" data-editor-bg="white" title="Pure white background (#FFFFFF)">⬜ White</button>
             <button type="button" class="bg-pill" data-editor-bg="black" title="Pure black background (#000000)">⬛ Black</button>
             <button type="button" class="bg-pill" data-editor-bg="prairie" title="Prairie trail green backdrop">🌿 Trail</button>
           </div>
@@ -301,10 +232,6 @@
             <input id="studio-show-grid" type="checkbox" checked>
             <span>Grid Lines</span>
           </label>
-          <div id="mask-canvas-legend" class="mask-canvas-legend" hidden>
-            <span class="legend-chip legend-base"></span><span>Body</span>
-            <span class="legend-chip legend-mask"></span><span>Z-Mask</span>
-          </div>
         </div>
 
         <div class="mask-readout-panel">
@@ -319,10 +246,10 @@
         </div>
       </div>
 
-      <!-- COLUMN 2: DRAWING TOOLS, UNDO/REDO & DUAL COLOR PALETTES -->
+      <!-- COLUMN 2: DRAWING TOOLS & GARMENT COLOR LIBRARY -->
       <div class="studio-col studio-col-tools">
         <div class="studio-col-header">
-          <span class="col-title">DRAWING TOOLS &amp; PALETTE</span>
+          <span class="col-title">DRAWING TOOLS &amp; DYE PALETTE</span>
           <span class="shortcut-hint">Right-click erase · Ctrl+Z undo</span>
         </div>
 
@@ -351,12 +278,11 @@
           <button id="studio-btn-reset" class="secondary-button" type="button" title="Revert this item to its original preset default">
             🔄 Reset Item
           </button>
-          <button id="studio-btn-clear" class="secondary-button" type="button" title="Clear all pixels on this layer">
+          <button id="studio-btn-clear" class="secondary-button" type="button" title="Clear all pixels on this garment layer">
             🗑️ Clear Grid
           </button>
         </div>
 
-        <!-- Color Picker & Dual Palettes -->
         <div id="studio-color-panel" class="studio-color-panel">
           <div class="studio-color-picker-row">
             <span class="studio-color-label">Active Brush:</span>
@@ -365,37 +291,9 @@
             <span id="studio-color-name-readout" class="studio-color-name">Buckskin / Umber</span>
           </div>
 
-                    <!-- Dedicated Skin Painter for Dynamic Shading -->
-          <div class="studio-palette-section skin-painter-section">
-            <div class="studio-palette-header">
-              <span class="skin-painter-title">🎨 Skin Painter (Dynamic Shading)</span>
-              <span class="palette-count-badge">Dynamic Roles</span>
-            </div>
-            <p class="skin-painter-desc">
-              Paint with these swatches to designate skin areas. The game will automatically shade them to whatever skin tone the player picks.
-            </p>
-            <div class="skin-painter-swatches-grid">
-              <button class="skin-role-btn" type="button" data-role="highlight" data-color="#f1af7d" title="Skin Highlight (#f1af7d) - Shaded to player highlight">
-                <span class="role-swatch" style="background:#f1af7d;"></span>
-                <span class="role-info"><strong>🌟 Highlight</strong><small>Cheeks, bridge of nose</small></span>
-              </button>
-              <button class="skin-role-btn active-role" type="button" data-role="base" data-color="#eea572" title="Skin Base (#eea572) - Shaded to player main skin tone">
-                <span class="role-swatch" style="background:#eea572;"></span>
-                <span class="role-info"><strong>🧑 Main Skin</strong><small>Face, neck, limbs, body</small></span>
-              </button>
-              <button class="skin-role-btn" type="button" data-role="shadow" data-color="#c56749" title="Skin Shadow (#c56749) - Shaded to player skin shadow">
-                <span class="role-swatch" style="background:#c56749;"></span>
-                <span class="role-info"><strong>👤 Shadow</strong><small>Jawline, chin, underarm</small></span>
-              </button>
-              <button class="skin-role-btn" type="button" data-role="far-limb" data-color="#ae4a3a" title="Far-Limb Shadow (#ae4a3a) - Shaded to player distant limb">
-                <span class="role-swatch" style="background:#ae4a3a;"></span>
-                <span class="role-info"><strong>🦾 Far Limb</strong><small>Receding arm &amp; leg</small></span>
-              </button>
-            </div>
-          </div>
           <div class="studio-palette-section">
             <div class="studio-palette-header">
-              <span>Colors Currently Used in Sprite</span>
+              <span>Colors Currently Used in Garment</span>
               <span id="studio-used-colors-count" class="palette-count-badge">0 colors</span>
             </div>
             <div id="studio-used-colors-grid" class="studio-swatches-grid used-colors-grid"></div>
@@ -403,7 +301,7 @@
 
           <div class="studio-palette-section">
             <div class="studio-palette-header">
-              <span>Preset Color Library (Click to Select)</span>
+              <span>Garment Color Library (Click to Select)</span>
               <span class="palette-count-badge">42 swatches</span>
             </div>
             <div id="studio-preset-colors-grid" class="studio-swatches-grid preset-colors-grid"></div>
@@ -423,18 +321,6 @@
         </div>
 
         <!-- Multi-Backdrop Switcher for Preview Canvas -->
-                <!-- Test Player Skin Tone in Live Preview -->
-        <div class="preview-skintone-tester-row">
-          <span class="skintone-tester-label">Test Player Skin:</span>
-          <div class="skintone-pills" role="group" aria-label="Test player skin tone in preview">
-            <button type="button" class="skintone-pill active" data-test-skintone="warm_ivory" title="Warm Ivory">🖐🏻 Ivory</button>
-            <button type="button" class="skintone-pill" data-test-skintone="golden_tan" title="Golden Tan">🖐🏼 Tan</button>
-            <button type="button" class="skintone-pill" data-test-skintone="olive_bronze" title="Olive Bronze">🖐🏽 Bronze</button>
-            <button type="button" class="skintone-pill" data-test-skintone="deep_umber" title="Deep Umber">🖐🏾 Umber</button>
-            <button type="button" class="skintone-pill" data-test-skintone="rich_espresso" title="Rich Espresso">🖐🏿 Espresso</button>
-            <button type="button" class="skintone-pill" data-test-skintone="porcelain_rose" title="Porcelain Rose">🌸 Rose</button>
-          </div>
-        </div>
         <div class="backdrop-switcher-row">
           <span class="backdrop-label">Preview BG:</span>
           <div class="backdrop-pills" role="group" aria-label="Preview canvas background">
@@ -446,7 +332,6 @@
           </div>
         </div>
 
-        <!-- Hidden checkbox kept in sync for backdrop compatibility -->
         <input id="mask-preview-backdrop" type="checkbox" hidden>
 
         <!-- Preview Outfit Customizer ("Choose Which Items Are Worn") -->
@@ -504,6 +389,106 @@
     </section>
   </main>
 
-  <script type="module" src="./src/sprite-studio.js?v=studio_split_1"></script>
+  <!-- Dialog: Add New Clothing Item -->
+  <dialog id="dialog-new-clothing" class="studio-modal-dialog">
+    <form id="form-new-clothing" method="dialog" class="studio-modal-form">
+      <div class="modal-header">
+        <h3>➕ Add New Clothing Item</h3>
+        <button type="button" class="modal-close-btn" data-close-dialog="dialog-new-clothing">✕</button>
+      </div>
+      <p class="modal-subtitle">Create a new garment slot preset. It will be added to your library and ready to paint.</p>
+
+      <div class="modal-fields">
+        <label class="modal-field">
+          <span>Item Name *</span>
+          <input id="new-clothing-name" type="text" placeholder="e.g. Frontier Leather Vest" required maxlength="50" autocomplete="off">
+        </label>
+
+        <div class="modal-field-grid">
+          <label class="modal-field">
+            <span>Slot Category</span>
+            <select id="new-clothing-category">
+              <option value="hats">👒 Hair / Hat</option>
+              <option value="shirts" selected>👕 Shirts &amp; Coats</option>
+              <option value="pants">👖 Pants &amp; Skirts</option>
+              <option value="shoes">🥾 Shoes &amp; Boots</option>
+              <option value="accessories">🧣 Accessories</option>
+            </select>
+          </label>
+
+          <label class="modal-field">
+            <span>Historical Era</span>
+            <select id="new-clothing-era">
+              <option value="oregon_trail" selected>Oregon Trail (1840s–1860s)</option>
+              <option value="1500s">1500's Tudor &amp; Renaissance</option>
+              <option value="1600s">1600's Baroque &amp; Cavalier</option>
+              <option value="1700s">1700's Georgian &amp; Colonial</option>
+              <option value="1800s">1800's Victorian &amp; Industrial</option>
+              <option value="1900_1920">1900–1920 Edwardian</option>
+              <option value="1921_1940">1921–1940 Roaring 20s &amp; 30s</option>
+              <option value="1941_1950">1941–1950 Wartime 40s</option>
+              <option value="1950s">1950's Rockabilly &amp; Diner</option>
+              <option value="1960s">1960's Mod &amp; Counterculture</option>
+              <option value="1970s">1970's Disco &amp; Funk</option>
+              <option value="1980s">1980's Arcade &amp; Synthwave</option>
+              <option value="1990s">1990's Grunge &amp; Skate</option>
+              <option value="2000s">2000's Y2K &amp; Pop Punk</option>
+              <option value="2010s">2010's Indie &amp; Athleisure</option>
+              <option value="2020s">2020's Modern Techwear</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="modal-field-grid">
+          <label class="modal-field">
+            <span>Gender Fit</span>
+            <select id="new-clothing-gender">
+              <option value="unisex" selected>Unisex (Both Genders)</option>
+              <option value="male">Male (32Man)</option>
+              <option value="female">Female (32Woman)</option>
+            </select>
+          </label>
+
+          <label class="modal-field">
+            <span>Starting Design</span>
+            <select id="new-clothing-template">
+              <option value="blank" selected>⬜ Blank Canvas (Start Fresh)</option>
+              <option value="clone">📑 Clone Current Item Design</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="secondary-button" data-close-dialog="dialog-new-clothing">Cancel</button>
+        <button id="btn-submit-new-clothing" type="submit" class="primary-save-btn">✨ Create &amp; Edit Item</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Dialog: Rename Clothing Item -->
+  <dialog id="dialog-rename-clothing" class="studio-modal-dialog">
+    <form id="form-rename-clothing" method="dialog" class="studio-modal-form">
+      <div class="modal-header">
+        <h3>✏️ Rename Clothing Item</h3>
+        <button type="button" class="modal-close-btn" data-close-dialog="dialog-rename-clothing">✕</button>
+      </div>
+      <p class="modal-subtitle">Update the display name of this item across the Studio and Character Designer.</p>
+
+      <div class="modal-fields">
+        <label class="modal-field">
+          <span>New Item Name *</span>
+          <input id="rename-clothing-input" type="text" required maxlength="50" autocomplete="off">
+        </label>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="secondary-button" data-close-dialog="dialog-rename-clothing">Cancel</button>
+        <button id="btn-submit-rename-clothing" type="submit" class="primary-save-btn">💾 Save Name</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="./src/sprite-studio.js?v=clothing_editor_v4"></script>
 </body>
 </html>

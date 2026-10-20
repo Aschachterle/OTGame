@@ -4,7 +4,8 @@ import {
   getCharacterFrameGrid,
   renderCharacterGridToCanvas,
   syncAllPartyAppearancesToEra,
-  preloadBoilerplateSprites
+  preloadBoilerplateSprites,
+  clearAllCustomOverridesAndStorage
 } from './character-designer.js?v=sprite32_1';
 import { trailMilestones } from './state.js';
 import {
@@ -529,6 +530,18 @@ resetButton.addEventListener('click', () => {
   }
   updateState();
 });
+
+const sceneBtnClearCache = document.querySelector('#scene-btn-clear-cache');
+if (sceneBtnClearCache) {
+  sceneBtnClearCache.addEventListener('click', () => {
+    const ok = confirm('Clear all browser-cached sprite overrides and restore clean defaults?');
+    if (!ok) return;
+    clearAllCustomOverridesAndStorage();
+    syncAllPartyAppearancesToEra(party, eraControl ? eraControl.value : undefined);
+    updateState();
+    alert('Cleared all cached options and restored project defaults!');
+  });
+}
 
 spriteCharacterControl.addEventListener('change', () => {
   stopSpritePlayback();

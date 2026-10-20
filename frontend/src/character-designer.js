@@ -6,8 +6,14 @@ import {
   PRESET_COLOR_DYES,
   SKIN_TONES,
   BASE_BODY_TEMPLATES,
-  INITIAL_CLOTHING_BOILERPLATE
-} from './character-presets.js';
+  INITIAL_CLOTHING_BOILERPLATE,
+  addCustomClothingItem,
+  renameClothingItem,
+  deleteCustomClothingItem,
+  getAllCustomClothingObject,
+  saveCustomClothingToServer,
+  clearAllCustomClothingStorage
+} from './character-presets.js?v=clothing_editor_v4';
 import {
   getBoilerplateSpriteFrameCount,
   getBoilerplateSpriteGrid,
@@ -45,6 +51,15 @@ export {
   SKIN_TONES,
   BASE_BODY_TEMPLATES,
   INITIAL_CLOTHING_BOILERPLATE
+};
+
+export {
+  addCustomClothingItem,
+  renameClothingItem,
+  deleteCustomClothingItem,
+  getAllCustomClothingObject,
+  saveCustomClothingToServer,
+  clearAllCustomClothingStorage
 };
 
 export { preloadBoilerplateSprites };
@@ -503,9 +518,7 @@ export function buildNeutralCompositeGrid(appearance, baseOrientation = 'front')
     pantsPresetId.includes('skirt') ||
     pantsPresetId.includes('kirtle') ||
     pantsPresetId.includes('kilt');
-  const effectiveDrawOrder = isSkirtEquipped
-    ? ['shoes', 'pants', 'shirts', 'accessories', 'hats']
-    : ['pants', 'shoes', 'shirts', 'accessories', 'hats'];
+  const effectiveDrawOrder = ['pants', 'shoes', 'shirts', 'accessories', 'hats'];
 
   for (const cat of effectiveDrawOrder) {
     const presetId = appearance?.equippedPresets?.[cat];
@@ -1362,6 +1375,27 @@ const SIDE_NEAR_HAND_CONTOURS = {
 import { CUSTOM_SPRITE_MASKS } from './custom-sprite-masks.js';
 import { CUSTOM_SPRITE_OVERRIDES_DATA } from './custom-sprite-overrides.js';
 
+export const MASK_SECTIONS = [
+  { id: 'head', label: 'Head', color: '#ffd166', shortcut: '1', role: 'head', isForeground: true, desc: 'Face, hair, skull & chin' },
+  { id: 'torso', label: 'Torso', color: '#f78c6c', shortcut: '2', role: 'torso', isForeground: false, desc: 'Chest, ribs & upper back' },
+  { id: 'fg_sleeve', label: 'Foreground Short Sleeve', color: '#80ed99', shortcut: '3', role: 'sleeve', isForeground: false, desc: 'Near shoulder & bicep (short sleeve shirt length)' },
+  { id: 'fg_arm', label: 'Foreground Forearm', color: '#06d6a0', shortcut: '4', role: 'limb', isForeground: true, desc: 'Near elbow & forearm (exposed past short sleeve)' },
+  { id: 'bg_sleeve', label: 'Background Short Sleeve', color: '#2a6f97', shortcut: '5', role: 'sleeve', isForeground: false, desc: 'Far shoulder & bicep behind body' },
+  { id: 'bg_arm', label: 'Background Forearm', color: '#118ab2', shortcut: '6', role: 'limb', isForeground: false, desc: 'Far elbow & forearm behind torso' },
+  { id: 'fg_hand', label: 'Foreground Hand', color: '#00e5ff', shortcut: '7', role: 'hand', isForeground: true, desc: 'Near hand & fingers in front of clothes' },
+  { id: 'bg_hand', label: 'Background Hand', color: '#073b4c', shortcut: '8', role: 'hand', isForeground: false, desc: 'Far hand & fingers behind body' },
+  { id: 'fg_leg', label: 'Foreground Leg and waist', color: '#9d4edd', shortcut: '9', role: 'leg', isForeground: true, desc: 'Waist/pelvis, near hip & thigh (above boot)' },
+  { id: 'fg_boot', label: 'Foreground Boot Length', color: '#4361ee', shortcut: '0', role: 'boot', isForeground: true, desc: 'Near knee, shin & calf (boot length)' },
+  { id: 'bg_leg', label: 'Background Leg', color: '#5a189a', shortcut: '-', role: 'leg', isForeground: false, desc: 'Far thigh & pelvis behind skirt/body' },
+  { id: 'bg_boot', label: 'Background Boot Length', color: '#3f37c9', shortcut: '=', role: 'boot', isForeground: false, desc: 'Far knee, shin & calf behind body (boot length)' },
+  { id: 'fg_foot', label: 'Foreground Foot', color: '#ff007f', shortcut: 'o', role: 'foot', isForeground: true, desc: 'Near ankle, heel, boot sole & toe' },
+  { id: 'bg_foot', label: 'Background Foot', color: '#9b1d64', shortcut: 'p', role: 'foot', isForeground: false, desc: 'Far ankle, heel, boot sole & toe' }
+];
+
+export const MASK_SECTION_COLORS = Object.fromEntries(
+  MASK_SECTIONS.map((s) => [s.id, s.color])
+);
+
 const CUSTOM_MASKS_STORAGE_KEY = 'ot_custom_sprite_masks';
 const CUSTOM_OVERRIDES_STORAGE_KEY = 'ot_custom_sprite_overrides';
 
@@ -1377,12 +1411,27 @@ function normalizeMaskKey(gender, view, animMode, frameIndex) {
   return `${normGender}:${normView}:${normAnim}:${normFrame}`;
 }
 
+function cloneMaskData(val) {
+  if (Array.isArray(val)) {
+    return val.map(([x, y]) => [x, y]);
+  }
+  if (val && typeof val === 'object') {
+    const obj = {};
+    for (const [k, coords] of Object.entries(val)) {
+      obj[k] = Array.isArray(coords) ? coords.map(([x, y]) => [x, y]) : [];
+    }
+    return obj;
+  }
+  return null;
+}
+
 function loadCustomMasksFromStorage() {
   if (CUSTOM_SPRITE_MASKS && typeof CUSTOM_SPRITE_MASKS === 'object') {
     for (const [key, coords] of Object.entries(CUSTOM_SPRITE_MASKS)) {
-      if (Array.isArray(coords)) {
-        CUSTOM_FRAME_MASKS.set(key, coords.map(([x, y]) => [x, y]));
-        SAVED_FRAME_MASKS.set(key, coords.map(([x, y]) => [x, y]));
+      const cloned = cloneMaskData(coords);
+      if (cloned) {
+        CUSTOM_FRAME_MASKS.set(key, cloned);
+        SAVED_FRAME_MASKS.set(key, cloneMaskData(coords));
       }
     }
   }
@@ -1393,10 +1442,11 @@ function loadCustomMasksFromStorage() {
     const data = JSON.parse(raw);
     if (data && typeof data === 'object') {
       for (const [key, coords] of Object.entries(data)) {
-        if (Array.isArray(coords)) {
-          CUSTOM_FRAME_MASKS.set(key, coords.map(([x, y]) => [x, y]));
+        const cloned = cloneMaskData(coords);
+        if (cloned) {
+          CUSTOM_FRAME_MASKS.set(key, cloned);
           if (!SAVED_FRAME_MASKS.has(key)) {
-            SAVED_FRAME_MASKS.set(key, coords.map(([x, y]) => [x, y]));
+            SAVED_FRAME_MASKS.set(key, cloneMaskData(coords));
           }
         }
       }
@@ -1539,6 +1589,50 @@ export async function saveCustomOverridesToServer() {
   return await response.json();
 }
 
+export function clearAllCustomOverridesAndStorage() {
+  CUSTOM_SPRITE_OVERRIDES.clear();
+  if (CUSTOM_SPRITE_OVERRIDES_DATA && typeof CUSTOM_SPRITE_OVERRIDES_DATA === 'object') {
+    for (const [key, grid] of Object.entries(CUSTOM_SPRITE_OVERRIDES_DATA)) {
+      if (Array.isArray(grid)) {
+        CUSTOM_SPRITE_OVERRIDES.set(key, grid.map((row) => [...row]));
+      }
+    }
+  }
+  CUSTOM_FRAME_MASKS.clear();
+  SAVED_FRAME_MASKS.clear();
+  if (CUSTOM_SPRITE_MASKS && typeof CUSTOM_SPRITE_MASKS === 'object') {
+    for (const [key, coords] of Object.entries(CUSTOM_SPRITE_MASKS)) {
+      if (Array.isArray(coords)) {
+        CUSTOM_FRAME_MASKS.set(key, coords.map(([x, y]) => [x, y]));
+        SAVED_FRAME_MASKS.set(key, coords.map(([x, y]) => [x, y]));
+      }
+    }
+  }
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.removeItem(CUSTOM_OVERRIDES_STORAGE_KEY);
+      localStorage.removeItem(CUSTOM_MASKS_STORAGE_KEY);
+    } catch (err) {
+      console.warn('Failed to clear cached overrides from localStorage', err);
+    }
+  }
+  clearAllCustomClothingStorage();
+}
+
+export function hasCachedOptions() {
+  if (typeof localStorage === 'undefined') return false;
+  try {
+    return Boolean(
+      localStorage.getItem(CUSTOM_OVERRIDES_STORAGE_KEY) ||
+      localStorage.getItem(CUSTOM_MASKS_STORAGE_KEY) ||
+      localStorage.getItem('ot_custom_clothing_items') ||
+      localStorage.getItem('ot_clothing_name_overrides')
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function getClothingItemDefaultGrid(category, presetId, gender = 'male', baseOrientation = 'side', dyeId = 'default', animMode = 'walk', frameIndex = 0) {
   const preset = (INITIAL_CLOTHING_BOILERPLATE[category] || []).find((p) => p.id === presetId);
   if (!preset || preset.isNone) return createEmptyGrid();
@@ -1560,26 +1654,35 @@ export function getClothingItemDefaultGrid(category, presetId, gender = 'male', 
   return grid;
 }
 
+export function getBaseSpriteGrid(gender, direction = 'east', animMode = 'walk', frameIndex = 0) {
+  const normGender = gender === 'female' ? 'female' : 'male';
+  const normDir = direction === 'south' || direction === 'front' ? 'south' : 'east';
+  const effectiveMode = (normDir === 'south' && normGender === 'male') ? 'idle' : animMode;
+  const frameCount = getBoilerplateSpriteFrameCount(normGender, effectiveMode) || 1;
+  const frame = (((Number(frameIndex) || 0) % frameCount) + frameCount) % frameCount;
+
+  const frameSpecificKey = `base:${normGender}:${normDir}:${effectiveMode}:${frame}`;
+  const universalKey = `base:${normGender}:${normDir}`;
+
+  const custom = CUSTOM_SPRITE_OVERRIDES.get(frameSpecificKey) || CUSTOM_SPRITE_OVERRIDES.get(universalKey);
+  if (custom) return custom.map((r) => [...r]);
+
+  return getBoilerplateSpriteGrid(normGender, normDir, effectiveMode, frame);
+}
+
 export function getBaseBoilerplateGrid(gender, view = 'side', animMode = 'walk', frameIndex = 0, skinToneId = null) {
   const normGender = gender === 'female' ? 'female' : 'male';
   const isFront = view === 'front';
-  let raw = null;
-  if (isFront) {
-    const effectiveMode = normGender === 'female' && animMode === 'walk' ? 'walk' : 'idle';
-    const frameCount = getBoilerplateSpriteFrameCount(normGender, effectiveMode);
-    raw = getBoilerplateSpriteGrid(normGender, 'south', effectiveMode, frameIndex % frameCount);
-  } else {
-    const frameCount = getBoilerplateSpriteFrameCount(normGender, animMode) || 1;
-    const eastGrid = getBoilerplateSpriteGrid(normGender, 'east', animMode, frameIndex % frameCount);
-    raw = ((view === 'side_left' || view === 'west') && eastGrid)
-      ? eastGrid.map((row) => [...row].reverse())
-      : eastGrid;
-  }
+  const dir = isFront ? 'south' : 'east';
+  const raw = getBaseSpriteGrid(normGender, dir, animMode, frameIndex);
   if (!raw) return null;
+  const oriented = ((view === 'side_left' || view === 'west') && !isFront)
+    ? raw.map((row) => [...row].reverse())
+    : raw;
   if (skinToneId) {
-    return applySkinToneToSpriteGrid(raw, skinToneId, normGender);
+    return applySkinToneToSpriteGrid(oriented, skinToneId, normGender);
   }
-  return raw;
+  return oriented;
 }
 
 export function getDefaultFrameMask(gender, view = 'side', animMode = 'walk', frameIndex = 0, baseGrid = null) {
@@ -1608,10 +1711,344 @@ export function getDefaultFrameMask(gender, view = 'side', animMode = 'walk', fr
   return coords;
 }
 
+export function getStridingLegFootMask(gender, view = 'side', animMode = 'walk', frameIndex = 0, baseGrid = null) {
+  const normGender = gender === 'female' ? 'female' : 'male';
+  const normView = view === 'front' ? 'front' : 'side';
+  const normAnim = animMode === 'idle' ? 'idle' : 'walk';
+  const normFrame = Math.max(0, Number(frameIndex) || 0);
+  const grid = baseGrid || getBaseBoilerplateGrid(normGender, normView, normAnim, normFrame);
+  if (!grid) return [];
+
+  const coords = [];
+  if (normView === 'side') {
+    const frameInfo = analyzeBoilerplateFrame(grid, normGender, 'side', normAnim, normFrame);
+    for (let y = 20; y < GRID_SIZE; y++) {
+      for (let x = 0; x < GRID_SIZE; x++) {
+        if (!grid[y]?.[x]) continue;
+        const limb = frameInfo.sideLimb?.[y]?.[x];
+        if (limb === 'N') {
+          coords.push([x, y]);
+        }
+      }
+    }
+  } else {
+    for (let y = 22; y < GRID_SIZE; y++) {
+      for (let x = 8; x <= 23; x++) {
+        if (grid[y]?.[x]) {
+          coords.push([x, y]);
+        }
+      }
+    }
+  }
+  return coords;
+}
+
+export function getAllForegroundLimbsMask(gender, view = 'side', animMode = 'walk', frameIndex = 0, baseGrid = null) {
+  const handCoords = getDefaultFrameMask(gender, view, animMode, frameIndex, baseGrid);
+  const legCoords = getStridingLegFootMask(gender, view, animMode, frameIndex, baseGrid);
+  const coordSet = new Set(handCoords.map(([x, y]) => `${x},${y}`));
+  for (const [x, y] of legCoords) {
+    coordSet.add(`${x},${y}`);
+  }
+  return Array.from(coordSet).map((k) => k.split(',').map(Number));
+}
+
+export function getTorsoWaistMask(gender, view = 'side', animMode = 'walk', frameIndex = 0, baseGrid = null) {
+  const normGender = gender === 'female' ? 'female' : 'male';
+  const normView = view === 'front' ? 'front' : 'side';
+  const normAnim = animMode === 'idle' ? 'idle' : 'walk';
+  const normFrame = Math.max(0, Number(frameIndex) || 0);
+  const grid = baseGrid || getBaseBoilerplateGrid(normGender, normView, normAnim, normFrame);
+  if (!grid) return [];
+
+  const coords = [];
+  const minX = normView === 'side' ? 12 : 11;
+  const maxX = normView === 'side' ? 20 : 20;
+  for (let y = 14; y <= 19; y++) {
+    for (let x = minX; x <= maxX; x++) {
+      if (grid[y]?.[x]) coords.push([x, y]);
+    }
+  }
+  return coords;
+}
+
+export function getHeadBeardHairMask(gender, view = 'side', animMode = 'walk', frameIndex = 0, baseGrid = null) {
+  const normGender = gender === 'female' ? 'female' : 'male';
+  const normView = view === 'front' ? 'front' : 'side';
+  const normAnim = animMode === 'idle' ? 'idle' : 'walk';
+  const normFrame = Math.max(0, Number(frameIndex) || 0);
+  const grid = baseGrid || getBaseBoilerplateGrid(normGender, normView, normAnim, normFrame);
+  if (!grid) return [];
+
+  const coords = [];
+  const minX = normView === 'side' ? 10 : 10;
+  const maxX = normView === 'side' ? 22 : 21;
+  for (let y = 5; y <= 13; y++) {
+    for (let x = minX; x <= maxX; x++) {
+      if (grid[y]?.[x]) coords.push([x, y]);
+    }
+  }
+  return coords;
+}
+
+export function sectionGridToMap(grid) {
+  const map = {};
+  for (const s of MASK_SECTIONS) map[s.id] = [];
+  if (Array.isArray(grid)) {
+    for (let y = 0; y < GRID_SIZE; y++) {
+      for (let x = 0; x < GRID_SIZE; x++) {
+        const id = grid[y]?.[x];
+        if (id && map[id]) {
+          map[id].push([x, y]);
+        }
+      }
+    }
+  }
+  return map;
+}
+
+export function sectionMapToGrid(map) {
+  const grid = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null));
+  if (map && typeof map === 'object') {
+    for (const [sectionId, coords] of Object.entries(map)) {
+      if (Array.isArray(coords)) {
+        for (const [x, y] of coords) {
+          if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
+            grid[y][x] = sectionId;
+          }
+        }
+      }
+    }
+  }
+  return grid;
+}
+
+export function getAutoDetectedSectionMap(gender, view = 'side', animMode = 'walk', frameIndex = 0, baseGrid = null) {
+  const normGender = gender === 'female' ? 'female' : 'male';
+  const normView = view === 'front' ? 'front' : 'side';
+  const normAnim = animMode === 'idle' ? 'idle' : 'walk';
+  const normFrame = Math.max(0, Number(frameIndex) || 0);
+  const grid = baseGrid || getBaseBoilerplateGrid(normGender, normView, normAnim, normFrame);
+  if (!grid) return {};
+
+  const frameInfo = analyzeBoilerplateFrame(grid, normGender, normView, normAnim, normFrame, true);
+  const { headDy, sideLimb, footBottomY, nearHandMask } = frameInfo;
+  const sectionGrid = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null));
+
+  const poseKey = `frame${normFrame % 6}`;
+  const legPoseRows = (normView === 'side' && normAnim === 'walk') ? SIDE_LEG_POSE_MAPS[poseKey] : null;
+  const armPose = (normView === 'side' && normAnim === 'walk') ? SIDE_ARM_POSE_MAPS[poseKey] : null;
+
+  for (let y = 0; y < GRID_SIZE; y++) {
+    for (let x = 0; x < GRID_SIZE; x++) {
+      const c = grid[y]?.[x];
+      if (!c) continue;
+
+      if (y <= 8 + headDy) {
+        sectionGrid[y][x] = 'head';
+      } else if (y >= 17 + headDy) {
+        if (y <= 18 + headDy) {
+          sectionGrid[y][x] = 'fg_leg'; // Foreground Leg and waist
+        } else if (normView === 'side') {
+          let isFar = false;
+          let isFoot = y >= 27;
+          let isBoot = y >= 23 && y <= 26;
+          if (legPoseRows && y >= 19 && y < 19 + legPoseRows.length) {
+            const ch = legPoseRows[y - 19]?.[x];
+            if (ch && ch !== '.') {
+              isFar = ch === ch.toLowerCase();
+              if ('UWD'.includes(ch.toUpperCase()) || y >= 27) {
+                isFoot = true;
+                isBoot = false;
+              } else if (y >= 23) {
+                isBoot = true;
+              }
+            } else {
+              const limb = sideLimb?.[y]?.[x] || (isSpriteFarLimb(c, y, headDy) ? 'F' : 'N');
+              isFar = limb === 'F';
+            }
+          } else {
+            const limb = sideLimb?.[y]?.[x] || (isSpriteFarLimb(c, y, headDy) ? 'F' : 'N');
+            isFar = limb === 'F';
+          }
+          if (isFar) {
+            sectionGrid[y][x] = isFoot ? 'bg_foot' : (isBoot ? 'bg_boot' : 'bg_leg');
+          } else {
+            sectionGrid[y][x] = isFoot ? 'fg_foot' : (isBoot ? 'fg_boot' : 'fg_leg');
+          }
+        } else {
+          // Front view: left vs right leg
+          const isFoot = y >= 27;
+          const isBoot = y >= 23 && y <= 26;
+          if (x <= 14) {
+            sectionGrid[y][x] = isFoot ? 'fg_foot' : (isBoot ? 'fg_boot' : 'fg_leg');
+          } else if (x >= 17) {
+            sectionGrid[y][x] = isFoot ? 'bg_foot' : (isBoot ? 'bg_boot' : 'bg_leg');
+          } else {
+            sectionGrid[y][x] = isFoot ? 'fg_foot' : (isBoot ? 'fg_boot' : 'fg_leg');
+          }
+        }
+      } else {
+        // y between 9 + headDy and 16 + headDy
+        if (normView === 'side') {
+          const isNearHand = nearHandMask?.has(`${x},${y}`);
+          const isFarLimbColor = isSpriteFarLimb(c, y, headDy);
+          let isFarArm = false;
+          let isNearArm = false;
+          if (armPose) {
+            const nearRows = armPose.near || [];
+            if (y >= 11 && y < 11 + nearRows.length && nearRows[y - 11]?.[x] && nearRows[y - 11][x] !== '.') {
+              isNearArm = true;
+            }
+            const farRows = armPose.far || [];
+            if (y >= 11 && y < 11 + farRows.length && farRows[y - 11]?.[x] && farRows[y - 11][x] !== '.') {
+              isFarArm = true;
+            }
+          }
+
+          const isSleeveHeight = y <= 13 + headDy;
+
+          if (isNearHand || isNearArm) {
+            if (isSleeveHeight) {
+              sectionGrid[y][x] = 'fg_sleeve';
+            } else if (y >= 16 + headDy && isNearHand) {
+              sectionGrid[y][x] = 'fg_hand';
+            } else {
+              sectionGrid[y][x] = 'fg_arm';
+            }
+          } else if (isFarArm || isFarLimbColor || (x >= 19 && y >= 14 + headDy)) {
+            if (isSleeveHeight) {
+              sectionGrid[y][x] = 'bg_sleeve';
+            } else if (y >= 16 + headDy) {
+              sectionGrid[y][x] = 'bg_hand';
+            } else {
+              sectionGrid[y][x] = 'bg_arm';
+            }
+          } else if (x <= 11) {
+            if (isSleeveHeight) {
+              sectionGrid[y][x] = 'fg_sleeve';
+            } else {
+              sectionGrid[y][x] = (y >= 16 + headDy) ? 'fg_hand' : 'fg_arm';
+            }
+          } else {
+            sectionGrid[y][x] = 'torso';
+          }
+        } else {
+          // Front view
+          const isSleeveHeight = y <= 13 + headDy;
+          if (x <= 10) {
+            if (isSleeveHeight) {
+              sectionGrid[y][x] = 'fg_sleeve';
+            } else {
+              sectionGrid[y][x] = (y >= 16 + headDy) ? 'fg_hand' : 'fg_arm';
+            }
+          } else if (x >= 21) {
+            if (isSleeveHeight) {
+              sectionGrid[y][x] = 'bg_sleeve';
+            } else {
+              sectionGrid[y][x] = (y >= 16 + headDy) ? 'bg_hand' : 'bg_arm';
+            }
+          } else {
+            sectionGrid[y][x] = 'torso';
+          }
+        }
+      }
+    }
+  }
+
+  return sectionGridToMap(sectionGrid);
+}
+
+export function getFrameSectionMap(gender, view = 'side', animMode = 'walk', frameIndex = 0, baseGrid = null) {
+  const key = normalizeMaskKey(gender, view, animMode, frameIndex);
+  const custom = CUSTOM_FRAME_MASKS.get(key);
+  if (custom && typeof custom === 'object' && !Array.isArray(custom)) {
+    const auto = getAutoDetectedSectionMap(gender, view, animMode, frameIndex, baseGrid);
+    const merged = {};
+
+    // Backward-compatibility: if custom has fg_arm but not fg_sleeve, partition fg_arm at y <= 13
+    let customFgArm = custom.fg_arm;
+    let customFgSleeve = custom.fg_sleeve;
+    if (Array.isArray(customFgArm) && !customFgSleeve) {
+      customFgSleeve = customFgArm.filter(([x, y]) => y <= 13);
+      customFgArm = customFgArm.filter(([x, y]) => y >= 14);
+    }
+
+    let customBgArm = custom.bg_arm;
+    let customBgSleeve = custom.bg_sleeve;
+    if (Array.isArray(customBgArm) && !customBgSleeve) {
+      customBgSleeve = customBgArm.filter(([x, y]) => y <= 13);
+      customBgArm = customBgArm.filter(([x, y]) => y >= 14);
+    }
+
+    let customFgLeg = custom.fg_leg;
+    let customFgBoot = custom.fg_boot;
+    if (Array.isArray(customFgLeg) && !customFgBoot) {
+      customFgBoot = customFgLeg.filter(([x, y]) => y >= 23);
+      customFgLeg = customFgLeg.filter(([x, y]) => y <= 22);
+    }
+
+    let customBgLeg = custom.bg_leg;
+    let customBgBoot = custom.bg_boot;
+    if (Array.isArray(customBgLeg) && !customBgBoot) {
+      customBgBoot = customBgLeg.filter(([x, y]) => y >= 23);
+      customBgLeg = customBgLeg.filter(([x, y]) => y <= 22);
+    }
+
+    const resolved = {
+      ...custom,
+      fg_arm: customFgArm,
+      fg_sleeve: customFgSleeve,
+      bg_arm: customBgArm,
+      bg_sleeve: customBgSleeve,
+      fg_leg: customFgLeg,
+      fg_boot: customFgBoot,
+      bg_leg: customBgLeg,
+      bg_boot: customBgBoot
+    };
+
+    for (const s of MASK_SECTIONS) {
+      merged[s.id] = Array.isArray(resolved[s.id])
+        ? resolved[s.id].map(([x, y]) => [x, y])
+        : (auto[s.id] || []);
+    }
+    return merged;
+  }
+  if (Array.isArray(custom)) {
+    const auto = getAutoDetectedSectionMap(gender, view, animMode, frameIndex, baseGrid);
+    auto.fg_hand = custom.map(([x, y]) => [x, y]);
+    return auto;
+  }
+  return getAutoDetectedSectionMap(gender, view, animMode, frameIndex, baseGrid);
+}
+
+export function setFrameSectionMap(gender, view = 'side', animMode = 'walk', frameIndex = 0, sectionMap = {}) {
+  const key = normalizeMaskKey(gender, view, animMode, frameIndex);
+  const cleaned = {};
+  for (const s of MASK_SECTIONS) {
+    const coords = sectionMap[s.id];
+    cleaned[s.id] = (Array.isArray(coords) ? coords : [])
+      .filter(([x, y]) => Number.isInteger(x) && Number.isInteger(y) && x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE)
+      .map(([x, y]) => [x, y]);
+  }
+  CUSTOM_FRAME_MASKS.set(key, cleaned);
+  saveCustomMasksToStorage();
+}
+
 export function getFrameCustomMask(gender, view = 'side', animMode = 'walk', frameIndex = 0) {
   const key = normalizeMaskKey(gender, view, animMode, frameIndex);
   if (CUSTOM_FRAME_MASKS.has(key)) {
-    return CUSTOM_FRAME_MASKS.get(key).map(([x, y]) => [x, y]);
+    const val = CUSTOM_FRAME_MASKS.get(key);
+    if (Array.isArray(val)) {
+      return val.map(([x, y]) => [x, y]);
+    }
+    if (val && typeof val === 'object') {
+      const fgCoords = [];
+      for (const k of ['fg_hand', 'fg_arm']) {
+        if (Array.isArray(val[k])) fgCoords.push(...val[k]);
+      }
+      return fgCoords;
+    }
   }
   return null;
 }
@@ -1624,6 +2061,10 @@ export function getFrameActiveMask(gender, view = 'side', animMode = 'walk', fra
 
 export function setFrameCustomMask(gender, view = 'side', animMode = 'walk', frameIndex = 0, coords = []) {
   const key = normalizeMaskKey(gender, view, animMode, frameIndex);
+  if (coords && typeof coords === 'object' && !Array.isArray(coords)) {
+    setFrameSectionMap(gender, view, animMode, frameIndex, coords);
+    return;
+  }
   const cleaned = (coords || [])
     .filter(([x, y]) => Number.isInteger(x) && Number.isInteger(y) && x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE)
     .map(([x, y]) => [x, y]);
@@ -1654,19 +2095,29 @@ export function exportAllMaskOverrides() {
 export function importMaskOverrides(jsonOrObj) {
   const data = typeof jsonOrObj === 'string' ? JSON.parse(jsonOrObj) : jsonOrObj;
   if (!data || typeof data !== 'object') return false;
-  for (const [k, coords] of Object.entries(data)) {
-    if (Array.isArray(coords)) {
-      const cleaned = coords
+  for (const [k, val] of Object.entries(data)) {
+    if (Array.isArray(val)) {
+      const cleaned = val
         .filter(([x, y]) => Number.isInteger(x) && Number.isInteger(y) && x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE)
         .map(([x, y]) => [x, y]);
       CUSTOM_FRAME_MASKS.set(k, cleaned);
+    } else if (val && typeof val === 'object') {
+      const cleanedObj = {};
+      for (const [secId, coords] of Object.entries(val)) {
+        if (Array.isArray(coords)) {
+          cleanedObj[secId] = coords
+            .filter(([x, y]) => Number.isInteger(x) && Number.isInteger(y) && x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE)
+            .map(([x, y]) => [x, y]);
+        }
+      }
+      CUSTOM_FRAME_MASKS.set(k, cleanedObj);
     }
   }
   saveCustomMasksToStorage();
   return true;
 }
 
-function analyzeBoilerplateFrame(baseGrid, gender, baseOrientation, animMode = "idle", frameIndex = 0) {
+export function analyzeBoilerplateFrame(baseGrid, gender, baseOrientation, animMode = "idle", frameIndex = 0, skipSectionMap = false) {
   let headTopY = 1;
   for (let y = 0; y < GRID_SIZE; y += 1) {
     if (baseGrid[y]?.some(Boolean)) {
@@ -1774,6 +2225,13 @@ function analyzeBoilerplateFrame(baseGrid, gender, baseOrientation, animMode = "
     }
   }
 
+  let sectionMap = null;
+  let sectionGrid = null;
+  if (!skipSectionMap) {
+    sectionMap = getFrameSectionMap(gender, baseOrientation, animMode, frameIndex, baseGrid);
+    sectionGrid = sectionMapToGrid(sectionMap);
+  }
+
   return {
     gender,
     baseOrientation,
@@ -1787,7 +2245,11 @@ function analyzeBoilerplateFrame(baseGrid, gender, baseOrientation, animMode = "
     sideLimb,
     footBottomY,
     nearHandMask,
-    nearHandPixels
+    nearHandPixels,
+    foregroundZMask: nearHandMask,
+    foregroundZPixels: nearHandPixels,
+    sectionMap,
+    sectionGrid
   };
 }
 
@@ -1893,8 +2355,8 @@ function renderFittedPantsOrSkirt(target, baseGrid, frameInfo, preset, palette, 
       hemLeft = rowLeft;
       hemRight = rowRight;
 
-      // Clear any stray bare thigh/knee pixels of the base sprite that poke outside the skirt bell
-      if (!isShort && ry >= 3) {
+      // Clear any stray bare thigh pixels of the base sprite that poke outside the skirt bell (thighs only, never feet/legs y >= 24!)
+      if (!isShort && ry >= 3 && y < 24) {
         for (let x = 5; x < rowLeft; x += 1) {
           if (frameInfo.nearHandMask?.has(`${x},${y}`)) continue;
           if (baseGrid[y]?.[x]) target[y][x] = null;
@@ -1927,10 +2389,6 @@ function renderFittedPantsOrSkirt(target, baseGrid, frameInfo, preset, palette, 
         for (let x = 5; x <= 26; x += 1) {
           if (!baseGrid[y]?.[x]) continue;
           if (frameInfo.nearHandMask?.has(`${x},${y}`)) continue;
-          if (x < hemLeft || x > hemRight) {
-            target[y][x] = null;
-            continue;
-          }
           const limb = sideLimb[y][x] || 'N';
           const fMax = footBottomY[limb][x] >= 24 ? footBottomY[limb][x] : 29;
           const shoeH = hasShoes ? 3 : 0;
@@ -1946,6 +2404,56 @@ function renderFittedPantsOrSkirt(target, baseGrid, frameInfo, preset, palette, 
   }
 
   // Trousers, Jeans, Dungarees, Breeches/Shorts
+  if (frameInfo.sectionGrid && !isSkirtPreset(preset)) {
+    const isShortPant = pat === 'breechesShorts';
+    for (let y = 0; y < GRID_SIZE; y += 1) {
+      for (let x = 0; x < GRID_SIZE; x += 1) {
+        if (frameInfo.nearHandMask?.has(`${x},${y}`)) continue;
+        const c = baseGrid[y]?.[x];
+        if (!c) continue;
+        const sec = frameInfo.sectionGrid[y]?.[x];
+        if (!sec) continue;
+
+        const isFgLeg = sec === 'fg_leg' || (!isShortPant && sec === 'fg_boot');
+        const isBgLeg = sec === 'bg_leg' || (!isShortPant && sec === 'bg_boot');
+
+        if (!isFgLeg && !isBgLeg) continue;
+
+        const isFar = isBgLeg;
+        const curO = isFar ? farO : O;
+        const curP = isFar ? farP : P;
+        const curS = isFar ? farS : S;
+        const curL = isFar ? farL : L;
+
+        const isWaistband = sec === 'fg_leg' && (!baseGrid[y - 1]?.[x] || frameInfo.sectionGrid[y - 1]?.[x] === 'torso');
+        const isBoundary =
+          isSpriteOutline(c) ||
+          !baseGrid[y - 1]?.[x] ||
+          !baseGrid[y + 1]?.[x] ||
+          !baseGrid[y]?.[x - 1] ||
+          !baseGrid[y]?.[x + 1] ||
+          isWaistband;
+
+        if (isBoundary) {
+          target[y][x] = curO;
+        } else if (baseOrientation === 'side') {
+          const isFront = !baseGrid[y]?.[x + 1] || (frameInfo.sectionGrid[y]?.[x + 1] !== sec);
+          const isBack = !baseGrid[y]?.[x - 1] || (frameInfo.sectionGrid[y]?.[x - 1] !== sec);
+          if (isFront) {
+            target[y][x] = curL;
+          } else if (isBack) {
+            target[y][x] = curS;
+          } else {
+            target[y][x] = curP;
+          }
+        } else {
+          target[y][x] = x <= 15 ? curL : curP;
+        }
+      }
+    }
+    return;
+  }
+
   const isShortPant = pat === 'breechesShorts';
   const minDistFromFoot = isShortPant ? 5 : (hasShoes ? 2 : 3);
   const pelvisTopY = 16 + headDy;
@@ -2100,6 +2608,61 @@ function renderFittedShoes(target, baseGrid, frameInfo, preset, palette) {
   const pat = preset.patternId || 'boots';
   const shoeHeight = pat === 'tallRidingBoots' ? 5 : pat === 'boots' ? 4 : 3;
 
+  if (frameInfo.sectionGrid) {
+    const isTall = pat === 'tallRidingBoots' || pat === 'boots';
+    for (let y = 0; y < GRID_SIZE; y += 1) {
+      for (let x = 0; x < GRID_SIZE; x += 1) {
+        const c = baseGrid[y]?.[x];
+        if (!c) continue;
+        const sec = frameInfo.sectionGrid[y]?.[x];
+        if (!sec) continue;
+
+        const isFgShoe = sec === 'fg_foot' || (isTall && sec === 'fg_boot');
+        const isBgShoe = sec === 'bg_foot' || (isTall && sec === 'bg_boot');
+
+        if (!isFgShoe && !isBgShoe) continue;
+
+        const isFar = isBgShoe;
+        const curO = isFar ? farO : O;
+        const curP = isFar ? farP : P;
+        const curS = isFar ? farS : S;
+        const curL = isFar ? farL : L;
+
+        const isSoleRow = !baseGrid[y + 1]?.[x] || (!baseGrid[y + 1]?.[x - 1] && !baseGrid[y + 1]?.[x + 1]);
+        const isBootTop = isTall && (sec === 'fg_boot' || sec === 'bg_boot') &&
+          (!baseGrid[y - 1]?.[x] || frameInfo.sectionGrid[y - 1]?.[x] === 'fg_leg' || frameInfo.sectionGrid[y - 1]?.[x] === 'bg_leg');
+
+        const isBoundary =
+          isSpriteOutline(c) ||
+          !baseGrid[y - 1]?.[x] ||
+          !baseGrid[y + 1]?.[x] ||
+          !baseGrid[y]?.[x - 1] ||
+          !baseGrid[y]?.[x + 1] ||
+          isSoleRow ||
+          isBootTop;
+
+        if (isBoundary) {
+          target[y][x] = curO;
+        } else if (isSoleRow) {
+          target[y][x] = curS;
+        } else if (baseOrientation === 'side') {
+          const isFront = !baseGrid[y]?.[x + 1] || (frameInfo.sectionGrid[y]?.[x + 1] !== sec);
+          const isBack = !baseGrid[y]?.[x - 1] || (frameInfo.sectionGrid[y]?.[x - 1] !== sec);
+          if (isFront) {
+            target[y][x] = curL;
+          } else if (isBack) {
+            target[y][x] = curS;
+          } else {
+            target[y][x] = curP;
+          }
+        } else {
+          target[y][x] = x <= 15 ? curL : curP;
+        }
+      }
+    }
+    return;
+  }
+
   if (baseOrientation === 'front') {
     for (let y = 22; y < GRID_SIZE; y += 1) {
       for (let x = 8; x <= 23; x += 1) {
@@ -2166,8 +2729,95 @@ function renderFittedShirt(target, baseGrid, frameInfo, preset, palette) {
   const { O, P, S, L, farO, farP, farS, farL } = palette;
   const pat = preset.patternId || 'teeHoodie';
   const isSleeveless = pat === 'vestJerkin' || pat === 'sleevelessTank';
+  const isLongSleeve = pat === 'suitJacket' || pat === 'doubletCoat' || pat === 'capeletCoat';
   const hasHighCollar = pat === 'turtleneckSweater' || pat === 'calicoBodice';
   const isCapelet = pat === 'capeletCoat';
+
+  if (frameInfo.sectionGrid) {
+    for (let y = 0; y < GRID_SIZE; y += 1) {
+      for (let x = 0; x < GRID_SIZE; x += 1) {
+        const c = baseGrid[y]?.[x];
+        if (!c) continue;
+        const sec = frameInfo.sectionGrid[y]?.[x];
+
+        const isCollar = hasHighCollar && sec === 'head' && y >= 7 + headDy;
+        const isTorso = sec === 'torso';
+        const isFgSleeve = !isSleeveless && (sec === 'fg_sleeve' || (isLongSleeve && sec === 'fg_arm'));
+        const isBgSleeve = !isSleeveless && (sec === 'bg_sleeve' || (isLongSleeve && sec === 'bg_arm'));
+
+        if (!isCollar && !isTorso && !isFgSleeve && !isBgSleeve) continue;
+
+        if (isTorso && frameInfo.nearHandMask?.has(`${x},${y}`)) continue;
+
+        const isFar = isBgSleeve;
+        const curO = isFar ? farO : O;
+        const curP = isFar ? farP : P;
+        const curS = isFar ? farS : S;
+        const curL = isFar ? farL : L;
+
+        const isSleeveHem = isFgSleeve && sec === 'fg_sleeve' && frameInfo.sectionGrid[y + 1]?.[x] === 'fg_arm';
+        const isShirtHem = isTorso && frameInfo.sectionGrid[y + 1]?.[x] === 'fg_leg';
+        const isBoundary =
+          isSpriteOutline(c) ||
+          !baseGrid[y - 1]?.[x] ||
+          !baseGrid[y + 1]?.[x] ||
+          !baseGrid[y]?.[x - 1] ||
+          !baseGrid[y]?.[x + 1] ||
+          isSleeveHem ||
+          isShirtHem;
+
+        if (isBoundary) {
+          target[y][x] = curO;
+        } else if (isFgSleeve) {
+          const isTopShoulder = !baseGrid[y - 1]?.[x] || frameInfo.sectionGrid[y - 1]?.[x] === 'head';
+          const isFront = !baseGrid[y]?.[x + 1] || frameInfo.sectionGrid[y]?.[x + 1] !== 'fg_sleeve';
+          target[y][x] = (isTopShoulder || isFront) ? curL : curP;
+        } else if (isBgSleeve) {
+          target[y][x] = curP;
+        } else if (isCollar) {
+          target[y][x] = curP;
+        } else if (pat === 'fringedBuckskin') {
+          const isSuspender = baseOrientation === 'side'
+            ? (x === 15 || x === 16)
+            : (x === 13 || x === 17);
+          const isBuckle = isSuspender && (y === 11 + headDy || y === 12 + headDy);
+          const isCenterPlacket = baseOrientation === 'front' && Math.abs(x - 15.5) <= 0.6;
+          const isButton = isCenterPlacket && (y % 2 === 0);
+
+          if (isBuckle) {
+            target[y][x] = curL;
+          } else if (isSuspender) {
+            target[y][x] = curS;
+          } else if (isButton) {
+            target[y][x] = curL;
+          } else if (isCenterPlacket) {
+            target[y][x] = shadeHex(curP, 18);
+          } else if (baseOrientation === 'side') {
+            if (x >= 17) {
+              target[y][x] = shadeHex(curP, 16);
+            } else if (x <= 13) {
+              target[y][x] = shadeHex(curP, -16);
+            } else {
+              target[y][x] = curP;
+            }
+          } else {
+            target[y][x] = x <= 15 ? shadeHex(curP, 16) : curP;
+          }
+        } else if (pat === 'calicoBodice') {
+          target[y][x] = (x === 16 || x === 17) ? curL : curP;
+        } else if (isCapelet) {
+          target[y][x] = y <= 11 + headDy ? curL : curP;
+        } else {
+          if (baseOrientation === 'side') {
+            target[y][x] = x >= 17 ? curL : (x <= 13 ? curS : curP);
+          } else {
+            target[y][x] = x <= 15 ? curL : curP;
+          }
+        }
+      }
+    }
+    return;
+  }
 
   if (baseOrientation === 'front') {
     const torsoMinX = 11;
@@ -2222,13 +2872,28 @@ function renderFittedShirt(target, baseGrid, frameInfo, preset, palette) {
 
         if (isTorsoOutline) {
           target[y][x] = O;
-        } else if (y === bottomY) {
-          target[y][x] = (pat === 'fringedBuckskin' && Math.abs(x - cx) <= 1.5) ? L : O;
-        } else if (y === bottomY - 1) {
-          target[y][x] = (pat === 'fringedBuckskin' && Math.abs(x - cx) <= 1.5) ? L : S;
         } else if (pat === 'fringedBuckskin') {
           const isStrap = x === torsoMinX + 2 || x === torsoMaxX - 2;
-          target[y][x] = isStrap ? (ry === 1 ? L : S) : P;
+          const isCenterPlacket = Math.abs(x - cx) <= 0.6;
+          const isButton = isCenterPlacket && (ry === 2 || ry === 4 || ry === 6);
+          const isBuckle = isStrap && ry === 3;
+          if (isBuckle) {
+            target[y][x] = L;
+          } else if (isStrap) {
+            target[y][x] = (ry <= 1) ? shadeHex(S, 20) : S;
+          } else if (isButton) {
+            target[y][x] = L;
+          } else if (isCenterPlacket) {
+            target[y][x] = shadeHex(P, 18);
+          } else if (x < cx) {
+            target[y][x] = ry <= 2 ? shadeHex(P, 20) : P;
+          } else {
+            target[y][x] = ry >= 4 ? shadeHex(P, -16) : P;
+          }
+        } else if (y === bottomY) {
+          target[y][x] = O;
+        } else if (y === bottomY - 1) {
+          target[y][x] = S;
         } else if (pat === 'calicoBodice') {
           if (Math.abs(x - cx) <= 1.5) {
             target[y][x] = ry <= 3 ? L : S;
@@ -2305,12 +2970,22 @@ function renderFittedShirt(target, baseGrid, frameInfo, preset, palette) {
 
       if (isEdge) {
         target[y][x] = curO;
-      } else if (y === bottomY) {
-        target[y][x] = (pat === 'fringedBuckskin' && x === 16) ? curL : curS;
       } else if (isCapelet && ry <= 2) {
         target[y][x] = ry === 2 ? curO : curL;
-      } else if (pat === 'fringedBuckskin' && x === 17) {
-        target[y][x] = curS;
+      } else if (pat === 'fringedBuckskin') {
+        const isSuspender = x === 16;
+        const isBuckle = isSuspender && (ry === 3 || ry === 4);
+        if (isBuckle) {
+          target[y][x] = curL;
+        } else if (isSuspender) {
+          target[y][x] = curS;
+        } else if (x >= 17) {
+          target[y][x] = ry <= 2 ? shadeHex(curP, 20) : curP;
+        } else if (x <= 13) {
+          target[y][x] = ry <= 2 ? shadeHex(curP, 16) : curP;
+        } else {
+          target[y][x] = shadeHex(curP, -18);
+        }
       } else if ((pat === 'suitJacket' || pat === 'calicoBodice' || pat === 'doubletCoat') && x === 17 && ry <= 3) {
         target[y][x] = curL;
       } else if (x <= 14) {
@@ -3289,9 +3964,7 @@ function overlayFittedClothing(baseGrid, appearance, baseOrientation = 'front', 
   const hasShoes = Boolean(shoesPreset && !shoesPreset.isNone);
   const isSkirt = isSkirtPreset(pantsPreset);
 
-  const drawOrder = isSkirt
-    ? ['shoes', 'pants', 'shirts', 'accessories', 'hats']
-    : ['pants', 'shoes', 'shirts', 'accessories', 'hats'];
+  const drawOrder = ['pants', 'shoes', 'shirts', 'accessories', 'hats'];
 
   for (const category of drawOrder) {
     const presetId = String(appearance?.equippedPresets?.[category] || '');
@@ -3377,28 +4050,24 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
 
   if (isFront) {
     const effectiveMode = gender === 'female' && animMode === 'walk' ? 'walk' : 'idle';
-    const frameCount = getBoilerplateSpriteFrameCount(gender, effectiveMode);
-    const baseKey = `base:${gender}:south:${effectiveMode}:${frameIndex % frameCount}`;
-    const rawGrid = CUSTOM_SPRITE_OVERRIDES.get(baseKey) || getBoilerplateSpriteGrid(gender, 'south', effectiveMode, frameIndex % frameCount);
+    const rawGrid = getBaseSpriteGrid(gender, 'south', effectiveMode, frameIndex);
     if (!rawGrid) return getLegacyCharacterFrameGrid(appearance, view, animMode, frameIndex);
     const spriteGrid = applySkinToneToSpriteGrid(rawGrid, appearance?.skinToneId, gender);
-    return overlayFittedClothing(spriteGrid, appearance, 'front', effectiveMode, frameIndex % frameCount);
+    return overlayFittedClothing(spriteGrid, appearance, 'front', effectiveMode, frameIndex);
   }
 
-  const frameCount = getBoilerplateSpriteFrameCount(gender, animMode) || 1;
-  const baseKey = `base:${gender}:east:${animMode}:${frameIndex % frameCount}`;
-  const rawGrid = CUSTOM_SPRITE_OVERRIDES.get(baseKey) || getBoilerplateSpriteGrid(gender, 'east', animMode, frameIndex % frameCount);
+  const rawGrid = getBaseSpriteGrid(gender, 'east', animMode, frameIndex);
   if (!rawGrid) return getLegacyCharacterFrameGrid(appearance, view, animMode, frameIndex);
   const eastGrid = applySkinToneToSpriteGrid(rawGrid, appearance?.skinToneId, gender);
-  const dressedEast = overlayFittedClothing(eastGrid, appearance, 'side', animMode, frameIndex % frameCount);
+  const dressedEast = overlayFittedClothing(eastGrid, appearance, 'side', animMode, frameIndex);
   return isSideLeft ? dressedEast.map((row) => [...row].reverse()) : dressedEast;
 }
 
 export function getCharacterOutfitGrid(appearance, view = 'front') {
   const gender = appearance?.gender === 'female' ? 'female' : 'male';
   const isSide = view === 'side' || view === 'side_right' || view === 'side_left';
-  const baseKey = `base:${gender}:${isSide ? 'east' : 'south'}:idle:0`;
-  const rawGrid = CUSTOM_SPRITE_OVERRIDES.get(baseKey) || getBoilerplateSpriteGrid(gender, isSide ? 'east' : 'south', 'idle', 0);
+  const dir = isSide ? 'east' : 'south';
+  const rawGrid = getBaseSpriteGrid(gender, dir, 'idle', 0);
   if (!rawGrid) return buildNeutralCompositeGrid(appearance, isSide ? 'side' : 'front');
   const spriteGrid = applySkinToneToSpriteGrid(rawGrid, appearance?.skinToneId, gender);
   const dressed = overlayFittedClothing(spriteGrid, appearance, isSide ? 'side' : 'front', 'idle', 0);

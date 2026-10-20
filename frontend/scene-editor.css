@@ -1286,6 +1286,18 @@ code {
   color: #00ff66;
 }
 
+.nav-pill.clear-cache-btn {
+  border-color: #774433;
+  color: #ffaa66;
+  cursor: pointer;
+}
+
+.nav-pill.clear-cache-btn:hover {
+  background: rgba(255, 120, 60, 0.15);
+  border-color: #ff8844;
+  color: #ffcc99;
+}
+
 .sprite-viewer-header-actions {
   display: flex;
   align-items: center;

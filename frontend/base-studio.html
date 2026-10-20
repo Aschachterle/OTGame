@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Base Sprite &amp; Skin Studio — Immutable Trail</title>
+  <link rel="stylesheet" href="./sprite-studio.css?v=studio_pages_2">
+</head>
+<body data-studio-mode="base">
+  <main class="studio-app">
+    <!-- Top Application Navigation Bar -->
+    <header class="app-header">
+      <div class="brand-block">
+        <p class="eyebrow">IMMUTABLE TRAIL / BASE ANATOMY WORKBENCH</p>
+        <h1>🧍 Base Character Sprite Studio</h1>
+      </div>
+
+      <nav class="app-nav" aria-label="Developer tools navigation">
+        <a class="nav-tab" href="./scene-editor.html">🌄 Trail Scene</a>
+        <a class="nav-tab active" href="./base-studio.html" aria-current="page">🧍 Base Sprites</a>
+        <a class="nav-tab" href="./sprite-studio.html">👗 Clothing Studio</a>
+        <a class="nav-tab" href="./mask-studio.html">✋ Z-Mask Studio</a>
+        <a class="nav-tab game-link" href="./index.html">🎮 Return to Game</a>
+      </nav>
+
+      <div class="save-toolbar">
+        <button id="mask-btn-save-project" class="primary-save-btn" type="button" title="Write all custom sprite overrides directly to project files">
+          💾 Save to Project
+        </button>
+        <button id="mask-btn-download" class="secondary-button" type="button" title="Download custom overrides JSON file">
+          ⬇️ Export JSON
+        </button>
+        <button id="mask-btn-load-file" class="secondary-button" type="button" title="Load custom overrides from a JSON file">
+          📂 Load JSON
+        </button>
+        <button id="mask-btn-copy" class="secondary-button" type="button" title="Copy pixel data JSON to clipboard">
+          📋 Copy
+        </button>
+        <button id="mask-btn-paste" class="secondary-button" type="button" title="Paste pixel data JSON">
+          📥 Paste
+        </button>
+        <button id="studio-btn-clear-cache" class="secondary-button clear-cache-btn" type="button" title="Clear all browser-cached overrides and drafts, restoring clean project defaults">
+          🧹 Clear Cached Options
+        </button>
+        <input id="mask-file-input" type="file" accept=".json,application/json" hidden>
+      </div>
+    </header>
+
+    <!-- Hidden mode select locked to 'base' -->
+    <select id="studio-mode-select" hidden>
+      <option value="base" selected>Character Base Sprite</option>
+    </select>
+
+    <!-- Step 1: Base Sprite Target & Walk Strip -->
+    <section class="character-strip-panel" aria-label="Base Sprite Target and Walk Cycle Strip">
+      <div class="strip-controls-row">
+        <div id="studio-base-controls" class="strip-selectors">
+          <label>
+            <span>1. Body Gender</span>
+            <select id="studio-base-gender">
+              <option value="male" selected>Male (32Man)</option>
+              <option value="female">Female (32Woman)</option>
+            </select>
+          </label>
+          <label>
+            <span>2. Orientation</span>
+            <select id="studio-base-direction">
+              <option value="east" selected>Side Profile (East)</option>
+              <option value="south">Front View (South)</option>
+            </select>
+          </label>
+          <label>
+            <span>3. Frame Target</span>
+            <select id="studio-base-frame">
+              <option value="all" id="studio-base-frame-opt-all" selected>All Frames (Apply to all 8 walk frames &amp; idle)</option>
+              <option value="walk:0">Walk Frame 1 Only</option>
+              <option value="walk:1">Walk Frame 2 Only</option>
+              <option value="walk:2">Walk Frame 3 Only</option>
+              <option value="walk:3">Walk Frame 4 Only</option>
+              <option value="walk:4">Walk Frame 5 Only</option>
+              <option value="walk:5">Walk Frame 6 Only</option>
+              <option value="walk:6">Walk Frame 7 Only</option>
+              <option value="walk:7">Walk Frame 8 Only</option>
+              <option value="idle:0">Idle Frame 1 Only</option>
+            </select>
+          </label>
+          <label class="toggle-check-label" style="align-self: flex-end; padding-bottom: 6px;">
+            <input id="studio-base-apply-all" type="checkbox" checked>
+            <span>Propagate edits across all frames</span>
+          </label>
+          <button id="sprite-play" class="secondary-button play-cycle-btn" type="button" aria-pressed="false">▶ Play Walk Cycle</button>
+        </div>
+        <output id="sprite-frame-readout" class="strip-readout" aria-live="polite">WALK · FRAME 1/8</output>
+      </div>
+
+      <!-- Hidden compatibility selects kept synced with Base Controls -->
+      <select id="sprite-character" hidden></select>
+      <select id="era" hidden></select>
+      <select id="sprite-view" hidden>
+        <option value="side_right" selected>Side Profile</option>
+        <option value="front">Front View</option>
+      </select>
+      <select id="sprite-animation" hidden>
+        <option value="walk" selected>Walk · 8 frames</option>
+        <option value="idle">Idle · 1 frame</option>
+      </select>
+
+      <div id="sprite-frame-strip" class="sprite-frame-strip" aria-label="Base sprite animation frames"></div>
+    </section>
+
+    <!-- Step 2: Active Target Context Breadcrumb -->
+    <section class="context-breadcrumb-bar" aria-label="Editing Context">
+      <div class="breadcrumb-main">
+        <span class="breadcrumb-eyebrow">EDITING BASE SPRITE:</span>
+        <div id="studio-breadcrumb-trail" class="breadcrumb-trail">
+          🧍 Base Body Sprite › Male (32Man) › Side Profile › All Frames
+        </div>
+        <output id="mask-status-readout" class="status-badge">DEFAULT · 0 PX</output>
+      </div>
+      <div id="studio-propagation-rule" class="propagation-rule-pill">
+        ℹ️ All-Frames Base Edit: Painting stationary areas (head, face, hair, torso) updates all 8 walk frames and idle simultaneously.
+      </div>
+    </section>
+
+    <!-- Step 3: 3-Column Focused Base Sprite Workspace -->
+    <section class="studio-workspace-grid" aria-label="Base Sprite Canvas, Skin Painter, and Live Skin Preview">
+      <!-- COLUMN 1: 32×32 BASE SPRITE EDITOR CANVAS -->
+      <div class="studio-col studio-col-canvas">
+        <div class="studio-col-header">
+          <span id="studio-canvas-title" class="col-title">32×32 BASE SPRITE EDITOR</span>
+          <strong id="studio-target-name" class="target-short-name">32Man · Side · All Frames</strong>
+        </div>
+
+        <div class="canvas-stage-box">
+          <canvas id="mask-editor-canvas" width="288" height="288" aria-label="32 by 32 base sprite pixel editor"></canvas>
+        </div>
+
+        <!-- Multi-Backdrop Switcher for Editor Canvas -->
+        <div class="backdrop-switcher-row">
+          <span class="backdrop-label">Canvas BG:</span>
+          <div class="backdrop-pills" role="group" aria-label="Editor canvas background">
+            <button type="button" class="bg-pill active" data-editor-bg="dark-grid" title="Dark transparency checkerboard">🏁 Dark</button>
+            <button type="button" class="bg-pill" data-editor-bg="light-grid" title="Light transparency checkerboard">🔲 Light</button>
+            <button type="button" class="bg-pill" data-editor-bg="white" title="Pure white background (#FFFFFF) for checking dark outlines">⬜ White</button>
+            <button type="button" class="bg-pill" data-editor-bg="black" title="Pure black background (#000000)">⬛ Black</button>
+            <button type="button" class="bg-pill" data-editor-bg="prairie" title="Prairie trail green backdrop">🌿 Trail</button>
+          </div>
+        </div>
+
+        <!-- Frame Stepper Bar -->
+        <div class="studio-frame-stepper">
+          <button id="studio-prev-frame" class="secondary-button stepper-btn" type="button">◀ Prev Frame</button>
+          <span id="studio-frame-stepper-label" class="stepper-readout">WALK Frame 1</span>
+          <button id="studio-next-frame" class="secondary-button stepper-btn" type="button">Next Frame ▶</button>
+        </div>
+
+        <!-- Grid Toggle -->
+        <div class="studio-canvas-underlay-row">
+          <label class="toggle-check-label">
+            <input id="studio-show-grid" type="checkbox" checked>
+            <span>Show 32×32 Pixel Grid Lines</span>
+          </label>
+        </div>
+
+        <div class="mask-readout-panel">
+          <div class="mask-readout-row">
+            <span class="readout-label">Cursor:</span>
+            <span id="mask-pixel-info">Hover canvas to inspect</span>
+          </div>
+          <div class="mask-readout-row">
+            <span class="readout-label">Layer Status:</span>
+            <span id="mask-origin-info">Default Base Sprite</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- COLUMN 2: DRAWING TOOLS & DYNAMIC SKIN PAINTER -->
+      <div class="studio-col studio-col-tools">
+        <div class="studio-col-header">
+          <span class="col-title">TOOLS &amp; DYNAMIC SKIN PAINTER</span>
+          <span class="shortcut-hint">Right-click erase · Ctrl+Z undo</span>
+        </div>
+
+        <div class="studio-tool-bar">
+          <button id="studio-tool-pencil" class="mask-tool-btn active" type="button" aria-pressed="true" title="Pencil / Draw (Left-click)">
+            ✏️ Draw
+          </button>
+          <button id="studio-tool-eraser" class="mask-tool-btn secondary-button" type="button" aria-pressed="false" title="Eraser / Clear pixel">
+            🧹 Erase
+          </button>
+          <button id="studio-tool-picker" class="mask-tool-btn secondary-button" type="button" aria-pressed="false" title="Eyedropper / Sample color from canvas">
+            💧 Pick Color
+          </button>
+          <button id="studio-tool-fill" class="mask-tool-btn secondary-button" type="button" aria-pressed="false" title="Bucket / Flood fill contiguous area">
+            🪣 Flood Fill
+          </button>
+        </div>
+
+        <div class="studio-history-bar">
+          <button id="studio-btn-undo" class="secondary-button" type="button" disabled title="Undo last action (Ctrl+Z / Cmd+Z)">
+            ↩️ Undo
+          </button>
+          <button id="studio-btn-redo" class="secondary-button" type="button" disabled title="Redo action (Ctrl+Y / Cmd+Shift+Z)">
+            ↪️ Redo
+          </button>
+          <button id="studio-btn-reset" class="secondary-button" type="button" title="Revert this base sprite to its original default">
+            🔄 Reset Base
+          </button>
+          <button id="studio-btn-clear" class="secondary-button" type="button" title="Clear all pixels on this frame">
+            🗑️ Clear Grid
+          </button>
+        </div>
+
+        <div id="studio-color-panel" class="studio-color-panel">
+          <div class="studio-color-picker-row">
+            <span class="studio-color-label">Active Brush:</span>
+            <input id="studio-active-color" type="color" value="#eea572" title="Click to choose any custom color">
+            <input id="studio-hex-input" type="text" value="#eea572" maxlength="7" spellcheck="false" aria-label="Hex color code">
+            <span id="studio-color-name-readout" class="studio-color-name">Main Skin Role</span>
+          </div>
+
+          <!-- Dedicated Skin Painter for Dynamic Shading -->
+          <div class="studio-palette-section skin-painter-section">
+            <div class="studio-palette-header">
+              <span class="skin-painter-title">🎨 Dynamic Skin Painter Roles</span>
+              <span class="palette-count-badge">Auto-Shades in Game</span>
+            </div>
+            <p class="skin-painter-desc">
+              Paint with these 4 swatches to mark skin regions. When a player picks a lighter or darker skin tone in-game, these pixels automatically shade to match!
+            </p>
+            <div class="skin-painter-swatches-grid">
+              <button class="skin-role-btn" type="button" data-role="highlight" data-color="#f1af7d" title="Skin Highlight (#f1af7d) - Shaded to player highlight">
+                <span class="role-swatch" style="background:#f1af7d;"></span>
+                <span class="role-info"><strong>🌟 Highlight</strong><small>Forehead, nose bridge, shoulder</small></span>
+              </button>
+              <button class="skin-role-btn active-role" type="button" data-role="base" data-color="#eea572" title="Skin Base (#eea572) - Shaded to player main skin tone">
+                <span class="role-swatch" style="background:#eea572;"></span>
+                <span class="role-info"><strong>🧑 Main Skin</strong><small>Face, neck, torso, near limbs</small></span>
+              </button>
+              <button class="skin-role-btn" type="button" data-role="shadow" data-color="#c56749" title="Skin Shadow (#c56749) - Shaded to player skin shadow">
+                <span class="role-swatch" style="background:#c56749;"></span>
+                <span class="role-info"><strong>👤 Shadow</strong><small>Jawline, chin, underarm</small></span>
+              </button>
+              <button class="skin-role-btn" type="button" data-role="far-limb" data-color="#ae4a3a" title="Far-Limb Shadow (#ae4a3a) - Shaded to player distant limb">
+                <span class="role-swatch" style="background:#ae4a3a;"></span>
+                <span class="role-info"><strong>🦾 Far Limb</strong><small>Back arm &amp; back leg</small></span>
+              </button>
+            </div>
+          </div>
+
+          <div class="studio-palette-section">
+            <div class="studio-palette-header">
+              <span>Colors Currently Used in This Sprite</span>
+              <span id="studio-used-colors-count" class="palette-count-badge">0 colors</span>
+            </div>
+            <div id="studio-used-colors-grid" class="studio-swatches-grid used-colors-grid"></div>
+          </div>
+
+          <div class="studio-palette-section">
+            <div class="studio-palette-header">
+              <span>Anatomy, Hair &amp; Outline Swatches</span>
+              <span class="palette-count-badge">Click to Pick</span>
+            </div>
+            <div id="studio-preset-colors-grid" class="studio-swatches-grid preset-colors-grid"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- COLUMN 3: LIVE SKIN TONE & BASE PREVIEW -->
+      <div class="studio-col studio-col-preview">
+        <div class="studio-col-header">
+          <span class="col-title">LIVE BASE &amp; SKIN TONE PREVIEW</span>
+          <button id="preview-play-btn" class="secondary-button" type="button" aria-pressed="false">▶ Play Walk Cycle</button>
+        </div>
+
+        <div class="canvas-stage-box">
+          <canvas id="mask-preview-canvas" width="288" height="288" aria-label="32 by 32 pixel base and skin tone preview"></canvas>
+        </div>
+
+        <!-- Test Player Skin Tone in Live Preview -->
+        <div class="preview-skintone-tester-row">
+          <span class="skintone-tester-label">Test Player Skin Choice:</span>
+          <div class="skintone-pills" role="group" aria-label="Test player skin tone in preview">
+            <button type="button" class="skintone-pill active" data-test-skintone="warm_ivory" title="Warm Ivory">🖐🏻 Ivory</button>
+            <button type="button" class="skintone-pill" data-test-skintone="golden_tan" title="Golden Tan">🖐🏼 Tan</button>
+            <button type="button" class="skintone-pill" data-test-skintone="olive_bronze" title="Olive Bronze">🖐🏽 Bronze</button>
+            <button type="button" class="skintone-pill" data-test-skintone="deep_umber" title="Deep Umber">🖐🏾 Umber</button>
+            <button type="button" class="skintone-pill" data-test-skintone="rich_espresso" title="Rich Espresso">🖐🏿 Espresso</button>
+            <button type="button" class="skintone-pill" data-test-skintone="porcelain_rose" title="Porcelain Rose">🌸 Rose</button>
+          </div>
+        </div>
+
+        <!-- Multi-Backdrop Switcher for Preview Canvas -->
+        <div class="backdrop-switcher-row">
+          <span class="backdrop-label">Preview BG:</span>
+          <div class="backdrop-pills" role="group" aria-label="Preview canvas background">
+            <button type="button" class="bg-pill active" data-preview-bg="dark-grid" title="Dark transparency checkerboard">🏁 Dark</button>
+            <button type="button" class="bg-pill" data-preview-bg="light-grid" title="Light transparency checkerboard">🔲 Light</button>
+            <button type="button" class="bg-pill" data-preview-bg="white" title="Pure white background (#FFFFFF)">⬜ White</button>
+            <button type="button" class="bg-pill" data-preview-bg="black" title="Pure black background (#000000)">⬛ Black</button>
+            <button type="button" class="bg-pill" data-preview-bg="prairie" title="Animated prairie trail backdrop">🌄 Trail Scene</button>
+          </div>
+        </div>
+
+        <input id="mask-preview-backdrop" type="checkbox" hidden>
+
+        <!-- Clean Clothing Overlay Toggle (Unchecked by default so Base Body edits are never hidden!) -->
+        <div class="studio-outfit-customizer">
+          <div class="studio-outfit-header">
+            <span class="studio-outfit-title">Preview Display Mode</span>
+          </div>
+          <label class="toggle-check-label base-outfit-toggle-card">
+            <input type="checkbox" id="base-preview-wear-outfit">
+            <span>👕 Overlay Default Pioneer Outfit (Leave unchecked to view unobstructed base anatomy)</span>
+          </label>
+          <div id="mask-outfit-summary" class="mask-outfit-summary">Bare Base Sprite (Unobstructed View)</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="./src/sprite-studio.js?v=studio_pages_2"></script>
+</body>
+</html>

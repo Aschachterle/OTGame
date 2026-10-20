@@ -63,6 +63,66 @@ const server = createServer((request, response) => {
     return;
   }
 
+  if (request.method === 'POST' && requestPath === '/api/dev/save-sprite-overrides') {
+    let body = '';
+    request.on('data', (chunk) => {
+      body += chunk;
+    });
+    request.on('end', () => {
+      try {
+        const parsed = JSON.parse(body || '{}');
+        const jsFile = resolve(frontendRoot, 'src', 'custom-sprite-overrides.js');
+        const jsonFile = resolve(frontendRoot, 'src', 'custom-sprite-overrides.json');
+        const jsContent = `// Automatically saved custom clothing and sprite overrides from the Trail Scene Editor\nexport const CUSTOM_SPRITE_OVERRIDES_DATA = ${JSON.stringify(parsed, null, 2)};\n`;
+        const jsonContent = JSON.stringify(parsed, null, 2);
+        writeFileSync(jsFile, jsContent, 'utf-8');
+        writeFileSync(jsonFile, jsonContent, 'utf-8');
+        response.writeHead(200, {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Access-Control-Allow-Origin': '*'
+        });
+        response.end(JSON.stringify({ ok: true, count: Object.keys(parsed).length }));
+      } catch (err) {
+        response.writeHead(500, {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Access-Control-Allow-Origin': '*'
+        });
+        response.end(JSON.stringify({ ok: false, error: String(err?.message || err) }));
+      }
+    });
+    return;
+  }
+
+  if (request.method === 'POST' && requestPath === '/api/dev/save-custom-clothing') {
+    let body = '';
+    request.on('data', (chunk) => {
+      body += chunk;
+    });
+    request.on('end', () => {
+      try {
+        const parsed = JSON.parse(body || '{}');
+        const jsFile = resolve(frontendRoot, 'src', 'custom-clothing.js');
+        const jsonFile = resolve(frontendRoot, 'src', 'custom-clothing.json');
+        const jsContent = `// Automatically saved custom clothing items and name overrides\nexport const CUSTOM_CLOTHING_DATA = ${JSON.stringify(parsed, null, 2)};\n`;
+        const jsonContent = JSON.stringify(parsed, null, 2);
+        writeFileSync(jsFile, jsContent, 'utf-8');
+        writeFileSync(jsonFile, jsonContent, 'utf-8');
+        response.writeHead(200, {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Access-Control-Allow-Origin': '*'
+        });
+        response.end(JSON.stringify({ ok: true, count: Object.keys(parsed.items || {}).length }));
+      } catch (err) {
+        response.writeHead(500, {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Access-Control-Allow-Origin': '*'
+        });
+        response.end(JSON.stringify({ ok: false, error: String(err?.message || err) }));
+      }
+    });
+    return;
+  }
+
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     response.writeHead(405, { Allow: 'GET, HEAD, POST' }).end();
     return;

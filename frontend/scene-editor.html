@@ -15,8 +15,11 @@
         <p class="subtitle">Preview the live game renderer, biomes, weather overlays, and river crossings.</p>
       </div>
       <nav class="editor-nav" aria-label="Developer tools navigation">
-        <a class="nav-pill active" href="./scene-editor.html" aria-current="page">🌄 Trail Scene Preview</a>
-        <a class="nav-pill primary-studio-link" href="./sprite-studio.html">🎨 Pixel Art Studio</a>
+        <a class="nav-pill active" href="./scene-editor.html" aria-current="page">🌄 Trail Scene</a>
+        <a class="nav-pill primary-studio-link" href="./base-studio.html">🧍 Base Sprites</a>
+        <a class="nav-pill primary-studio-link" href="./sprite-studio.html">👗 Clothing Studio</a>
+        <a class="nav-pill primary-studio-link" href="./mask-studio.html">✋ Z-Mask Studio</a>
+        <button id="scene-btn-clear-cache" class="nav-pill clear-cache-btn" type="button" title="Clear all browser-cached sprite overrides and reset to clean defaults">🧹 Clear Cached Options</button>
         <a class="nav-pill" href="./index.html">🎮 Return to Game</a>
       </nav>
     </header>
@@ -50,7 +53,9 @@
           </div>
           <div class="sprite-viewer-header-actions">
             <output id="sprite-frame-readout" aria-live="polite">WALK · FRAME 1/8</output>
-            <a class="open-studio-cta" href="./sprite-studio.html">🎨 Edit Sprites in Studio →</a>
+            <a class="open-studio-cta" href="./base-studio.html">🧍 Base Sprites →</a>
+            <a class="open-studio-cta" href="./sprite-studio.html">👗 Clothing →</a>
+            <a class="open-studio-cta" href="./mask-studio.html">✋ Z-Mask →</a>
           </div>
         </div>
         <div class="sprite-viewer-controls">
