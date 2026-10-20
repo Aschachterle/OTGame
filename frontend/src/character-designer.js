@@ -1179,6 +1179,80 @@ function isSpriteUndies(color) {
   return SPRITE_UNDIES_COLORS.has(color.toLowerCase());
 }
 
+const KNOWN_SKIN_HIGHLIGHT_COLORS = new Set([
+  '#f1af7d', '#ffe6d4', '#fad0a8', '#ffffff',
+  ...SKIN_TONES.map((s) => s.highlight.toLowerCase())
+]);
+
+const KNOWN_SKIN_BASE_COLORS = new Set([
+  '#eea572', '#efa580', '#f6c69f', '#e09b67', '#f6d6bd',
+  ...SKIN_TONES.map((s) => s.base.toLowerCase())
+]);
+
+const KNOWN_SKIN_SHADOW_COLORS = new Set([
+  '#c56749', '#ca694f', '#bd5e44', '#c97e54', '#a86034', '#d99066',
+  ...SKIN_TONES.map((s) => s.shadow.toLowerCase())
+]);
+
+export function isSpriteSkinPixel(color, y = 0, headDy = 0) {
+  if (!color) return false;
+  const lower = color.toLowerCase();
+  if (isSpriteOutline(lower)) return false;
+  if (isSpriteBaseHair(lower, y, headDy)) return false;
+  if (isSpriteUndies(lower)) return false;
+  if (SPRITE_FAR_LIMB_COLORS.has(lower)) return true;
+  if (KNOWN_SKIN_HIGHLIGHT_COLORS.has(lower)) return true;
+  if (KNOWN_SKIN_BASE_COLORS.has(lower)) return true;
+  if (KNOWN_SKIN_SHADOW_COLORS.has(lower)) return true;
+  if (lower.startsWith('#') && lower.length === 7) {
+    const r = parseInt(lower.slice(1, 3), 16);
+    const g = parseInt(lower.slice(3, 5), 16);
+    const b = parseInt(lower.slice(5, 7), 16);
+    if (r > g && g > b && r > 90 && b < 180) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function applySkinToneToSpriteGrid(grid, skinToneId, gender = 'male') {
+  if (!grid || !Array.isArray(grid)) return grid;
+  const skin = getSkinToneById(skinToneId);
+  if (!skin) return grid;
+
+  const result = grid.map((row) => [...row]);
+  for (let y = 0; y < GRID_SIZE; y += 1) {
+    for (let x = 0; x < GRID_SIZE; x += 1) {
+      const col = result[y]?.[x];
+      if (!col) continue;
+      const lower = col.toLowerCase();
+      if (isSpriteOutline(lower)) continue;
+      if (isSpriteBaseHair(lower, y, 0)) continue;
+      if (isSpriteUndies(lower)) continue;
+
+      if (SPRITE_FAR_LIMB_COLORS.has(lower)) {
+        result[y][x] = coolShadowHex(skin.shadow, 0.42);
+      } else if (KNOWN_SKIN_HIGHLIGHT_COLORS.has(lower)) {
+        result[y][x] = skin.highlight;
+      } else if (KNOWN_SKIN_SHADOW_COLORS.has(lower)) {
+        result[y][x] = skin.shadow;
+      } else if (KNOWN_SKIN_BASE_COLORS.has(lower)) {
+        result[y][x] = skin.base;
+      } else if (isSpriteSkinPixel(lower, y, 0)) {
+        const r = parseInt(lower.slice(1, 3), 16);
+        const g = parseInt(lower.slice(3, 5), 16);
+        const b = parseInt(lower.slice(5, 7), 16);
+        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+        if (brightness > 210) result[y][x] = skin.highlight;
+        else if (brightness < 140) result[y][x] = skin.shadow;
+        else result[y][x] = skin.base;
+      }
+    }
+  }
+  return result;
+}
+
+
 function isSkirtPreset(preset) {
   if (!preset || preset.isNone) return false;
   const id = String(preset.id || '');
@@ -1286,9 +1360,14 @@ const SIDE_NEAR_HAND_CONTOURS = {
 };
 
 import { CUSTOM_SPRITE_MASKS } from './custom-sprite-masks.js';
+import { CUSTOM_SPRITE_OVERRIDES_DATA } from './custom-sprite-overrides.js';
 
 const CUSTOM_MASKS_STORAGE_KEY = 'ot_custom_sprite_masks';
+const CUSTOM_OVERRIDES_STORAGE_KEY = 'ot_custom_sprite_overrides';
+
 const CUSTOM_FRAME_MASKS = new Map();
+const SAVED_FRAME_MASKS = new Map();
+const CUSTOM_SPRITE_OVERRIDES = new Map();
 
 function normalizeMaskKey(gender, view, animMode, frameIndex) {
   const normGender = gender === 'female' ? 'female' : 'male';
@@ -1302,7 +1381,8 @@ function loadCustomMasksFromStorage() {
   if (CUSTOM_SPRITE_MASKS && typeof CUSTOM_SPRITE_MASKS === 'object') {
     for (const [key, coords] of Object.entries(CUSTOM_SPRITE_MASKS)) {
       if (Array.isArray(coords)) {
-        CUSTOM_FRAME_MASKS.set(key, coords);
+        CUSTOM_FRAME_MASKS.set(key, coords.map(([x, y]) => [x, y]));
+        SAVED_FRAME_MASKS.set(key, coords.map(([x, y]) => [x, y]));
       }
     }
   }
@@ -1314,7 +1394,10 @@ function loadCustomMasksFromStorage() {
     if (data && typeof data === 'object') {
       for (const [key, coords] of Object.entries(data)) {
         if (Array.isArray(coords)) {
-          CUSTOM_FRAME_MASKS.set(key, coords);
+          CUSTOM_FRAME_MASKS.set(key, coords.map(([x, y]) => [x, y]));
+          if (!SAVED_FRAME_MASKS.has(key)) {
+            SAVED_FRAME_MASKS.set(key, coords.map(([x, y]) => [x, y]));
+          }
         }
       }
     }
@@ -1338,6 +1421,21 @@ function saveCustomMasksToStorage() {
 
 loadCustomMasksFromStorage();
 
+export function commitSavedMasks() {
+  SAVED_FRAME_MASKS.clear();
+  for (const [k, v] of CUSTOM_FRAME_MASKS.entries()) {
+    SAVED_FRAME_MASKS.set(k, v.map(([x, y]) => [x, y]));
+  }
+}
+
+export function getFrameSavedMask(gender, view = 'side', animMode = 'walk', frameIndex = 0, baseGrid = null) {
+  const key = normalizeMaskKey(gender, view, animMode, frameIndex);
+  if (SAVED_FRAME_MASKS.has(key)) {
+    return SAVED_FRAME_MASKS.get(key).map(([x, y]) => [x, y]);
+  }
+  return getDefaultFrameMask(gender, view, animMode, frameIndex, baseGrid);
+}
+
 export function getAllCustomMasksObject() {
   const obj = {};
   for (const [k, v] of CUSTOM_FRAME_MASKS.entries()) {
@@ -1356,23 +1454,132 @@ export async function saveCustomMasksToServer() {
   if (!response.ok) {
     throw new Error(`Server returned status ${response.status}`);
   }
+  const result = await response.json();
+  commitSavedMasks();
+  return result;
+}
+
+function loadCustomOverridesFromStorage() {
+  if (CUSTOM_SPRITE_OVERRIDES_DATA && typeof CUSTOM_SPRITE_OVERRIDES_DATA === 'object') {
+    for (const [key, grid] of Object.entries(CUSTOM_SPRITE_OVERRIDES_DATA)) {
+      if (Array.isArray(grid)) {
+        CUSTOM_SPRITE_OVERRIDES.set(key, grid.map((row) => [...row]));
+      }
+    }
+  }
+  if (typeof localStorage === 'undefined') return;
+  try {
+    const raw = localStorage.getItem(CUSTOM_OVERRIDES_STORAGE_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (data && typeof data === 'object') {
+      for (const [key, grid] of Object.entries(data)) {
+        if (Array.isArray(grid)) {
+          CUSTOM_SPRITE_OVERRIDES.set(key, grid.map((row) => [...row]));
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to parse custom sprite overrides from localStorage', err);
+  }
+}
+
+function saveCustomOverridesToStorage() {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    const obj = {};
+    for (const [k, v] of CUSTOM_SPRITE_OVERRIDES.entries()) {
+      obj[k] = v;
+    }
+    localStorage.setItem(CUSTOM_OVERRIDES_STORAGE_KEY, JSON.stringify(obj));
+  } catch (err) {
+    console.warn('Failed to save custom sprite overrides to localStorage', err);
+  }
+}
+
+loadCustomOverridesFromStorage();
+
+export function getCustomSpriteOverride(key) {
+  if (CUSTOM_SPRITE_OVERRIDES.has(key)) {
+    return CUSTOM_SPRITE_OVERRIDES.get(key).map((row) => [...row]);
+  }
+  return null;
+}
+
+export function setCustomSpriteOverride(key, grid) {
+  if (!Array.isArray(grid)) return;
+  CUSTOM_SPRITE_OVERRIDES.set(key, grid.map((row) => [...row]));
+  saveCustomOverridesToStorage();
+}
+
+export function resetCustomSpriteOverride(key) {
+  const deleted = CUSTOM_SPRITE_OVERRIDES.delete(key);
+  saveCustomOverridesToStorage();
+  return deleted;
+}
+
+export function getAllCustomOverridesObject() {
+  const obj = {};
+  for (const [k, v] of CUSTOM_SPRITE_OVERRIDES.entries()) {
+    obj[k] = v;
+  }
+  return obj;
+}
+
+export async function saveCustomOverridesToServer() {
+  const payload = getAllCustomOverridesObject();
+  const response = await fetch('/api/dev/save-sprite-overrides', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    throw new Error(`Server returned status ${response.status}`);
+  }
   return await response.json();
 }
 
-export function getBaseBoilerplateGrid(gender, view = 'side', animMode = 'walk', frameIndex = 0) {
+export function getClothingItemDefaultGrid(category, presetId, gender = 'male', baseOrientation = 'side', dyeId = 'default', animMode = 'walk', frameIndex = 0) {
+  const preset = (INITIAL_CLOTHING_BOILERPLATE[category] || []).find((p) => p.id === presetId);
+  if (!preset || preset.isNone) return createEmptyGrid();
+  const grid = createEmptyGrid();
+  const baseGrid = getBaseBoilerplateGrid(gender, baseOrientation, animMode, frameIndex) || createEmptyGrid();
+  const frameInfo = analyzeBoilerplateFrame(baseGrid, gender, baseOrientation, animMode, frameIndex);
+  const palette = resolveGarmentPalette(preset, dyeId);
+  if (category === 'pants') {
+    renderFittedPantsOrSkirt(grid, baseGrid, frameInfo, preset, palette, false);
+  } else if (category === 'shoes') {
+    renderFittedShoes(grid, baseGrid, frameInfo, preset, palette);
+  } else if (category === 'shirts') {
+    renderFittedShirt(grid, baseGrid, frameInfo, preset, palette);
+  } else if (category === 'accessories') {
+    renderFittedAccessory(grid, baseGrid, frameInfo, preset, palette);
+  } else if (category === 'hats') {
+    renderFittedHeadwear(grid, baseGrid, frameInfo, preset, palette);
+  }
+  return grid;
+}
+
+export function getBaseBoilerplateGrid(gender, view = 'side', animMode = 'walk', frameIndex = 0, skinToneId = null) {
   const normGender = gender === 'female' ? 'female' : 'male';
   const isFront = view === 'front';
+  let raw = null;
   if (isFront) {
     const effectiveMode = normGender === 'female' && animMode === 'walk' ? 'walk' : 'idle';
     const frameCount = getBoilerplateSpriteFrameCount(normGender, effectiveMode);
-    return getBoilerplateSpriteGrid(normGender, 'south', effectiveMode, frameIndex % frameCount);
+    raw = getBoilerplateSpriteGrid(normGender, 'south', effectiveMode, frameIndex % frameCount);
+  } else {
+    const frameCount = getBoilerplateSpriteFrameCount(normGender, animMode) || 1;
+    const eastGrid = getBoilerplateSpriteGrid(normGender, 'east', animMode, frameIndex % frameCount);
+    raw = ((view === 'side_left' || view === 'west') && eastGrid)
+      ? eastGrid.map((row) => [...row].reverse())
+      : eastGrid;
   }
-  const frameCount = getBoilerplateSpriteFrameCount(normGender, animMode) || 1;
-  const eastGrid = getBoilerplateSpriteGrid(normGender, 'east', animMode, frameIndex % frameCount);
-  if ((view === 'side_left' || view === 'west') && eastGrid) {
-    return eastGrid.map((row) => [...row].reverse());
+  if (!raw) return null;
+  if (skinToneId) {
+    return applySkinToneToSpriteGrid(raw, skinToneId, normGender);
   }
-  return eastGrid;
+  return raw;
 }
 
 export function getDefaultFrameMask(gender, view = 'side', animMode = 'walk', frameIndex = 0, baseGrid = null) {
@@ -3094,16 +3301,47 @@ function overlayFittedClothing(baseGrid, appearance, baseOrientation = 'front', 
     const dyeId = appearance?.categoryDyes?.[category] || 'default';
     const palette = resolveGarmentPalette(preset, dyeId);
 
-    if (category === 'pants') {
-      renderFittedPantsOrSkirt(target, baseGrid, frameInfo, preset, palette, hasShoes);
-    } else if (category === 'shoes') {
-      renderFittedShoes(target, baseGrid, frameInfo, preset, palette);
-    } else if (category === 'shirts') {
-      renderFittedShirt(target, baseGrid, frameInfo, preset, palette);
-    } else if (category === 'accessories') {
-      renderFittedAccessory(target, baseGrid, frameInfo, preset, palette);
-    } else if (category === 'hats') {
-      renderFittedHeadwear(target, baseGrid, frameInfo, preset, palette);
+    const frameSpecificKey = `clothing:${presetId}:${baseOrientation}:${animMode}:${frameIndex}`;
+    const orientationKey = `clothing:${presetId}:${baseOrientation}`;
+    const hasSpecific = CUSTOM_SPRITE_OVERRIDES.has(frameSpecificKey);
+    const customGrid = hasSpecific
+      ? CUSTOM_SPRITE_OVERRIDES.get(frameSpecificKey)
+      : CUSTOM_SPRITE_OVERRIDES.get(orientationKey);
+    if (customGrid) {
+      let shiftX = 0;
+      let shiftY = 0;
+      if (!hasSpecific && (category === 'hats' || category === 'accessories')) {
+        const refBase = getBaseBoilerplateGrid(gender, baseOrientation, 'walk', 0);
+        if (refBase) {
+          const refInfo = analyzeBoilerplateFrame(refBase, gender, baseOrientation, 'walk', 0);
+          shiftX = (frameInfo.headDx || 0) - (refInfo.headDx || 0);
+          shiftY = (frameInfo.headDy || 0) - (refInfo.headDy || 0);
+        }
+      }
+      for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+          const col = customGrid[y]?.[x];
+          if (col) {
+            const tx = x + shiftX;
+            const ty = y + shiftY;
+            if (tx >= 0 && tx < GRID_SIZE && ty >= 0 && ty < GRID_SIZE) {
+              target[ty][tx] = col;
+            }
+          }
+        }
+      }
+    } else {
+      if (category === 'pants') {
+        renderFittedPantsOrSkirt(target, baseGrid, frameInfo, preset, palette, hasShoes);
+      } else if (category === 'shoes') {
+        renderFittedShoes(target, baseGrid, frameInfo, preset, palette);
+      } else if (category === 'shirts') {
+        renderFittedShirt(target, baseGrid, frameInfo, preset, palette);
+      } else if (category === 'accessories') {
+        renderFittedAccessory(target, baseGrid, frameInfo, preset, palette);
+      } else if (category === 'hats') {
+        renderFittedHeadwear(target, baseGrid, frameInfo, preset, palette);
+      }
     }
   }
 
@@ -3140,14 +3378,18 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
   if (isFront) {
     const effectiveMode = gender === 'female' && animMode === 'walk' ? 'walk' : 'idle';
     const frameCount = getBoilerplateSpriteFrameCount(gender, effectiveMode);
-    const spriteGrid = getBoilerplateSpriteGrid(gender, 'south', effectiveMode, frameIndex % frameCount);
-    if (!spriteGrid) return getLegacyCharacterFrameGrid(appearance, view, animMode, frameIndex);
+    const baseKey = `base:${gender}:south:${effectiveMode}:${frameIndex % frameCount}`;
+    const rawGrid = CUSTOM_SPRITE_OVERRIDES.get(baseKey) || getBoilerplateSpriteGrid(gender, 'south', effectiveMode, frameIndex % frameCount);
+    if (!rawGrid) return getLegacyCharacterFrameGrid(appearance, view, animMode, frameIndex);
+    const spriteGrid = applySkinToneToSpriteGrid(rawGrid, appearance?.skinToneId, gender);
     return overlayFittedClothing(spriteGrid, appearance, 'front', effectiveMode, frameIndex % frameCount);
   }
 
   const frameCount = getBoilerplateSpriteFrameCount(gender, animMode) || 1;
-  const eastGrid = getBoilerplateSpriteGrid(gender, 'east', animMode, frameIndex % frameCount);
-  if (!eastGrid) return getLegacyCharacterFrameGrid(appearance, view, animMode, frameIndex);
+  const baseKey = `base:${gender}:east:${animMode}:${frameIndex % frameCount}`;
+  const rawGrid = CUSTOM_SPRITE_OVERRIDES.get(baseKey) || getBoilerplateSpriteGrid(gender, 'east', animMode, frameIndex % frameCount);
+  if (!rawGrid) return getLegacyCharacterFrameGrid(appearance, view, animMode, frameIndex);
+  const eastGrid = applySkinToneToSpriteGrid(rawGrid, appearance?.skinToneId, gender);
   const dressedEast = overlayFittedClothing(eastGrid, appearance, 'side', animMode, frameIndex % frameCount);
   return isSideLeft ? dressedEast.map((row) => [...row].reverse()) : dressedEast;
 }
@@ -3155,8 +3397,10 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
 export function getCharacterOutfitGrid(appearance, view = 'front') {
   const gender = appearance?.gender === 'female' ? 'female' : 'male';
   const isSide = view === 'side' || view === 'side_right' || view === 'side_left';
-  const spriteGrid = getBoilerplateSpriteGrid(gender, isSide ? 'east' : 'south', 'idle', 0);
-  if (!spriteGrid) return buildNeutralCompositeGrid(appearance, isSide ? 'side' : 'front');
+  const baseKey = `base:${gender}:${isSide ? 'east' : 'south'}:idle:0`;
+  const rawGrid = CUSTOM_SPRITE_OVERRIDES.get(baseKey) || getBoilerplateSpriteGrid(gender, isSide ? 'east' : 'south', 'idle', 0);
+  if (!rawGrid) return buildNeutralCompositeGrid(appearance, isSide ? 'side' : 'front');
+  const spriteGrid = applySkinToneToSpriteGrid(rawGrid, appearance?.skinToneId, gender);
   const dressed = overlayFittedClothing(spriteGrid, appearance, isSide ? 'side' : 'front', 'idle', 0);
   return view === 'side_left' ? dressed.map((row) => [...row].reverse()) : dressed;
 }

@@ -3,18 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Trail Scene Editor</title>
-  <link rel="stylesheet" href="./scene-editor.css">
+  <title>Trail Scene Preview — Immutable Trail</title>
+  <link rel="stylesheet" href="./scene-editor.css?v=scene_split_1">
 </head>
 <body>
   <main class="editor">
     <header class="editor-header">
       <div>
         <p class="eyebrow">IMMUTABLE TRAIL / DEV TOOL</p>
-        <h1>Trail Scene Editor</h1>
-        <p class="subtitle">Preview the live game renderer without loading a journey or changing game state.</p>
+        <h1>Trail Scene Preview</h1>
+        <p class="subtitle">Preview the live game renderer, biomes, weather overlays, and river crossings.</p>
       </div>
-      <a class="back-link" href="./index.html">Return to game</a>
+      <nav class="editor-nav" aria-label="Developer tools navigation">
+        <a class="nav-pill active" href="./scene-editor.html" aria-current="page">🌄 Trail Scene Preview</a>
+        <a class="nav-pill primary-studio-link" href="./sprite-studio.html">🎨 Pixel Art Studio</a>
+        <a class="nav-pill" href="./index.html">🎮 Return to Game</a>
+      </nav>
     </header>
 
     <section class="workspace" aria-label="Scene preview and controls">
@@ -44,7 +48,10 @@
             <p class="eyebrow">SPRITE VIEWER</p>
             <h2>Character animation frames</h2>
           </div>
-          <output id="sprite-frame-readout" aria-live="polite">WALK · FRAME 1/8</output>
+          <div class="sprite-viewer-header-actions">
+            <output id="sprite-frame-readout" aria-live="polite">WALK · FRAME 1/8</output>
+            <a class="open-studio-cta" href="./sprite-studio.html">🎨 Edit Sprites in Studio →</a>
+          </div>
         </div>
         <div class="sprite-viewer-controls">
           <label>
@@ -68,91 +75,6 @@
           <button id="sprite-play" class="secondary-button" type="button" aria-pressed="false">Play cycle</button>
         </div>
         <div id="sprite-frame-strip" class="sprite-frame-strip" aria-label="Animation frames"></div>
-      </section>
-
-      <section class="mask-editor" id="mask-editor-section" aria-label="Foreground Z-mask pixel editor">
-        <div class="panel-heading mask-editor-heading">
-          <div>
-            <p class="eyebrow">FOREGROUND Z-MASK</p>
-            <h2>Masked pixel selection editor</h2>
-          </div>
-          <output id="mask-status-readout" aria-live="polite">DEFAULT · 11 PIXELS</output>
-        </div>
-        <p class="mask-editor-desc">
-          Click or drag across the 32×32 grid to modify foreground pixels (such as hands/limbs) that render in front of clothing for the active frame.
-        </p>
-        <div class="mask-editor-body">
-          <div class="mask-canvas-container">
-            <div class="mask-canvas-title">Mask Selection (Base Sprite)</div>
-            <canvas id="mask-editor-canvas" width="256" height="256" aria-label="32 by 32 pixel mask editor"></canvas>
-            <div class="mask-canvas-legend">
-              <span class="legend-chip legend-base"></span><span>Base Sprite</span>
-              <span class="legend-chip legend-mask"></span><span>Masked (Foreground)</span>
-            </div>
-          </div>
-          <div class="mask-preview-container">
-            <div class="mask-canvas-title">Clothed Preview (Live Result)</div>
-            <canvas id="mask-preview-canvas" width="256" height="256" aria-label="32 by 32 pixel clothed preview"></canvas>
-            <div class="mask-preview-controls">
-              <label class="mask-preview-backdrop-toggle">
-                <input id="mask-preview-backdrop" type="checkbox">
-                <span>Show Trail Backdrop</span>
-              </label>
-              <span id="mask-outfit-summary" class="mask-outfit-summary"></span>
-            </div>
-          </div>
-          <div class="mask-editor-controls">
-            <div class="mask-tool-row">
-              <button id="mask-mode-draw" class="mask-tool-btn active" type="button" aria-pressed="true" title="Draw / Add pixels to mask">
-                ✏️ Draw Mask
-              </button>
-              <button id="mask-mode-erase" class="mask-tool-btn secondary-button" type="button" aria-pressed="false" title="Erase pixels from mask">
-                🧹 Erase Mask
-              </button>
-            </div>
-            <div class="mask-action-row">
-              <button id="mask-btn-reset" class="secondary-button" type="button" title="Revert to AI / heuristic default mask for this frame">
-                Reset to default
-              </button>
-              <button id="mask-btn-clear" class="secondary-button" type="button" title="Clear all masked pixels for this frame">
-                Clear mask
-              </button>
-              <button id="mask-btn-copy" class="secondary-button" type="button" title="Copy coordinate array JSON to clipboard">
-                Copy JSON
-              </button>
-              <button id="mask-btn-paste" class="secondary-button" type="button" title="Paste coordinates JSON">
-                Paste JSON
-              </button>
-            </div>
-            <div class="mask-save-row">
-              <button id="mask-btn-save-project" class="mask-save-btn" type="button" title="Save custom masks directly into the project codebase (custom-sprite-masks.js & custom-sprite-masks.json)">
-                💾 Save to Project
-              </button>
-              <button id="mask-btn-download" class="secondary-button" type="button" title="Download custom-sprite-masks.json file">
-                ⬇️ Download JSON
-              </button>
-              <button id="mask-btn-load-file" class="secondary-button" type="button" title="Load masks from a JSON file">
-                📂 Load File
-              </button>
-              <input id="mask-file-input" type="file" accept=".json,application/json" hidden>
-            </div>
-            <div id="mask-save-status" class="mask-save-status" hidden></div>
-            <div class="mask-readout-panel">
-              <div class="mask-readout-row">
-                <span class="readout-label">Target Frame:</span>
-                <strong id="mask-target-readout">Male · Side · Walk Frame 1</strong>
-              </div>
-              <div class="mask-readout-row">
-                <span class="readout-label">Pixel under cursor:</span>
-                <span id="mask-pixel-info">X: --, Y: --</span>
-              </div>
-              <div class="mask-readout-row">
-                <span class="readout-label">Mask Source:</span>
-                <span id="mask-origin-info">Default heuristic mask</span>
-              </div>
-            </div>
-          </div>
-        </div>
       </section>
 
       <aside class="controls-panel" aria-label="Scene controls">
@@ -245,10 +167,10 @@
           <button id="play" type="button">Play</button>
           <button id="reset" class="secondary-button" type="button">Reset crossing</button>
         </div>
-        <p class="hint">This page uses the same pixel-art renderer as the game. Edit scene composition in <code>src/scene-renderer.js</code>, character and store art in <code>src/character-designer.js</code>, and wagon / river sprites in <code>src/scene-sprites.js</code>.</p>
+        <p class="hint">Need to fine-tune clothing presets, base body sprites, or hand depth Z-masks? Open the <a class="back-link" href="./sprite-studio.html">🎨 Pixel Art Studio</a>.</p>
       </aside>
     </section>
   </main>
-  <script type="module" src="./src/scene-editor.js?v=pixi_final_8"></script>
+  <script type="module" src="./src/scene-editor.js?v=scene_split_1"></script>
 </body>
 </html>
