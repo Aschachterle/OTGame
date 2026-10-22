@@ -30,6 +30,7 @@ import {
   PRESET_COLOR_DYES,
   SELECTABLE_ERAS,
   SKIN_TONES,
+  HAIR_COLORS,
   buildNeutralCompositeGrid,
   getCharacterFrameCount,
   getCharacterFrameGrid,
@@ -1050,6 +1051,13 @@ export function createUI() {
         return;
       }
 
+      const hairBtn = target.closest('[data-creator-hair]');
+      if (hairBtn instanceof HTMLButtonElement) {
+        invokeUiClick('hair');
+        handlers.onUpdateCreatorMember({ hairColorId: hairBtn.dataset.creatorHair });
+        return;
+      }
+
       const catBtn = target.closest('[data-creator-category]');
       if (catBtn instanceof HTMLButtonElement) {
         invokeUiClick('category');
@@ -1535,6 +1543,22 @@ export function createUI() {
                   `).join('')}
                 </div>
               </div>
+
+              <div class="creator-control-group">
+                <span class="creator-control-label">HAIR COLOR</span>
+                <div class="creator-swatch-row">
+                  ${HAIR_COLORS.map((hair) => `
+                    <button
+                      type="button"
+                      class="creator-swatch ${(activeApp.hairColorId || 'chestnut_brown') === hair.id ? 'is-active' : ''}"
+                      data-creator-hair="${escapeHtml(hair.id)}"
+                      title="${escapeHtml(hair.name)}"
+                      aria-label="Hair color ${escapeHtml(hair.name)}"
+                      style="background:${escapeHtml(hair.base)};"
+                    ></button>
+                  `).join('')}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1565,11 +1589,11 @@ export function createUI() {
 
             ${activeCategory === 'hats' ? `
               <div class="creator-subfilter-bar">
-                <span>HEADWEAR MODE (HAIR OR HAT IS MUTUALLY EXCLUSIVE):</span>
+                <span>CHOOSE A HAIRSTYLE OR HAT (ONE HEADWEAR ITEM):</span>
                 <div class="creator-subfilter-pills">
                   <button type="button" class="crt-secondary-btn ${headwearSubFilter === 'all' ? 'is-active' : ''}" data-creator-headwear-filter="all">All (${escapeHtml(eraMeta.shortLabel || eraMeta.label)})</button>
                   <button type="button" class="crt-secondary-btn ${headwearSubFilter === 'hat' ? 'is-active' : ''}" data-creator-headwear-filter="hat">Hats Only</button>
-                  <button type="button" class="crt-secondary-btn ${headwearSubFilter === 'hair' ? 'is-active' : ''}" data-creator-headwear-filter="hair">Hair Only</button>
+                  <button type="button" class="crt-secondary-btn ${headwearSubFilter === 'hair' ? 'is-active' : ''}" data-creator-headwear-filter="hair">Hairstyles Only</button>
                 </div>
               </div>
             ` : ''}
@@ -1626,7 +1650,7 @@ export function createUI() {
         <div class="creator-submit-row">
           <button class="crt-primary-btn" type="submit">Confirm Party &amp; Generate Opening Prologue [ENTER]</button>
         </div>
-        <p class="crt-help">Click any traveler card to customize their 32×32 sprite · All 4 travelers share the selected era · ENTER confirms the roster</p>
+        <p class="crt-help">Choose a hairstyle or hat for each traveler in Hair / Hat · New hairstyle designs are made in Clothing Studio · ENTER confirms the roster</p>
       </form>
     `;
   }

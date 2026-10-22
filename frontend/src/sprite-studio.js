@@ -16,6 +16,10 @@ import {
   saveCustomMasksToServer,
   summarizeMemberOutfit,
   applySkinToneToSpriteGrid,
+  applyHairColorToSpriteGrid,
+  getBaseSpriteGrid,
+  HAIR_COLORS,
+  getHairColorById,
   getClothingItemDefaultGrid,
   getCustomSpriteOverride,
   setCustomSpriteOverride,
@@ -37,6 +41,10 @@ import {
   MASK_SECTION_COLORS,
   getFrameSectionMap,
   setFrameSectionMap,
+  getFrameSkinRoleMap,
+  setFrameSkinRoleMap,
+  getFrameHairRoleMap,
+  setFrameHairRoleMap,
   getAutoDetectedSectionMap,
   sectionMapToGrid,
   sectionGridToMap
@@ -68,6 +76,8 @@ const dialogNewClothing = document.querySelector('#dialog-new-clothing');
 const formNewClothing = document.querySelector('#form-new-clothing');
 const newClothingName = document.querySelector('#new-clothing-name');
 const newClothingCategory = document.querySelector('#new-clothing-category');
+const newClothingHeadwearTypeField = document.querySelector('#new-clothing-headwear-type-field');
+const newClothingHeadwearType = document.querySelector('#new-clothing-headwear-type');
 const newClothingEra = document.querySelector('#new-clothing-era');
 const newClothingGender = document.querySelector('#new-clothing-gender');
 const newClothingTemplate = document.querySelector('#new-clothing-template');
@@ -145,6 +155,10 @@ const studioColorPanel = document.querySelector('#studio-color-panel');
 const studioActiveColor = document.querySelector('#studio-active-color');
 const studioHexInput = document.querySelector('#studio-hex-input');
 const studioColorNameReadout = document.querySelector('#studio-color-name-readout');
+const studioActionIcon = document.querySelector('#studio-action-icon');
+const studioActionTitle = document.querySelector('#studio-action-title');
+const studioActionDetail = document.querySelector('#studio-action-detail');
+const studioActionBadge = document.querySelector('#studio-action-badge');
 const studioUsedColorsCount = document.querySelector('#studio-used-colors-count');
 const studioUsedColorsGrid = document.querySelector('#studio-used-colors-grid');
 const studioPresetColorsGrid = document.querySelector('#studio-preset-colors-grid');
@@ -184,6 +198,7 @@ const previewPresetSelects = {
   accessories: document.querySelector('#preview-select-accessories')
 };
 const basePreviewWearOutfit = document.querySelector('#base-preview-wear-outfit');
+const basePreviewHairstyle = document.querySelector('#base-preview-hairstyle');
 
 // Party Travelers
 const editorPartySpecs = [
@@ -207,6 +222,7 @@ let selectedSpriteFrame = 0;
 let editorBgMode = 'dark-grid';
 let previewBgMode = 'dark-grid';
 let testPlayerSkinTone = 'warm_ivory';
+let testPlayerHairColor = 'chestnut_brown';
 
 // Populate Era Select
 for (const era of SELECTABLE_ERAS) {
@@ -321,6 +337,8 @@ function isFrameSpecificCategory(category) {
 
 let activeStudioTool = 'pencil';
 let studioBrushColor = '#8f563b';
+let activeSkinRole = null;
+let activeHairRole = null;
 let isStudioPainting = false;
 let studioHoverCoords = null;
 
@@ -482,6 +500,7 @@ function setActiveBrushColor(hexColor) {
     studioColorNameReadout.textContent = lookupColorName(clean);
   }
   highlightActiveSwatches();
+  updateStudioActionReadout();
 }
 
 function highlightActiveSwatches() {
@@ -583,6 +602,64 @@ function setActiveTool(tool) {
       t.btn.setAttribute('aria-pressed', 'false');
     }
   }
+  updateStudioActionReadout();
+}
+
+function updateStudioActionReadout(target = getStudioTargetInfo()) {
+  if (!studioActionTitle || !studioActionDetail || !studioActionBadge) return;
+
+  const role = target.mode === 'base' ? (activeSkinRole || activeHairRole) : null;
+  const roleNames = {
+    highlight: 'highlight',
+    base: 'main',
+    shadow: 'shadow',
+    'far-limb': 'far-limb'
+  };
+  const roleType = activeSkinRole ? 'skin' : activeHairRole ? 'hair' : '';
+  const roleDescription = role ? `${roleType} ${roleNames[role] || role}` : '';
+  const color = studioBrushColor.toUpperCase();
+
+  let icon = '✏️';
+  let title = 'Draw with brush color';
+  let detail = `Left-click paints ${color}. Right-click erases. Choose a skin or hair role to make base pixels recolor in the preview.`;
+  let badge = 'DRAW';
+
+  if (activeStudioTool === 'eraser') {
+    icon = '🧹';
+    title = 'Erase pixels';
+    detail = target.mode === 'mask'
+      ? 'Left-click or drag to remove the selected section assignment. Right-click also erases.'
+      : 'Left-click or drag to clear source pixels and remove any skin or hair role. Right-click also erases.';
+    badge = 'ERASE';
+  } else if (activeStudioTool === 'picker') {
+    icon = '💧';
+    title = target.mode === 'mask' ? 'Pick a section' : 'Pick a color';
+    detail = target.mode === 'mask'
+      ? 'Click a mapped pixel to select its section; the editor returns to Draw.'
+      : 'Click a painted pixel to sample its source color; the editor returns to Draw.';
+    badge = 'PICK';
+  } else if (activeStudioTool === 'fill') {
+    icon = '🪣';
+    title = roleDescription ? `Fill with ${roleDescription}` : 'Flood-fill area';
+    detail = target.mode === 'mask'
+      ? `Click a connected area to assign the selected section. Right-click fills it as unassigned.`
+      : `Click a connected area to fill with ${color}${roleDescription ? ` and tag it as ${roleDescription}` : ''}. Right-click clears the area.`;
+    badge = 'FILL';
+  } else if (target.mode === 'mask') {
+    icon = '🖌️';
+    title = 'Paint section assignment';
+    detail = 'Left-click paints the selected Z-mask section. Right-click erases the assignment.';
+    badge = 'SECTION';
+  } else if (roleDescription) {
+    title = `Draw ${roleDescription}`;
+    detail = `Left-click paints ${color} and tags the pixel as ${roleDescription}; the live preview remaps it. Right-click erases.`;
+    badge = `${roleType.toUpperCase()} · ${roleNames[role].toUpperCase()}`;
+  }
+
+  if (studioActionIcon) studioActionIcon.textContent = icon;
+  studioActionTitle.textContent = title;
+  studioActionDetail.textContent = detail;
+  studioActionBadge.textContent = badge;
 }
 
 function selectActiveMaskSection(sectionId) {
@@ -622,6 +699,8 @@ function captureTargetStateSnapshot() {
 
   const savedGrid = getCustomSpriteOverride(target.key);
   const frameBackups = {};
+  const skinRoleBackups = {};
+  const hairRoleBackups = {};
   if (target.mode === 'clothing' && target.isAllFrames) {
     for (let f = 0; f < 8; f++) {
       const fKey = `clothing:${target.presetId}:${target.view}:walk:${f}`;
@@ -636,17 +715,43 @@ function captureTargetStateSnapshot() {
       const fKey = `base:${target.gender}:${target.direction}:walk:${f}`;
       const fGrid = getCustomSpriteOverride(fKey);
       frameBackups[fKey] = fGrid ? fGrid.map((r) => [...r]) : null;
+      skinRoleBackups[fKey] = getFrameSkinRoleMap(
+        target.gender,
+        target.direction === 'south' ? 'front' : 'side',
+        'walk',
+        f
+      );
+      hairRoleBackups[fKey] = getFrameHairRoleMap(
+        target.gender,
+        target.direction === 'south' ? 'front' : 'side',
+        'walk',
+        f
+      );
     }
     const idleKey = `base:${target.gender}:${target.direction}:idle:0`;
     const idleGrid = getCustomSpriteOverride(idleKey);
     frameBackups[idleKey] = idleGrid ? idleGrid.map((r) => [...r]) : null;
+    skinRoleBackups[idleKey] = getFrameSkinRoleMap(
+      target.gender,
+      target.direction === 'south' ? 'front' : 'side',
+      'idle',
+      0
+    );
+    hairRoleBackups[idleKey] = getFrameHairRoleMap(
+      target.gender,
+      target.direction === 'south' ? 'front' : 'side',
+      'idle',
+      0
+    );
   }
   return {
     mode: target.mode,
     key: target.key,
     hadCustomOverride: savedGrid !== null,
     grid: savedGrid ? savedGrid.map((row) => [...row]) : null,
-    frameBackups
+    frameBackups,
+    skinRoleBackups,
+    hairRoleBackups
   };
 }
 
@@ -673,6 +778,30 @@ function restoreTargetStateSnapshot(snapshot) {
         } else {
           resetCustomSpriteOverride(fKey);
         }
+      }
+    }
+    if (snapshot.skinRoleBackups) {
+      for (const [key, roles] of Object.entries(snapshot.skinRoleBackups)) {
+        const [, gender, direction, animMode, frameIndex] = key.split(':');
+        setFrameSkinRoleMap(
+          gender,
+          direction === 'south' ? 'front' : 'side',
+          animMode,
+          Number(frameIndex),
+          roles
+        );
+      }
+    }
+    if (snapshot.hairRoleBackups) {
+      for (const [key, roles] of Object.entries(snapshot.hairRoleBackups)) {
+        const [, gender, direction, animMode, frameIndex] = key.split(':');
+        setFrameHairRoleMap(
+          gender,
+          direction === 'south' ? 'front' : 'side',
+          animMode,
+          Number(frameIndex),
+          roles
+        );
       }
     }
   }
@@ -829,6 +958,11 @@ function populateClothingPresets() {
   syncCategoryFrameBehavior();
 }
 
+function syncNewClothingHeadwearType() {
+  if (!newClothingHeadwearTypeField) return;
+  newClothingHeadwearTypeField.hidden = newClothingCategory?.value !== 'hats';
+}
+
 function syncStudioToActiveTravelerDefaults() {
   const memberIndex = Number(spriteCharacterControl?.value) || 0;
   const member = party[memberIndex] ?? party[0];
@@ -838,6 +972,7 @@ function syncStudioToActiveTravelerDefaults() {
 
   if (studioClothingGender) studioClothingGender.value = travelerGender;
   if (studioBaseGender) studioBaseGender.value = travelerGender;
+  populateBasePreviewHairstyles();
   if (studioClothingEra && selectedEra && studioClothingEra.value !== 'all') {
     studioClothingEra.value = selectedEra;
   }
@@ -910,6 +1045,43 @@ function populatePreviewOutfitSelectors() {
   }
 }
 
+function populateBasePreviewHairstyles() {
+  if (!basePreviewHairstyle) return;
+  const gender = studioBaseGender?.value === 'female' ? 'female' : 'male';
+  const previousValue = basePreviewHairstyle.value;
+  const presets = (INITIAL_CLOTHING_BOILERPLATE.hats || [])
+    .filter((preset) => !preset.isNone && preset.subType === 'hair')
+    .filter((preset) => !preset.gender || preset.gender === 'unisex' || preset.gender === gender)
+    .sort((a, b) => `${a.era || ''}:${a.name}`.localeCompare(`${b.era || ''}:${b.name}`));
+
+  basePreviewHairstyle.replaceChildren();
+  const noneOption = document.createElement('option');
+  noneOption.value = '__none__';
+  noneOption.textContent = 'No hairstyle · bald base';
+  basePreviewHairstyle.append(noneOption);
+
+  const eraGroups = new Map();
+  for (const preset of presets) {
+    const era = preset.era || 'Custom';
+    if (!eraGroups.has(era)) {
+      const group = document.createElement('optgroup');
+      group.label = era === 'oregon_trail' ? 'Oregon Trail' : era;
+      eraGroups.set(era, group);
+    }
+    const option = document.createElement('option');
+    option.value = preset.id;
+    option.textContent = `${preset.name}${preset.isCustom ? ' · Clothing Studio' : ''}`;
+    eraGroups.get(era).append(option);
+  }
+  for (const group of eraGroups.values()) basePreviewHairstyle.append(group);
+
+  if (previousValue && basePreviewHairstyle.querySelector(`option[value="${CSS.escape(previousValue)}"]`)) {
+    basePreviewHairstyle.value = previousValue;
+  } else {
+    basePreviewHairstyle.value = '__none__';
+  }
+}
+
 function buildCustomPreviewAppearance(baseAppearance, target) {
   const equipped = { ...(baseAppearance?.equippedPresets || {}) };
   const categories = ['hats', 'shirts', 'pants', 'shoes', 'accessories'];
@@ -930,10 +1102,15 @@ function buildCustomPreviewAppearance(baseAppearance, target) {
       const refTraveler = party.find((m) => m.appearance?.gender === target.gender) || party[0];
       Object.assign(equipped, refTraveler?.appearance?.equippedPresets || {});
     }
+    const nonePreset = (INITIAL_CLOTHING_BOILERPLATE.hats || []).find((preset) => preset.isNone);
+    equipped.hats = basePreviewHairstyle?.value && basePreviewHairstyle.value !== '__none__'
+      ? basePreviewHairstyle.value
+      : (nonePreset?.id || '');
     return {
       ...baseAppearance,
       gender: target.gender,
       skinToneId: testPlayerSkinTone || baseAppearance?.skinToneId || 'warm_ivory',
+      hairColorId: testPlayerHairColor || baseAppearance?.hairColorId || 'chestnut_brown',
       equippedPresets: equipped
     };
   }
@@ -958,6 +1135,7 @@ function buildCustomPreviewAppearance(baseAppearance, target) {
     ...baseAppearance,
     gender: target.mode === 'base' ? target.gender : baseAppearance.gender,
     skinToneId: testPlayerSkinTone || baseAppearance.skinToneId || 'warm_ivory',
+    hairColorId: testPlayerHairColor || baseAppearance.hairColorId || 'chestnut_brown',
     equippedPresets: equipped
   };
 }
@@ -1004,12 +1182,16 @@ function getStudioTargetInfo() {
     const direction = studioBaseDirection?.value || 'east';
     const rawVal = studioBaseFrame?.value || 'all';
     const isApplyAllChecked = studioBaseApplyAll ? studioBaseApplyAll.checked : (rawVal === 'all');
-    const isAllFrames = rawVal === 'all' || isApplyAllChecked;
+    const isAllFrames = direction === 'south' ? false : (rawVal === 'all' || isApplyAllChecked);
 
-    let animMode = 'walk';
+    let animMode = direction === 'south' ? 'idle' : 'walk';
     let frameIndex = 0;
     let key = '';
-    if (isAllFrames) {
+    if (direction === 'south') {
+      animMode = 'idle';
+      frameIndex = 0;
+      key = `base:${gender}:south:idle:0`;
+    } else if (isAllFrames) {
       animMode = spriteAnimationControl?.value || 'walk';
       frameIndex = selectedSpriteFrame;
       key = `base:${gender}:${direction}:${animMode}:${frameIndex}`;
@@ -1019,9 +1201,11 @@ function getStudioTargetInfo() {
       frameIndex = Number(fStr) || 0;
       key = `base:${gender}:${direction}:${animMode}:${frameIndex}`;
     }
-    const frameLabel = isAllFrames
-      ? `All Frames (Viewing ${animMode.toUpperCase()} #${frameIndex + 1})`
-      : `${animMode.toUpperCase()} Frame ${frameIndex + 1}`;
+    const frameLabel = direction === 'south'
+      ? 'Front Idle (1/1)'
+      : isAllFrames
+        ? `All Frames (Viewing ${animMode.toUpperCase()} #${frameIndex + 1})`
+        : `${animMode.toUpperCase()} Frame ${frameIndex + 1}`;
     const name = `${gender === 'female' ? '32Woman' : '32Man'} · ${direction === 'east' ? 'Side' : 'Front'} · ${frameLabel}`;
     return { mode, member, gender, direction, animMode, frameIndex, isAllFrames, key, name };
   }
@@ -1029,11 +1213,11 @@ function getStudioTargetInfo() {
   // mode === 'mask'
   const gender = member?.appearance?.gender === 'female' ? 'female' : 'male';
   const view = spriteViewControl?.value || 'side_right';
-  const animMode = spriteAnimationControl?.value || 'walk';
-  const frameCount = getCharacterFrameCount(member?.appearance, view, animMode);
-  const activeFrame = ((selectedSpriteFrame % frameCount) + frameCount) % frameCount;
+  const animMode = view === 'front' ? 'idle' : (spriteAnimationControl?.value || 'walk');
+  const frameCount = view === 'front' ? 1 : getCharacterFrameCount(member?.appearance, view, animMode);
+  const activeFrame = view === 'front' ? 0 : (((selectedSpriteFrame % frameCount) + frameCount) % frameCount);
   const key = `mask:${gender}:${view}:${animMode}:${activeFrame}`;
-  const name = `Z-Mask: ${member.name} (${view === 'front' ? 'Front' : 'Side'} Frame ${activeFrame + 1})`;
+  const name = `Z-Mask: ${member.name} (${view === 'front' ? 'Front Idle' : `Side ${animMode.toUpperCase()} Frame ${activeFrame + 1}`})`;
   return { mode, member, gender, view, animMode, frameIndex: activeFrame, frameCount, isAllFrames: false, key, name };
 }
 
@@ -1062,15 +1246,14 @@ function getStudioWorkingGrid(target) {
     }
   }
   if (target.mode === 'base') {
-    const fKey = `base:${target.gender}:${target.direction}:${target.animMode}:${target.frameIndex}`;
-    const customFrame = getCustomSpriteOverride(fKey);
-    if (customFrame) return customFrame;
-    const universalKey = `base:${target.gender}:${target.direction}`;
-    const customUniversal = getCustomSpriteOverride(universalKey);
-    if (customUniversal) return customUniversal;
-    const boilerplate = getBaseBoilerplateGrid(target.gender, target.direction === 'south' ? 'front' : 'side', target.animMode, target.frameIndex);
-    if (boilerplate) return boilerplate.map((row) => [...row]);
-    return Array.from({ length: 32 }, () => Array(32).fill(null));
+    const sourceGrid = getBaseSpriteGrid(
+      target.gender,
+      target.direction,
+      target.animMode,
+      target.frameIndex
+    );
+    if (!sourceGrid) return Array.from({ length: 32 }, () => Array(32).fill(null));
+    return sourceGrid.map((row) => [...row]);
   }
   return null;
 }
@@ -1162,6 +1345,7 @@ function updateContextBreadcrumbAndRule(target) {
 function renderStudioEditor() {
   syncCategoryFrameBehavior();
   const target = getStudioTargetInfo();
+  updateStudioActionReadout(target);
   if (studioTargetName) studioTargetName.textContent = target.name;
   updateContextBreadcrumbAndRule(target);
 
@@ -1191,7 +1375,7 @@ function renderStudioEditor() {
     if (studioColorPanel) studioColorPanel.hidden = false;
     if (maskCanvasLegend) maskCanvasLegend.hidden = true;
     if (studioShowUnderlay?.parentElement) studioShowUnderlay.parentElement.hidden = true;
-    if (studioCanvasTitle) studioCanvasTitle.textContent = '32×32 BASE SPRITE EDITOR';
+    if (studioCanvasTitle) studioCanvasTitle.textContent = 'EDIT SOURCE PIXELS · 32×32';
   } else {
     if (studioClothingControls) studioClothingControls.hidden = true;
     if (studioBaseControls) studioBaseControls.hidden = true;
@@ -1539,7 +1723,7 @@ function renderStudioEditor() {
 
   if (maskOutfitSummary) {
     if (target.mode === 'base' && basePreviewWearOutfit && !basePreviewWearOutfit.checked) {
-      maskOutfitSummary.textContent = `Bare Base Sprite · Skin: ${lookupSkinToneName(testPlayerSkinTone)}`;
+      maskOutfitSummary.textContent = `Bare Base Sprite · Skin: ${lookupSkinToneName(testPlayerSkinTone)} · Hair: ${lookupHairColorName(testPlayerHairColor)}`;
     } else {
       maskOutfitSummary.textContent = summarizeMemberOutfit({ appearance: previewAppearance, name: previewMember.name });
     }
@@ -1551,7 +1735,6 @@ function renderStudioEditor() {
 // ============================================================================
 function floodFill(grid, startX, startY, newColor) {
   const targetColor = grid[startY]?.[startX] ?? null;
-  if (targetColor === newColor) return;
 
   const queue = [[startX, startY]];
   const visited = new Set();
@@ -1579,6 +1762,52 @@ function floodFill(grid, startX, startY, newColor) {
         }
       }
     }
+  }
+  return Array.from(visited, (key) => key.split(',').map(Number));
+}
+
+function updateSkinRolePixels(gender, direction, animMode, frameIndex, coords, role) {
+  if (!Array.isArray(coords) || coords.length === 0) return;
+  const view = direction === 'south' ? 'front' : 'side';
+  const roles = getFrameSkinRoleMap(gender, view, animMode, frameIndex);
+  const edited = new Set(coords.map(([x, y]) => `${x},${y}`));
+  const hasRoleToClear = Object.values(roles).some((roleCoords) =>
+    Array.isArray(roleCoords) && roleCoords.some(([x, y]) => edited.has(`${x},${y}`))
+  );
+  if (!role && !hasRoleToClear) return;
+  for (const existingRole of Object.keys(roles)) {
+    roles[existingRole] = (roles[existingRole] || []).filter(([x, y]) => !edited.has(`${x},${y}`));
+  }
+  if (role) {
+    roles[role] = [...(roles[role] || []), ...coords.map(([x, y]) => [x, y])];
+  }
+  setFrameSkinRoleMap(gender, view, animMode, frameIndex, roles);
+}
+
+function updateHairRolePixels(gender, direction, animMode, frameIndex, coords, role) {
+  if (!Array.isArray(coords) || coords.length === 0) return;
+  const view = direction === 'south' ? 'front' : 'side';
+  const roles = getFrameHairRoleMap(gender, view, animMode, frameIndex);
+  const edited = new Set(coords.map(([x, y]) => `${x},${y}`));
+  const hasRoleToClear = Object.values(roles).some((roleCoords) =>
+    Array.isArray(roleCoords) && roleCoords.some(([x, y]) => edited.has(`${x},${y}`))
+  );
+  if (!role && !hasRoleToClear) return;
+  for (const existingRole of Object.keys(roles)) {
+    roles[existingRole] = (roles[existingRole] || []).filter(([x, y]) => !edited.has(`${x},${y}`));
+  }
+  if (role) roles[role] = [...(roles[role] || []), ...coords.map(([x, y]) => [x, y])];
+  setFrameHairRoleMap(gender, view, animMode, frameIndex, roles);
+}
+
+function clearSkinRolesForBaseTarget(target, allFrames = false) {
+  const view = target.direction === 'south' ? 'front' : 'side';
+  const frames = allFrames
+    ? [...Array.from({ length: 8 }, (_, frameIndex) => ['walk', frameIndex]), ['idle', 0]]
+    : [[target.animMode, target.frameIndex]];
+  for (const [animMode, frameIndex] of frames) {
+    setFrameSkinRoleMap(target.gender, view, animMode, frameIndex, {});
+    setFrameHairRoleMap(target.gender, view, animMode, frameIndex, {});
   }
 }
 
@@ -1623,6 +1852,9 @@ function applyStudioPixel(x, y, isRightClick = false) {
     }
   } else {
     const grid = getStudioWorkingGrid(target);
+    let paintedPixels = [];
+    const skinRoleToAssign = activeStudioTool === 'eraser' || isRightClick ? null : activeSkinRole;
+    const hairRoleToAssign = activeStudioTool === 'eraser' || isRightClick ? null : activeHairRole;
 
     if (activeStudioTool === 'picker') {
       const picked = grid[y]?.[x] || null;
@@ -1637,14 +1869,18 @@ function applyStudioPixel(x, y, isRightClick = false) {
 
     if (activeStudioTool === 'fill') {
       const fillColor = (activeStudioTool === 'eraser' || isRightClick) ? null : studioBrushColor;
-      floodFill(grid, x, y, fillColor);
+      paintedPixels = floodFill(grid, x, y, fillColor);
       setCustomSpriteOverride(target.key, grid);
     } else if (activeStudioTool === 'eraser' || isRightClick) {
-      if (grid[y][x] === null) return;
+      if (grid[y][x] === null) {
+        paintedPixels = [[x, y]];
+      } else {
+        paintedPixels = [[x, y]];
+      }
       grid[y][x] = null;
       setCustomSpriteOverride(target.key, grid);
     } else {
-      if (grid[y][x] === studioBrushColor) return;
+      paintedPixels = [[x, y]];
       grid[y][x] = studioBrushColor;
       setCustomSpriteOverride(target.key, grid);
     }
@@ -1654,6 +1890,13 @@ function applyStudioPixel(x, y, isRightClick = false) {
         resetCustomSpriteOverride(`clothing:${target.presetId}:${target.view}:walk:${f}`);
       }
       resetCustomSpriteOverride(`clothing:${target.presetId}:${target.view}:idle:0`);
+    } else if (target.mode === 'base' && target.direction === 'south') {
+      setCustomSpriteOverride(`base:${target.gender}:south:idle:0`, grid.map((r) => [...r]));
+      setCustomSpriteOverride(`base:${target.gender}:south:walk:0`, grid.map((r) => [...r]));
+      updateSkinRolePixels(target.gender, 'south', 'idle', 0, paintedPixels, skinRoleToAssign);
+      updateSkinRolePixels(target.gender, 'south', 'walk', 0, paintedPixels, skinRoleToAssign);
+      updateHairRolePixels(target.gender, 'south', 'idle', 0, paintedPixels, hairRoleToAssign);
+      updateHairRolePixels(target.gender, 'south', 'walk', 0, paintedPixels, hairRoleToAssign);
     } else if (target.mode === 'base' && target.isAllFrames) {
       // Propagate the pixel edit to all 8 walk frames and idle frame while preserving each frame's pose
       const fillColor = (activeStudioTool === 'eraser' || isRightClick) ? null : studioBrushColor;
@@ -1662,21 +1905,36 @@ function applyStudioPixel(x, y, isRightClick = false) {
         const fGrid = getCustomSpriteOverride(fKey) || getBaseBoilerplateGrid(target.gender, target.direction === 'south' ? 'front' : 'side', 'walk', f);
         if (fGrid) {
           const copy = fGrid.map((r) => [...r]);
-          if (activeStudioTool === 'fill') floodFill(copy, x, y, fillColor);
-          else if (activeStudioTool === 'eraser' || isRightClick) copy[y][x] = null;
-          else copy[y][x] = studioBrushColor;
+          let framePixels;
+          if (activeStudioTool === 'fill') framePixels = floodFill(copy, x, y, fillColor);
+          else {
+            framePixels = [[x, y]];
+            if (activeStudioTool === 'eraser' || isRightClick) copy[y][x] = null;
+            else copy[y][x] = studioBrushColor;
+          }
           setCustomSpriteOverride(fKey, copy);
+          updateSkinRolePixels(target.gender, target.direction, 'walk', f, framePixels, skinRoleToAssign);
+          updateHairRolePixels(target.gender, target.direction, 'walk', f, framePixels, hairRoleToAssign);
         }
       }
       const idleKey = `base:${target.gender}:${target.direction}:idle:0`;
       const idleGrid = getCustomSpriteOverride(idleKey) || getBaseBoilerplateGrid(target.gender, target.direction === 'south' ? 'front' : 'side', 'idle', 0);
       if (idleGrid) {
         const copy = idleGrid.map((r) => [...r]);
-        if (activeStudioTool === 'fill') floodFill(copy, x, y, fillColor);
-        else if (activeStudioTool === 'eraser' || isRightClick) copy[y][x] = null;
-        else copy[y][x] = studioBrushColor;
+        let idlePixels;
+        if (activeStudioTool === 'fill') idlePixels = floodFill(copy, x, y, fillColor);
+        else {
+          idlePixels = [[x, y]];
+          if (activeStudioTool === 'eraser' || isRightClick) copy[y][x] = null;
+          else copy[y][x] = studioBrushColor;
+        }
         setCustomSpriteOverride(idleKey, copy);
+        updateSkinRolePixels(target.gender, target.direction, 'idle', 0, idlePixels, skinRoleToAssign);
+        updateHairRolePixels(target.gender, target.direction, 'idle', 0, idlePixels, hairRoleToAssign);
       }
+    } else if (target.mode === 'base') {
+      updateSkinRolePixels(target.gender, target.direction, target.animMode, target.frameIndex, paintedPixels, skinRoleToAssign);
+      updateHairRolePixels(target.gender, target.direction, target.animMode, target.frameIndex, paintedPixels, hairRoleToAssign);
     }
   }
 
@@ -1848,7 +2106,7 @@ if (maskBtnAutodetectAll) {
     commitUndoSnapshotIfChanged(before);
     renderSpriteViewer();
     renderStudioEditor();
-    showSaveStatus('Auto-detected and mapped all 10 anatomical sections!', false);
+    showSaveStatus('Auto-detected and mapped all 16 anatomical sections!', false);
   });
 }
 
@@ -2064,6 +2322,7 @@ function performCreateNewClothing() {
   const category = newClothingCategory?.value || studioClothingCategory?.value || 'shirts';
   const era = newClothingEra?.value || studioClothingEra?.value || 'oregon_trail';
   const gender = newClothingGender?.value || 'unisex';
+  const subType = category === 'hats' ? (newClothingHeadwearType?.value || 'hair') : null;
   const templateMode = newClothingTemplate?.value || 'blank';
   const basePresetId = templateMode === 'clone' ? studioClothingPreset?.value : null;
 
@@ -2074,6 +2333,7 @@ function performCreateNewClothing() {
     category,
     era,
     gender,
+    subType,
     basePresetId
   });
 
@@ -2149,6 +2409,10 @@ studioClothingBtnNew?.addEventListener('click', (evt) => {
   if (newClothingCategory && studioClothingCategory) {
     newClothingCategory.value = studioClothingCategory.value;
   }
+  if (newClothingHeadwearType) {
+    newClothingHeadwearType.value = 'hair';
+  }
+  syncNewClothingHeadwearType();
   if (newClothingEra && studioClothingEra) {
     newClothingEra.value = studioClothingEra.value !== 'all' ? studioClothingEra.value : 'oregon_trail';
   }
@@ -2172,6 +2436,8 @@ studioClothingBtnNew?.addEventListener('click', (evt) => {
     }
   }
 });
+
+newClothingCategory?.addEventListener('change', syncNewClothingHeadwearType);
 
 formNewClothing?.addEventListener('submit', (evt) => {
   evt.preventDefault();
@@ -2230,15 +2496,73 @@ studioClothingFrame?.addEventListener('change', () => {
 
 studioBaseGender?.addEventListener('change', () => {
   if (studioClothingGender) studioClothingGender.value = studioBaseGender.value;
+  populateBasePreviewHairstyles();
   populateClothingPresets();
   renderSpriteViewer();
   renderStudioEditor();
 });
 
+basePreviewHairstyle?.addEventListener('change', () => {
+  renderSpriteViewer();
+});
+
+function syncQuickPoseButtons() {
+  const mode = document.body?.dataset?.studioMode || studioModeSelect?.value || 'clothing';
+  const isFront = mode === 'base'
+    ? studioBaseDirection?.value === 'south'
+    : spriteViewControl?.value === 'front';
+  const isIdle = mode === 'base'
+    ? (isFront || studioBaseFrame?.value === 'idle:0')
+    : (isFront || spriteAnimationControl?.value === 'idle');
+  const activePose = isFront ? 'front-idle' : (isIdle ? 'side-idle' : 'side-walk');
+  document.querySelectorAll('.pose-quick-btn').forEach((btn) => {
+    btn.classList.toggle('active', btn.getAttribute('data-quick-pose') === activePose);
+  });
+}
+
+document.querySelectorAll('.pose-quick-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const pose = btn.getAttribute('data-quick-pose');
+    stopSpritePlayback();
+    if (pose === 'front-idle') {
+      if (spriteViewControl) spriteViewControl.value = 'front';
+      if (spriteAnimationControl) spriteAnimationControl.value = 'idle';
+      if (studioBaseDirection) studioBaseDirection.value = 'south';
+      if (studioBaseFrame) studioBaseFrame.value = 'idle:0';
+      if (studioBaseApplyAll) studioBaseApplyAll.checked = false;
+      selectedSpriteFrame = 0;
+    } else if (pose === 'side-idle') {
+      if (spriteViewControl) spriteViewControl.value = 'side_right';
+      if (spriteAnimationControl) spriteAnimationControl.value = 'idle';
+      if (studioBaseDirection) studioBaseDirection.value = 'east';
+      if (studioBaseFrame) studioBaseFrame.value = 'idle:0';
+      if (studioBaseApplyAll) studioBaseApplyAll.checked = false;
+      selectedSpriteFrame = 0;
+    } else {
+      if (spriteViewControl) spriteViewControl.value = 'side_right';
+      if (spriteAnimationControl) spriteAnimationControl.value = 'walk';
+      if (studioBaseDirection) studioBaseDirection.value = 'east';
+      if (studioBaseFrame) studioBaseFrame.value = 'all';
+      if (studioBaseApplyAll) studioBaseApplyAll.checked = true;
+      selectedSpriteFrame = 0;
+    }
+    syncQuickPoseButtons();
+    renderSpriteViewer();
+    renderStudioEditor();
+  });
+});
+
 studioBaseDirection?.addEventListener('change', () => {
   const isFront = studioBaseDirection.value === 'south';
   if (spriteViewControl) spriteViewControl.value = isFront ? 'front' : 'side_right';
+  if (spriteAnimationControl) spriteAnimationControl.value = isFront ? 'idle' : 'walk';
   if (studioClothingView) studioClothingView.value = isFront ? 'front' : 'side';
+  if (isFront) {
+    if (studioBaseFrame) studioBaseFrame.value = 'idle:0';
+    if (studioBaseApplyAll) studioBaseApplyAll.checked = false;
+    selectedSpriteFrame = 0;
+  }
+  syncQuickPoseButtons();
   renderSpriteViewer();
   renderStudioEditor();
 });
@@ -2255,6 +2579,7 @@ studioBaseFrame?.addEventListener('change', () => {
       spriteAnimationControl.value = animMode;
     }
   }
+  syncQuickPoseButtons();
   renderSpriteViewer();
   renderStudioEditor();
 });
@@ -2341,6 +2666,7 @@ studioBtnReset?.addEventListener('click', () => {
       }
       resetCustomSpriteOverride(`base:${target.gender}:${target.direction}:idle:0`);
     }
+    clearSkinRolesForBaseTarget(target, target.isAllFrames);
   } else {
     resetCustomSpriteOverride(target.key);
   }
@@ -2369,6 +2695,7 @@ studioBtnClear?.addEventListener('click', () => {
       }
       setCustomSpriteOverride(`base:${target.gender}:${target.direction}:idle:0`, emptyGrid);
     }
+    if (target.mode === 'base') clearSkinRolesForBaseTarget(target, target.isAllFrames);
   }
   commitUndoSnapshotIfChanged(before);
   renderSpriteViewer();
@@ -2537,8 +2864,12 @@ if (studioBtnClearCache) {
     updateUndoRedoButtons();
     syncStudioToActiveTravelerDefaults();
     testPlayerSkinTone = 'warm_ivory';
+    testPlayerHairColor = 'chestnut_brown';
     document.querySelectorAll('[data-test-skintone]').forEach((b) => {
       b.classList.toggle('active', b.getAttribute('data-test-skintone') === 'warm_ivory');
+    });
+    document.querySelectorAll('[data-test-hair]').forEach((b) => {
+      b.classList.toggle('active', b.getAttribute('data-test-hair') === 'chestnut_brown');
     });
     renderSpriteViewer();
     renderStudioEditor();
@@ -2556,7 +2887,8 @@ if (studioBtnApplySkintone) {
       const fKey = `base:${target.gender}:${target.direction}:walk:${f}`;
       const fGrid = getCustomSpriteOverride(fKey) || getBaseBoilerplateGrid(target.gender, target.direction === 'south' ? 'front' : 'side', 'walk', f);
       if (fGrid) {
-        const recolored = applySkinToneToSpriteGrid(fGrid, chosenSkinTone, target.gender);
+        const skinRoles = getFrameSkinRoleMap(target.gender, target.direction === 'south' ? 'front' : 'side', 'walk', f);
+        const recolored = applySkinToneToSpriteGrid(fGrid, chosenSkinTone, target.gender, skinRoles);
         setCustomSpriteOverride(fKey, recolored);
       }
     }
@@ -2564,7 +2896,8 @@ if (studioBtnApplySkintone) {
     const idleKey = `base:${target.gender}:${target.direction}:idle:0`;
     const idleGrid = getCustomSpriteOverride(idleKey) || getBaseBoilerplateGrid(target.gender, target.direction === 'south' ? 'front' : 'side', 'idle', 0);
     if (idleGrid) {
-      const recolored = applySkinToneToSpriteGrid(idleGrid, chosenSkinTone, target.gender);
+      const skinRoles = getFrameSkinRoleMap(target.gender, target.direction === 'south' ? 'front' : 'side', 'idle', 0);
+      const recolored = applySkinToneToSpriteGrid(idleGrid, chosenSkinTone, target.gender, skinRoles);
       setCustomSpriteOverride(idleKey, recolored);
     }
 
@@ -2594,15 +2927,73 @@ if (studioBaseApplyAll) {
 
 // Skin Painter Buttons
 document.querySelectorAll('.skin-role-btn').forEach((btn) => {
+  btn.setAttribute('aria-pressed', 'false');
   btn.addEventListener('click', () => {
-    const col = btn.getAttribute('data-color');
-    if (col) {
-      setActiveBrushColor(col);
-      if (activeStudioTool === 'eraser' || activeStudioTool === 'picker') {
-        setActiveTool('pencil');
-      }
-      document.querySelectorAll('.skin-role-btn').forEach((b) => b.classList.toggle('active-role', b === btn));
+    const role = btn.getAttribute('data-role');
+    if (activeSkinRole === role) {
+      activeSkinRole = null;
+      document.querySelectorAll('.skin-role-btn').forEach((b) => {
+        b.classList.remove('active-role');
+        b.setAttribute('aria-pressed', 'false');
+      });
+      updateStudioActionReadout();
+      showSaveStatus('Skin painter off. Repainted pixels will no longer carry a skin tint role.', false);
+      return;
     }
+    const col = btn.getAttribute('data-color');
+    activeSkinRole = role || 'base';
+    activeHairRole = null;
+    document.querySelectorAll('.hair-role-btn').forEach((b) => {
+      b.classList.remove('active-role');
+      b.setAttribute('aria-pressed', 'false');
+    });
+    if (col) setActiveBrushColor(col);
+    if (activeStudioTool === 'eraser' || activeStudioTool === 'picker') {
+      setActiveTool('pencil');
+    }
+    document.querySelectorAll('.skin-role-btn').forEach((b) => {
+      const selected = b === btn;
+      b.classList.toggle('active-role', selected);
+      b.setAttribute('aria-pressed', String(selected));
+    });
+    updateStudioActionReadout();
+    showSaveStatus(`Skin painter ${activeSkinRole} role active. Choose any brush color to paint tintable skin pixels.`, false);
+  });
+});
+
+// Hair Painter Buttons
+document.querySelectorAll('.hair-role-btn').forEach((btn) => {
+  btn.setAttribute('aria-pressed', 'false');
+  btn.addEventListener('click', () => {
+    const role = btn.getAttribute('data-hair-role');
+    if (activeHairRole === role) {
+      activeHairRole = null;
+      document.querySelectorAll('.hair-role-btn').forEach((b) => {
+        b.classList.remove('active-role');
+        b.setAttribute('aria-pressed', 'false');
+      });
+      updateStudioActionReadout();
+      showSaveStatus('Hair painter off. Repainted pixels will no longer carry a hair tint role.', false);
+      return;
+    }
+    const col = btn.getAttribute('data-color');
+    activeHairRole = role || 'base';
+    activeSkinRole = null;
+    document.querySelectorAll('.skin-role-btn').forEach((b) => {
+      b.classList.remove('active-role');
+      b.setAttribute('aria-pressed', 'false');
+    });
+    if (col) setActiveBrushColor(col);
+    if (activeStudioTool === 'eraser' || activeStudioTool === 'picker') {
+      setActiveTool('pencil');
+    }
+    document.querySelectorAll('.hair-role-btn').forEach((b) => {
+      const selected = b === btn;
+      b.classList.toggle('active-role', selected);
+      b.setAttribute('aria-pressed', String(selected));
+    });
+    updateStudioActionReadout();
+    showSaveStatus(`Hair painter ${activeHairRole} role active. Choose any brush color to paint tintable hair pixels.`, false);
   });
 });
 
@@ -2616,6 +3007,22 @@ document.querySelectorAll('[data-test-skintone]').forEach((btn) => {
     showSaveStatus(`Testing player skin tone: ${lookupSkinToneName(testPlayerSkinTone)}`, false);
   });
 });
+
+// Test Player Hair Color Pills in Live Preview
+document.querySelectorAll('[data-test-hair]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    testPlayerHairColor = btn.getAttribute('data-test-hair') || 'chestnut_brown';
+    document.querySelectorAll('[data-test-hair]').forEach((b) => b.classList.toggle('active', b === btn));
+    renderSpriteViewer();
+    renderStudioEditor();
+    showSaveStatus(`Testing player hair color: ${lookupHairColorName(testPlayerHairColor)}`, false);
+  });
+});
+
+function lookupHairColorName(id) {
+  const hair = HAIR_COLORS.find((h) => h.id === id);
+  return hair ? hair.name : id;
+}
 
 function lookupSkinToneName(id) {
   const map = {
@@ -2633,6 +3040,7 @@ function lookupSkinToneName(id) {
 renderPresetColorPalette();
 populatePreviewOutfitSelectors();
 syncStudioToActiveTravelerDefaults();
+populateBasePreviewHairstyles();
 updateUndoRedoButtons();
 if (document.querySelector('#mask-section-palette')) {
   selectActiveMaskSection(activeMaskSection);

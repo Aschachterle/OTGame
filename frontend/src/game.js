@@ -142,15 +142,40 @@ export function createGameController({ state, ui, api, audio }) {
   async function animateWalkToGeneralStore() {
     stopWagonAnimation();
     state.landscapeMoving = true;
-    const steps = 60;
-    for (let i = 1; i <= steps; i += 1) {
-      state.generalStoreApproachProgress = i / steps;
-      state.wagonAnimationFrame = Math.floor(i / 2) % 12;
-      ui.refreshLandscapeCanvas?.(state);
-      await delay(55);
-    }
+    const durationMs = 3300;
+    const startProgress = state.generalStoreApproachProgress ?? 0;
+    const startTime = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+
+    await new Promise((resolve) => {
+      function tick(now) {
+        const elapsed = Math.max(0, now - startTime);
+        const rawT = Math.min(1, elapsed / durationMs);
+
+        state.generalStoreApproachProgress = startProgress + (1 - startProgress) * rawT;
+
+        ui.refreshLandscapeCanvas?.(state);
+
+        if (rawT < 1) {
+          if (typeof window !== 'undefined' && window.requestAnimationFrame) {
+            window.requestAnimationFrame(tick);
+          } else {
+            setTimeout(() => tick(Date.now()), 16);
+          }
+        } else {
+          resolve();
+        }
+      }
+
+      if (typeof window !== 'undefined' && window.requestAnimationFrame) {
+        window.requestAnimationFrame(tick);
+      } else {
+        setTimeout(() => tick(Date.now()), 16);
+      }
+    });
+
     state.generalStoreApproachProgress = 1;
     state.landscapeMoving = false;
+    state.wagonAnimationFrame = 0;
     ui.refreshLandscapeCanvas?.(state);
   }
 
@@ -162,22 +187,41 @@ export function createGameController({ state, ui, api, audio }) {
     const stepSpeed = Math.max(1.0, (paceCfg?.speed || 1.0) * 1.8);
     ui.refreshLandscapeCanvas?.(state);
 
-    // Keep walking until the General Store is completely out of the viewer.
-    // The store building is positioned at 24 - Math.floor(scrollOffset * 0.8) and is 56px wide.
-    // At scrollOffset >= 140, it is at <= -88px, completely off-screen to the left.
-    while ((state.landscapeScrollX || 0) < 140) {
-      state.wagonAnimationFrame = (state.wagonAnimationFrame + 1) % Math.max(12, getFrameCount());
-      state.landscapeScrollX = (state.landscapeScrollX || 0) + stepSpeed;
-      ui.refreshLandscapeCanvas?.(state);
-      await delay(55);
-    }
-    // A brief settle on the open trail so the party is firmly underway
-    for (let extra = 0; extra < 10; extra += 1) {
-      state.wagonAnimationFrame = (state.wagonAnimationFrame + 1) % Math.max(12, getFrameCount());
-      state.landscapeScrollX = (state.landscapeScrollX || 0) + stepSpeed;
-      ui.refreshLandscapeCanvas?.(state);
-      await delay(55);
-    }
+    const targetScroll = 155;
+    const startScroll = state.landscapeScrollX || 0;
+    const distance = Math.max(1, targetScroll - startScroll);
+    const durationMs = Math.max(800, Math.round((distance / (stepSpeed * 14)) * 1000));
+    const startTime = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+
+    await new Promise((resolve) => {
+      function tick(now) {
+        const elapsed = Math.max(0, now - startTime);
+        const rawT = Math.min(1, elapsed / durationMs);
+
+        state.landscapeScrollX = startScroll + distance * rawT;
+        const stepRate = 18;
+        state.wagonAnimationFrame = Math.floor((elapsed / 1000) * stepRate);
+
+        ui.refreshLandscapeCanvas?.(state);
+
+        if (rawT < 1) {
+          if (typeof window !== 'undefined' && window.requestAnimationFrame) {
+            window.requestAnimationFrame(tick);
+          } else {
+            setTimeout(() => tick(Date.now()), 16);
+          }
+        } else {
+          resolve();
+        }
+      }
+
+      if (typeof window !== 'undefined' && window.requestAnimationFrame) {
+        window.requestAnimationFrame(tick);
+      } else {
+        setTimeout(() => tick(Date.now()), 16);
+      }
+    });
+
     stopWagonAnimation();
   }
 
@@ -2485,6 +2529,9 @@ export function createGameController({ state, ui, api, audio }) {
     }
     if (typeof update.skinToneId === 'string') {
       member.appearance.skinToneId = update.skinToneId;
+    }
+    if (typeof update.hairColorId === 'string') {
+      member.appearance.hairColorId = update.hairColorId;
     }
     if (typeof update.creatorCategory === 'string') {
       state.creatorCategory = update.creatorCategory;

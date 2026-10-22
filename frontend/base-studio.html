@@ -66,7 +66,7 @@
             <span>2. Orientation</span>
             <select id="studio-base-direction">
               <option value="east" selected>Side Profile (East)</option>
-              <option value="south">Front View (South)</option>
+              <option value="south">Front View (South · Idle)</option>
             </select>
           </label>
           <label>
@@ -84,6 +84,11 @@
               <option value="idle:0">Idle Frame 1 Only</option>
             </select>
           </label>
+          <div class="pose-quick-pills" role="group" aria-label="Quick base pose switcher" style="display:flex; gap:4px; align-self:flex-end; padding-bottom:2px;">
+            <button type="button" class="secondary-button pose-quick-btn active" data-quick-pose="side-walk" title="Edit Side Profile 8-frame Walk Cycle">🚶 Side Walk</button>
+            <button type="button" class="secondary-button pose-quick-btn" data-quick-pose="side-idle" title="Edit Side Profile Standing Idle">🧍 Side Idle</button>
+            <button type="button" class="secondary-button pose-quick-btn" data-quick-pose="front-idle" title="Edit Front-Facing (South) Standing Idle">🧍‍♂️ Front Idle (South)</button>
+          </div>
           <label class="toggle-check-label" style="align-self: flex-end; padding-bottom: 6px;">
             <input id="studio-base-apply-all" type="checkbox" checked>
             <span>Propagate edits across all frames</span>
@@ -123,11 +128,11 @@
     </section>
 
     <!-- Step 3: 3-Column Focused Base Sprite Workspace -->
-    <section class="studio-workspace-grid" aria-label="Base Sprite Canvas, Skin Painter, and Live Skin Preview">
+    <section class="studio-workspace-grid" aria-label="Base Sprite editing workspace with source canvas, tools, and live character preview">
       <!-- COLUMN 1: 32×32 BASE SPRITE EDITOR CANVAS -->
       <div class="studio-col studio-col-canvas">
         <div class="studio-col-header">
-          <span id="studio-canvas-title" class="col-title">32×32 BASE SPRITE EDITOR</span>
+          <span id="studio-canvas-title" class="col-title">EDIT SOURCE PIXELS · 32×32</span>
           <strong id="studio-target-name" class="target-short-name">32Man · Side · All Frames</strong>
         </div>
 
@@ -174,108 +179,168 @@
         </div>
       </div>
 
-      <!-- COLUMN 2: DRAWING TOOLS & DYNAMIC SKIN PAINTER -->
+      <!-- COLUMN 2: PAINTING TOOLKIT -->
       <div class="studio-col studio-col-tools">
         <div class="studio-col-header">
-          <span class="col-title">TOOLS &amp; DYNAMIC SKIN PAINTER</span>
+          <span class="col-title">PAINTING TOOLKIT</span>
           <span class="shortcut-hint">Right-click erase · Ctrl+Z undo</span>
         </div>
 
-        <div class="studio-tool-bar">
-          <button id="studio-tool-pencil" class="mask-tool-btn active" type="button" aria-pressed="true" title="Pencil / Draw (Left-click)">
-            ✏️ Draw
-          </button>
-          <button id="studio-tool-eraser" class="mask-tool-btn secondary-button" type="button" aria-pressed="false" title="Eraser / Clear pixel">
-            🧹 Erase
-          </button>
-          <button id="studio-tool-picker" class="mask-tool-btn secondary-button" type="button" aria-pressed="false" title="Eyedropper / Sample color from canvas">
-            💧 Pick Color
-          </button>
-          <button id="studio-tool-fill" class="mask-tool-btn secondary-button" type="button" aria-pressed="false" title="Bucket / Flood fill contiguous area">
-            🪣 Flood Fill
-          </button>
-        </div>
+        <section class="tool-group" aria-labelledby="paint-tools-heading">
+          <div class="tool-group-heading">
+            <span id="paint-tools-heading">1 · Paint tool</span>
+            <small>Choose what a canvas click does</small>
+          </div>
+          <div class="studio-tool-bar">
+            <button id="studio-tool-pencil" class="mask-tool-btn active" type="button" aria-pressed="true" title="Pencil / Draw (Left-click)">
+              ✏️ Draw
+            </button>
+            <button id="studio-tool-eraser" class="mask-tool-btn secondary-button" type="button" aria-pressed="false" title="Eraser / Clear pixel">
+              🧹 Erase
+            </button>
+            <button id="studio-tool-picker" class="mask-tool-btn secondary-button" type="button" aria-pressed="false" title="Eyedropper / Sample color from canvas">
+              💧 Pick Color
+            </button>
+            <button id="studio-tool-fill" class="mask-tool-btn secondary-button" type="button" aria-pressed="false" title="Bucket / Flood fill contiguous area">
+              🪣 Flood Fill
+            </button>
+          </div>
+          <div id="studio-action-readout" class="studio-action-readout" role="status" aria-live="polite" aria-atomic="true">
+            <span id="studio-action-icon" class="studio-action-icon" aria-hidden="true">✏️</span>
+            <span class="studio-action-copy">
+              <strong id="studio-action-title">Draw with brush color</strong>
+              <small id="studio-action-detail">Left-click paints one pixel; right-click erases. Choose a skin or hair role to make pixels recolor in the preview.</small>
+            </span>
+            <span id="studio-action-badge" class="studio-action-badge">DRAW</span>
+          </div>
+        </section>
 
-        <div class="studio-history-bar">
-          <button id="studio-btn-undo" class="secondary-button" type="button" disabled title="Undo last action (Ctrl+Z / Cmd+Z)">
-            ↩️ Undo
-          </button>
-          <button id="studio-btn-redo" class="secondary-button" type="button" disabled title="Redo action (Ctrl+Y / Cmd+Shift+Z)">
-            ↪️ Redo
-          </button>
-          <button id="studio-btn-reset" class="secondary-button" type="button" title="Revert this base sprite to its original default">
-            🔄 Reset Base
-          </button>
-          <button id="studio-btn-clear" class="secondary-button" type="button" title="Clear all pixels on this frame">
-            🗑️ Clear Grid
-          </button>
-        </div>
+        <section class="tool-group" aria-labelledby="paint-history-heading">
+          <div class="tool-group-heading compact">
+              <span id="paint-history-heading">2 · History &amp; actions</span>
+          </div>
+          <div class="studio-history-bar">
+            <button id="studio-btn-undo" class="secondary-button" type="button" disabled title="Undo last action (Ctrl+Z / Cmd+Z)">
+              ↩️ Undo
+            </button>
+            <button id="studio-btn-redo" class="secondary-button" type="button" disabled title="Redo action (Ctrl+Y / Cmd+Shift+Z)">
+              ↪️ Redo
+            </button>
+            <button id="studio-btn-reset" class="secondary-button" type="button" title="Revert this base sprite to its original default">
+              🔄 Reset Base
+            </button>
+            <button id="studio-btn-clear" class="secondary-button" type="button" title="Clear all pixels on this frame">
+              🗑️ Clear Grid
+            </button>
+          </div>
+        </section>
 
         <div id="studio-color-panel" class="studio-color-panel">
-          <div class="studio-color-picker-row">
-            <span class="studio-color-label">Active Brush:</span>
-            <input id="studio-active-color" type="color" value="#eea572" title="Click to choose any custom color">
-            <input id="studio-hex-input" type="text" value="#eea572" maxlength="7" spellcheck="false" aria-label="Hex color code">
-            <span id="studio-color-name-readout" class="studio-color-name">Main Skin Role</span>
-          </div>
+          <section class="tool-group brush-group" aria-labelledby="brush-color-heading">
+            <div class="tool-group-heading compact">
+              <span id="brush-color-heading">3 · Brush color</span>
+              <small>Applies to Draw and Fill</small>
+            </div>
+            <div class="studio-color-picker-row">
+              <span class="studio-color-label">Active brush</span>
+              <input id="studio-active-color" type="color" value="#eea572" title="Click to choose any custom color">
+              <input id="studio-hex-input" type="text" value="#eea572" maxlength="7" spellcheck="false" aria-label="Hex color code">
+                <span id="studio-color-name-readout" class="studio-color-name">Custom brush color</span>
+            </div>
+          </section>
 
-          <!-- Dedicated Skin Painter for Dynamic Shading -->
-          <div class="studio-palette-section skin-painter-section">
-            <div class="studio-palette-header">
-              <span class="skin-painter-title">🎨 Dynamic Skin Painter Roles</span>
-              <span class="palette-count-badge">Auto-Shades in Game</span>
+          <section class="tool-group role-painter-group" aria-labelledby="role-painter-heading">
+            <div class="tool-group-heading">
+              <span id="role-painter-heading">4 · Dynamic paint roles</span>
+              <small>Tag pixels so they recolor with the character</small>
             </div>
-            <p class="skin-painter-desc">
-              Paint with these 4 swatches to mark skin regions. When a player picks a lighter or darker skin tone in-game, these pixels automatically shade to match!
-            </p>
-            <div class="skin-painter-swatches-grid">
-              <button class="skin-role-btn" type="button" data-role="highlight" data-color="#f1af7d" title="Skin Highlight (#f1af7d) - Shaded to player highlight">
-                <span class="role-swatch" style="background:#f1af7d;"></span>
-                <span class="role-info"><strong>🌟 Highlight</strong><small>Forehead, nose bridge, shoulder</small></span>
-              </button>
-              <button class="skin-role-btn active-role" type="button" data-role="base" data-color="#eea572" title="Skin Base (#eea572) - Shaded to player main skin tone">
-                <span class="role-swatch" style="background:#eea572;"></span>
-                <span class="role-info"><strong>🧑 Main Skin</strong><small>Face, neck, torso, near limbs</small></span>
-              </button>
-              <button class="skin-role-btn" type="button" data-role="shadow" data-color="#c56749" title="Skin Shadow (#c56749) - Shaded to player skin shadow">
-                <span class="role-swatch" style="background:#c56749;"></span>
-                <span class="role-info"><strong>👤 Shadow</strong><small>Jawline, chin, underarm</small></span>
-              </button>
-              <button class="skin-role-btn" type="button" data-role="far-limb" data-color="#ae4a3a" title="Far-Limb Shadow (#ae4a3a) - Shaded to player distant limb">
-                <span class="role-swatch" style="background:#ae4a3a;"></span>
-                <span class="role-info"><strong>🦾 Far Limb</strong><small>Back arm &amp; back leg</small></span>
-              </button>
-            </div>
-          </div>
+            <details class="role-disclosure skin-painter-section">
+              <summary class="role-disclosure-summary">
+                <span class="role-summary-icon skin-icon">✋</span>
+                <span class="role-summary-copy"><strong>Skin painter</strong><small>Highlight · base · shadow · far limb</small></span>
+                <span class="palette-count-badge">4 roles</span>
+              </summary>
+              <div class="role-disclosure-content">
+                <p class="skin-painter-desc">Choose a role, then paint with any brush color. Click the active role again to turn skin painting off.</p>
+                <div class="skin-painter-swatches-grid">
+                  <button class="skin-role-btn" type="button" data-role="highlight" data-color="#f1af7d" title="Skin Highlight - Shaded to player highlight">
+                    <span class="role-swatch" style="background:#f1af7d;"></span>
+                    <span class="role-info"><strong>🌟 Highlight</strong><small>Forehead, nose, shoulder</small></span>
+                  </button>
+                  <button class="skin-role-btn" type="button" data-role="base" data-color="#eea572" title="Skin Base - Shaded to player main skin tone">
+                    <span class="role-swatch" style="background:#eea572;"></span>
+                    <span class="role-info"><strong>🧑 Main Skin</strong><small>Face, neck, torso, near limbs</small></span>
+                  </button>
+                  <button class="skin-role-btn" type="button" data-role="shadow" data-color="#c56749" title="Skin Shadow - Shaded to player skin shadow">
+                    <span class="role-swatch" style="background:#c56749;"></span>
+                    <span class="role-info"><strong>👤 Shadow</strong><small>Jaw, chin, underarm</small></span>
+                  </button>
+                  <button class="skin-role-btn" type="button" data-role="far-limb" data-color="#ae4a3a" title="Far-Limb Shadow - Shaded to player distant limb">
+                    <span class="role-swatch" style="background:#ae4a3a;"></span>
+                    <span class="role-info"><strong>🦾 Far Limb</strong><small>Back arm and leg</small></span>
+                  </button>
+                </div>
+              </div>
+            </details>
 
-          <div class="studio-palette-section">
-            <div class="studio-palette-header">
-              <span>Colors Currently Used in This Sprite</span>
-              <span id="studio-used-colors-count" class="palette-count-badge">0 colors</span>
-            </div>
+            <details class="role-disclosure hair-painter-section">
+              <summary class="role-disclosure-summary">
+                <span class="role-summary-icon hair-icon">💇</span>
+                <span class="role-summary-copy"><strong>Hair painter</strong><small>Highlight · base · shadow</small></span>
+                <span class="palette-count-badge">3 roles</span>
+              </summary>
+              <div class="role-disclosure-content">
+                <p class="skin-painter-desc">Choose a role, then paint with any brush color. Click the active role again to turn hair painting off.</p>
+                <div class="skin-painter-swatches-grid hair-painter-swatches-grid">
+                  <button class="hair-role-btn" type="button" data-hair-role="highlight" data-color="#81492c" title="Hair Highlight - Shaded to hair highlight">
+                    <span class="role-swatch" style="background:#81492c;"></span>
+                    <span class="role-info"><strong>🌟 Highlight</strong><small>Crown strands</small></span>
+                  </button>
+                  <button class="hair-role-btn" type="button" data-hair-role="base" data-color="#4d1b1b" title="Hair Base - Shaded to player main hair color">
+                    <span class="role-swatch" style="background:#4d1b1b;"></span>
+                    <span class="role-info"><strong>💇 Main Hair</strong><small>Scalp, bangs, sideburns</small></span>
+                  </button>
+                  <button class="hair-role-btn" type="button" data-hair-role="shadow" data-color="#442434" title="Hair Shadow - Shaded to hair shadow">
+                    <span class="role-swatch" style="background:#442434;"></span>
+                    <span class="role-info"><strong>🌑 Shadow</strong><small>Deep locks, nape</small></span>
+                  </button>
+                </div>
+              </div>
+            </details>
+          </section>
+
+          <details class="palette-disclosure">
+            <summary><span>5 · Colors in this sprite</span><span id="studio-used-colors-count" class="palette-count-badge">0 colors</span></summary>
             <div id="studio-used-colors-grid" class="studio-swatches-grid used-colors-grid"></div>
-          </div>
+          </details>
 
-          <div class="studio-palette-section">
-            <div class="studio-palette-header">
-              <span>Anatomy, Hair &amp; Outline Swatches</span>
-              <span class="palette-count-badge">Click to Pick</span>
-            </div>
+          <details class="palette-disclosure">
+            <summary><span>6 · Preset colors</span><span class="palette-count-badge">Click to pick</span></summary>
             <div id="studio-preset-colors-grid" class="studio-swatches-grid preset-colors-grid"></div>
-          </div>
+          </details>
         </div>
       </div>
 
       <!-- COLUMN 3: LIVE SKIN TONE & BASE PREVIEW -->
       <div class="studio-col studio-col-preview">
         <div class="studio-col-header">
-          <span class="col-title">LIVE BASE &amp; SKIN TONE PREVIEW</span>
+          <span class="col-title">LIVE CHARACTER LOOK · REMAPPED</span>
           <button id="preview-play-btn" class="secondary-button" type="button" aria-pressed="false">▶ Play Walk Cycle</button>
         </div>
+
+        <p class="preview-explainer">Shows how tagged skin and hair pixels adapt to the selected character colors. Untagged pixels keep their painted colors.</p>
 
         <div class="canvas-stage-box">
           <canvas id="mask-preview-canvas" width="288" height="288" aria-label="32 by 32 pixel base and skin tone preview"></canvas>
         </div>
+
+        <label class="preview-hairstyle-control" for="base-preview-hairstyle">
+          <span>Try a hairstyle from Clothing Studio</span>
+          <select id="base-preview-hairstyle" aria-label="Preview hairstyle from Clothing Studio">
+            <option value="__none__">No hairstyle · bald base</option>
+          </select>
+          <small>Preview only; edit and create hairstyle layers in Clothing Studio.</small>
+        </label>
 
         <!-- Test Player Skin Tone in Live Preview -->
         <div class="preview-skintone-tester-row">
@@ -287,6 +352,20 @@
             <button type="button" class="skintone-pill" data-test-skintone="deep_umber" title="Deep Umber">🖐🏾 Umber</button>
             <button type="button" class="skintone-pill" data-test-skintone="rich_espresso" title="Rich Espresso">🖐🏿 Espresso</button>
             <button type="button" class="skintone-pill" data-test-skintone="porcelain_rose" title="Porcelain Rose">🌸 Rose</button>
+          </div>
+        </div>
+
+        <!-- Test Player Hair Color in Live Preview -->
+        <div class="preview-skintone-tester-row preview-hair-tester-row">
+          <span class="skintone-tester-label">Test Player Hair Color:</span>
+          <div class="skintone-pills hair-pills" role="group" aria-label="Test player hair color in preview">
+            <button type="button" class="skintone-pill hair-pill active" data-test-hair="chestnut_brown" title="Chestnut Brown">🌰 Chestnut</button>
+            <button type="button" class="skintone-pill hair-pill" data-test-hair="raven_black" title="Raven Black">🖤 Black</button>
+            <button type="button" class="skintone-pill hair-pill" data-test-hair="golden_blonde" title="Golden Blonde">🌾 Blonde</button>
+            <button type="button" class="skintone-pill hair-pill" data-test-hair="auburn_red" title="Auburn Red">🦊 Auburn</button>
+            <button type="button" class="skintone-pill hair-pill" data-test-hair="sandy_brown" title="Sandy Brown">🍂 Sandy</button>
+            <button type="button" class="skintone-pill hair-pill" data-test-hair="dark_chocolate" title="Dark Chocolate">🍫 Dark</button>
+            <button type="button" class="skintone-pill hair-pill" data-test-hair="silver_gray" title="Silver Gray">🪙 Silver</button>
           </div>
         </div>
 

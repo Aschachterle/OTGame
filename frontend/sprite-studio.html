@@ -404,11 +404,20 @@
           <input id="new-clothing-name" type="text" placeholder="e.g. Frontier Leather Vest" required maxlength="50" autocomplete="off">
         </label>
 
+        <label id="new-clothing-headwear-type-field" class="modal-field" hidden>
+          <span>Headwear Type</span>
+          <select id="new-clothing-headwear-type">
+            <option value="hair" selected>💇 Hairstyle (preview and equip as hair)</option>
+            <option value="hat">🎩 Hat (wearable headwear)</option>
+          </select>
+          <small>Hairstyle silhouettes are created and edited here, then offered to players in the character creator.</small>
+        </label>
+
         <div class="modal-field-grid">
           <label class="modal-field">
             <span>Slot Category</span>
             <select id="new-clothing-category">
-              <option value="hats">👒 Hair / Hat</option>
+              <option value="hats">💇 Hairstyle / Hat</option>
               <option value="shirts" selected>👕 Shirts &amp; Coats</option>
               <option value="pants">👖 Pants &amp; Skirts</option>
               <option value="shoes">🥾 Shoes &amp; Boots</option>

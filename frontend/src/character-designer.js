@@ -5,6 +5,7 @@ import {
   CATEGORIES,
   PRESET_COLOR_DYES,
   SKIN_TONES,
+  HAIR_COLORS,
   BASE_BODY_TEMPLATES,
   INITIAL_CLOTHING_BOILERPLATE,
   addCustomClothingItem,
@@ -49,6 +50,7 @@ export {
   CATEGORIES,
   PRESET_COLOR_DYES,
   SKIN_TONES,
+  HAIR_COLORS,
   BASE_BODY_TEMPLATES,
   INITIAL_CLOTHING_BOILERPLATE
 };
@@ -257,6 +259,10 @@ export function getSkinToneById(skinToneId) {
   return SKIN_TONES.find((s) => s.id === skinToneId) || SKIN_TONES[0];
 }
 
+export function getHairColorById(hairColorId) {
+  return HAIR_COLORS.find((h) => h.id === hairColorId) || HAIR_COLORS[0];
+}
+
 export function getDyeById(dyeId) {
   return PRESET_COLOR_DYES.find((d) => d.id === dyeId) || PRESET_COLOR_DYES[0];
 }
@@ -297,6 +303,7 @@ export function createMemberAppearance({
   eraId = DEFAULT_PARTY_ERA_ID,
   bodyTemplateId = 'standard_adventurer',
   skinToneId = 'warm_ivory',
+  hairColorId = 'chestnut_brown',
   headwearType = 'hat',
   variantIndex = 0
 } = {}) {
@@ -304,6 +311,7 @@ export function createMemberAppearance({
     gender: gender === 'female' ? 'female' : 'male',
     bodyTemplateId,
     skinToneId,
+    hairColorId,
     preferredHeadwearType: headwearType,
     equippedPresets: {
       hats: '',
@@ -357,8 +365,10 @@ export function randomizeMemberInEra(appearance, eraId) {
   const targetEra = getEraById(eraId).id;
   const randomBody = BASE_BODY_TEMPLATES[Math.floor(Math.random() * BASE_BODY_TEMPLATES.length)];
   const randomSkin = SKIN_TONES[Math.floor(Math.random() * SKIN_TONES.length)];
+  const randomHair = HAIR_COLORS[Math.floor(Math.random() * HAIR_COLORS.length)];
   appearance.bodyTemplateId = randomBody.id;
   appearance.skinToneId = randomSkin.id;
+  appearance.hairColorId = randomHair.id;
   const headwearType = Math.random() < 0.5 ? 'hat' : 'hair';
   appearance.preferredHeadwearType = headwearType;
   CATEGORIES.forEach(({ id }) => {
@@ -1193,9 +1203,10 @@ function isSpriteUndies(color) {
 }
 
 const KNOWN_SKIN_HIGHLIGHT_COLORS = new Set([
-  '#f1af7d', '#ffe6d4', '#fad0a8', '#ffffff',
+  '#f1af7d', '#ffe6d4', '#fad0a8',
   ...SKIN_TONES.map((s) => s.highlight.toLowerCase())
 ]);
+KNOWN_SKIN_HIGHLIGHT_COLORS.delete('#ffffff');
 
 const KNOWN_SKIN_BASE_COLORS = new Set([
   '#eea572', '#efa580', '#f6c69f', '#e09b67', '#f6d6bd',
@@ -1217,28 +1228,39 @@ export function isSpriteSkinPixel(color, y = 0, headDy = 0) {
   if (KNOWN_SKIN_HIGHLIGHT_COLORS.has(lower)) return true;
   if (KNOWN_SKIN_BASE_COLORS.has(lower)) return true;
   if (KNOWN_SKIN_SHADOW_COLORS.has(lower)) return true;
-  if (lower.startsWith('#') && lower.length === 7) {
-    const r = parseInt(lower.slice(1, 3), 16);
-    const g = parseInt(lower.slice(3, 5), 16);
-    const b = parseInt(lower.slice(5, 7), 16);
-    if (r > g && g > b && r > 90 && b < 180) {
-      return true;
-    }
-  }
   return false;
 }
 
-export function applySkinToneToSpriteGrid(grid, skinToneId, gender = 'male') {
+export function applySkinToneToSpriteGrid(grid, skinToneId, gender = 'male', skinRoleMap = null) {
   if (!grid || !Array.isArray(grid)) return grid;
   const skin = getSkinToneById(skinToneId);
   if (!skin) return grid;
 
   const result = grid.map((row) => [...row]);
+  const explicitRoles = new Map();
+  if (skinRoleMap && typeof skinRoleMap === 'object') {
+    for (const [role, coords] of Object.entries(skinRoleMap)) {
+      if (!Array.isArray(coords)) continue;
+      for (const [x, y] of coords) {
+        if (Number.isInteger(x) && Number.isInteger(y) && x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
+          explicitRoles.set(`${x},${y}`, role);
+        }
+      }
+    }
+  }
   for (let y = 0; y < GRID_SIZE; y += 1) {
     for (let x = 0; x < GRID_SIZE; x += 1) {
       const col = result[y]?.[x];
       if (!col) continue;
       const lower = col.toLowerCase();
+      const explicitRole = explicitRoles.get(`${x},${y}`);
+      if (explicitRole) {
+        if (explicitRole === 'far-limb') result[y][x] = coolShadowHex(skin.shadow, 0.42);
+        else if (explicitRole === 'highlight') result[y][x] = skin.highlight;
+        else if (explicitRole === 'shadow') result[y][x] = skin.shadow;
+        else result[y][x] = skin.base;
+        continue;
+      }
       if (isSpriteOutline(lower)) continue;
       if (isSpriteBaseHair(lower, y, 0)) continue;
       if (isSpriteUndies(lower)) continue;
@@ -1263,6 +1285,146 @@ export function applySkinToneToSpriteGrid(grid, skinToneId, gender = 'male') {
     }
   }
   return result;
+}
+
+const KNOWN_HAIR_HIGHLIGHT_COLORS = new Set([
+  '#81492c', '#8f563b', '#743f39', '#855847',
+  ...HAIR_COLORS.map((h) => h.highlight.toLowerCase())
+]);
+
+const KNOWN_HAIR_BASE_COLORS = new Set([
+  '#4d1b1b', '#663931',
+  ...HAIR_COLORS.map((h) => h.base.toLowerCase())
+]);
+
+const KNOWN_HAIR_SHADOW_COLORS = new Set([
+  '#442434', '#3b1e14', '#30160d', '#2b2a3f',
+  ...HAIR_COLORS.map((h) => h.shadow.toLowerCase())
+]);
+
+const KNOWN_SKIN_COLORS = new Set(
+  SKIN_TONES.flatMap((tone) => [tone.shadow, tone.base, tone.highlight].map((color) => color.toLowerCase()))
+);
+
+function getKnownHairRole(color) {
+  const lower = color?.toLowerCase();
+  if (!lower) return null;
+  if (KNOWN_HAIR_HIGHLIGHT_COLORS.has(lower)) return 'highlight';
+  if (KNOWN_HAIR_SHADOW_COLORS.has(lower)) return 'shadow';
+  if (KNOWN_HAIR_BASE_COLORS.has(lower) || SPRITE_BASE_HAIR_COLORS.has(lower)) return 'base';
+  return null;
+}
+
+export function applyHairColorToSpriteGrid(grid, hairColorId, gender = 'male', hairMaskCoords = null, view = 'side', animMode = 'walk', frameIndex = 0, hairRoleMap = null) {
+  if (!grid || !Array.isArray(grid)) return grid;
+  const hair = getHairColorById(hairColorId);
+  if (!hair) return grid;
+
+  const result = grid.map((row) => [...row]);
+  let coords = Array.isArray(hairMaskCoords) ? hairMaskCoords : [];
+  if (coords.length === 0) {
+    try {
+      coords = getFrameSectionMap(gender, view, animMode, frameIndex, grid)?.hair || [];
+    } catch {
+      coords = [];
+    }
+  }
+  const explicitRoles = new Map();
+  if (hairRoleMap && typeof hairRoleMap === 'object') {
+    for (const [role, roleCoords] of Object.entries(hairRoleMap)) {
+      if (!Array.isArray(roleCoords)) continue;
+      for (const [x, y] of roleCoords) {
+        if (Number.isInteger(x) && Number.isInteger(y) && x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
+          explicitRoles.set(`${x},${y}`, role);
+        }
+      }
+    }
+  }
+  if (explicitRoles.size > 0) {
+    const coordSet = new Set(coords.map(([x, y]) => `${x},${y}`));
+    for (const key of explicitRoles.keys()) coordSet.add(key);
+    coords = Array.from(coordSet, (key) => key.split(',').map(Number));
+  }
+  if (coords.length === 0) return result;
+
+  const rowBounds = new Map();
+  let minY = GRID_SIZE;
+  let maxY = -1;
+  for (const [x, y] of coords) {
+    if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) continue;
+    const bounds = rowBounds.get(y) || { minX: x, maxX: x };
+    bounds.minX = Math.min(bounds.minX, x);
+    bounds.maxX = Math.max(bounds.maxX, x);
+    rowBounds.set(y, bounds);
+    minY = Math.min(minY, y);
+    maxY = Math.max(maxY, y);
+  }
+
+  const femaleHighlightCoords = new Set();
+  if (gender === 'female') {
+    for (let y = minY; y <= Math.min(maxY, minY + 3); y++) {
+      const bounds = rowBounds.get(y);
+      if (!bounds) continue;
+      const centerX = (bounds.minX + bounds.maxX) / 2;
+      const candidates = coords
+        .filter(([x, rowY]) => rowY === y && result[y]?.[x] && !isSpriteOutline(result[y][x]))
+        .sort((a, b) => Math.abs(a[0] - centerX) - Math.abs(b[0] - centerX));
+      if (candidates.length > 0) femaleHighlightCoords.add(`${candidates[0][0]},${y}`);
+    }
+  }
+
+  for (const [x, y] of coords) {
+    if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) continue;
+    const color = result[y]?.[x];
+    if (!color) continue;
+    const lower = color.toLowerCase();
+    const explicitRole = explicitRoles.get(`${x},${y}`);
+    if (!explicitRole && (lower === '#0098dc' || lower === '#ffffff')) continue;
+
+    // Keep existing palette roles; classify unknown masked colors by silhouette
+    // position so highlights and shadows stay registered across animation frames.
+    let role = explicitRole;
+    if (!role && gender === 'female') {
+      if (SPRITE_OUTLINE_COLORS.has(lower) || isSpriteOutline(lower)) continue;
+      const row = rowBounds.get(y);
+      if (!row) continue;
+      const backEdge = x === row.minX + 1 && row.maxX - row.minX > 2;
+      if (y >= maxY - 1 || backEdge) role = 'shadow';
+      else if (femaleHighlightCoords.has(`${x},${y}`)) role = 'highlight';
+      else role = 'base';
+    } else if (!role) {
+      role = getKnownHairRole(lower);
+      if (!role) {
+        if (KNOWN_SKIN_COLORS.has(lower)) continue;
+        if (SPRITE_OUTLINE_COLORS.has(lower) || isSpriteOutline(lower)) continue;
+        const row = rowBounds.get(y);
+        if (!row) continue;
+        const rowWidth = row.maxX - row.minX + 1;
+        const edge = x === row.minX || x === row.maxX;
+        if (y >= maxY - 1 || (edge && rowWidth > 2)) role = 'shadow';
+        else if (y <= minY + 1 && x > row.minX && x < row.maxX) role = 'highlight';
+        else role = 'base';
+      }
+    }
+    result[y][x] = hair[role];
+  }
+  return result;
+}
+
+function recolorCustomHairGrid(grid, preset, hairColorId) {
+  const hair = getHairColorById(hairColorId);
+  if (!hair || !Array.isArray(grid)) return grid;
+  const source = preset?.palette || {};
+  const roleByColor = new Map();
+  for (const [sourceRole, hairRole] of [['O', null], ['P', 'base'], ['S', 'shadow'], ['L', 'highlight']]) {
+    const color = source[sourceRole]?.toLowerCase();
+    if (color) roleByColor.set(color, hairRole);
+  }
+  return grid.map((row) => row.map((color) => {
+    if (!color) return color;
+    const role = roleByColor.get(color.toLowerCase());
+    return role ? hair[role] : color;
+  }));
 }
 
 
@@ -1293,7 +1455,27 @@ function isShortSkirtPreset(preset) {
   );
 }
 
-function resolveGarmentPalette(preset, dyeId) {
+function resolveGarmentPalette(preset, dyeId, hairColorId = null) {
+  if (preset?.subType === 'hair' && (!dyeId || dyeId === 'default') && hairColorId) {
+    const hair = getHairColorById(hairColorId);
+    if (hair) {
+      const O = '#140c1c';
+      const P = hair.base;
+      const S = hair.shadow;
+      const L = hair.highlight;
+      return {
+        O,
+        P,
+        S,
+        L,
+        farO: O,
+        farP: coolShadowHex(P, 0.42),
+        farS: coolShadowHex(S, 0.46),
+        farL: coolShadowHex(L, 0.36)
+      };
+    }
+  }
+
   const raw = preset?.palette || {};
   let fallbackP = raw.P || null;
   let fallbackS = raw.S || null;
@@ -1376,7 +1558,9 @@ import { CUSTOM_SPRITE_MASKS } from './custom-sprite-masks.js';
 import { CUSTOM_SPRITE_OVERRIDES_DATA } from './custom-sprite-overrides.js';
 
 export const MASK_SECTIONS = [
-  { id: 'head', label: 'Head', color: '#ffd166', shortcut: '1', role: 'head', isForeground: true, desc: 'Face, hair, skull & chin' },
+  { id: 'hair', label: 'Hair', color: '#ff9e00', shortcut: 'h', role: 'hair', isForeground: true, desc: 'Scalp, crown, bangs, sideburns & locks' },
+  { id: 'head', label: 'Head / Face', color: '#ffd166', shortcut: '1', role: 'head', isForeground: true, desc: 'Face, eyes, nose, cheeks, mouth, jaw & chin' },
+  { id: 'neck', label: 'Neck', color: '#d4a373', shortcut: 'n', role: 'neck', isForeground: false, desc: 'Neck, throat, collar base & chin junction' },
   { id: 'torso', label: 'Torso', color: '#f78c6c', shortcut: '2', role: 'torso', isForeground: false, desc: 'Chest, ribs & upper back' },
   { id: 'fg_sleeve', label: 'Foreground Short Sleeve', color: '#80ed99', shortcut: '3', role: 'sleeve', isForeground: false, desc: 'Near shoulder & bicep (short sleeve shirt length)' },
   { id: 'fg_arm', label: 'Foreground Forearm', color: '#06d6a0', shortcut: '4', role: 'limb', isForeground: true, desc: 'Near elbow & forearm (exposed past short sleeve)' },
@@ -1418,7 +1602,14 @@ function cloneMaskData(val) {
   if (val && typeof val === 'object') {
     const obj = {};
     for (const [k, coords] of Object.entries(val)) {
-      obj[k] = Array.isArray(coords) ? coords.map(([x, y]) => [x, y]) : [];
+      if ((k === 'skinRoles' || k === 'hairRoles') && coords && typeof coords === 'object' && !Array.isArray(coords)) {
+        obj[k] = Object.fromEntries(Object.entries(coords).map(([role, roleCoords]) => [
+          role,
+          Array.isArray(roleCoords) ? roleCoords.map(([x, y]) => [x, y]) : []
+        ]));
+      } else {
+        obj[k] = Array.isArray(coords) ? coords.map(([x, y]) => [x, y]) : [];
+      }
     }
     return obj;
   }
@@ -1549,6 +1740,34 @@ function saveCustomOverridesToStorage() {
 
 loadCustomOverridesFromStorage();
 
+function normalizeExistingBaseOverridesAsBald() {
+  let changed = false;
+  const frameKeys = [...CUSTOM_SPRITE_OVERRIDES.keys()];
+  for (const key of frameKeys) {
+    const match = key.match(/^base:(male|female):(east|south):(walk|idle):(\d+)$/);
+    if (!match) continue;
+    const [, gender, direction, animMode, frameIndex] = match;
+    const grid = CUSTOM_SPRITE_OVERRIDES.get(key);
+    if (!grid) continue;
+    const view = direction === 'south' ? 'front' : 'side';
+    const hairCoords = getFrameSectionMap(gender, view, animMode, Number(frameIndex), grid)?.hair || [];
+    let frameChanged = false;
+    for (const [x, y] of hairCoords) {
+      if (Number.isInteger(x) && Number.isInteger(y) && grid[y]?.[x]) {
+        grid[y][x] = null;
+        frameChanged = true;
+      }
+    }
+    if (frameChanged) {
+      CUSTOM_SPRITE_OVERRIDES.set(key, grid);
+      changed = true;
+    }
+  }
+  if (changed) saveCustomOverridesToStorage();
+}
+
+normalizeExistingBaseOverridesAsBald();
+
 export function getCustomSpriteOverride(key) {
   if (CUSTOM_SPRITE_OVERRIDES.has(key)) {
     return CUSTOM_SPRITE_OVERRIDES.get(key).map((row) => [...row]);
@@ -1657,30 +1876,72 @@ export function getClothingItemDefaultGrid(category, presetId, gender = 'male', 
 export function getBaseSpriteGrid(gender, direction = 'east', animMode = 'walk', frameIndex = 0) {
   const normGender = gender === 'female' ? 'female' : 'male';
   const normDir = direction === 'south' || direction === 'front' ? 'south' : 'east';
-  const effectiveMode = (normDir === 'south' && normGender === 'male') ? 'idle' : animMode;
+  const effectiveMode = normDir === 'south' ? 'idle' : animMode;
   const frameCount = getBoilerplateSpriteFrameCount(normGender, effectiveMode) || 1;
   const frame = (((Number(frameIndex) || 0) % frameCount) + frameCount) % frameCount;
 
   const frameSpecificKey = `base:${normGender}:${normDir}:${effectiveMode}:${frame}`;
+  const southIdleFallbackKey = `base:${normGender}:south:idle:0`;
   const universalKey = `base:${normGender}:${normDir}`;
 
-  const custom = CUSTOM_SPRITE_OVERRIDES.get(frameSpecificKey) || CUSTOM_SPRITE_OVERRIDES.get(universalKey);
-  if (custom) return custom.map((r) => [...r]);
+  const customKey = CUSTOM_SPRITE_OVERRIDES.has(frameSpecificKey)
+    ? frameSpecificKey
+    : (normDir === 'south' && CUSTOM_SPRITE_OVERRIDES.has(southIdleFallbackKey)
+        ? southIdleFallbackKey
+        : (CUSTOM_SPRITE_OVERRIDES.has(universalKey) ? universalKey : null));
+  const custom = customKey ? CUSTOM_SPRITE_OVERRIDES.get(customKey) : null;
+  const sourceGrid = custom
+    ? custom.map((r) => [...r])
+    : getBoilerplateSpriteGrid(normGender, normDir, effectiveMode, frame);
+  if (!sourceGrid) return sourceGrid;
 
-  return getBoilerplateSpriteGrid(normGender, normDir, effectiveMode, frame);
+  // Base bodies are intentionally bald: hairstyles are clothing-layer items
+  // authored in the Clothing Studio and fitted over this clean scalp.
+  const hairView = normDir === 'south' ? 'front' : 'side';
+  const hairCoords = getFrameSectionMap(normGender, hairView, effectiveMode, frame, sourceGrid)?.hair || [];
+  const baldGrid = sourceGrid.map((row) => [...row]);
+  let removedHairPixel = false;
+  for (const [x, y] of hairCoords) {
+    if (Number.isInteger(x) && Number.isInteger(y) && baldGrid[y]?.[x]) {
+      baldGrid[y][x] = null;
+      removedHairPixel = true;
+    }
+  }
+  // Custom override grids are the Base Studio's editable source pixels. Keep
+  // the canonical in-memory/local draft bald too, so later edits and exports
+  // start from these pixels instead of reintroducing the old scalp fill.
+  if (removedHairPixel && customKey) {
+    CUSTOM_SPRITE_OVERRIDES.set(customKey, baldGrid.map((row) => [...row]));
+    saveCustomOverridesToStorage();
+  }
+  return baldGrid;
 }
 
-export function getBaseBoilerplateGrid(gender, view = 'side', animMode = 'walk', frameIndex = 0, skinToneId = null) {
+export function getBaseBoilerplateGrid(gender, view = 'side', animMode = 'walk', frameIndex = 0, skinToneId = null, hairColorId = null) {
   const normGender = gender === 'female' ? 'female' : 'male';
   const isFront = view === 'front';
   const dir = isFront ? 'south' : 'east';
   const raw = getBaseSpriteGrid(normGender, dir, animMode, frameIndex);
   if (!raw) return null;
-  const oriented = ((view === 'side_left' || view === 'west') && !isFront)
+  let oriented = ((view === 'side_left' || view === 'west') && !isFront)
     ? raw.map((row) => [...row].reverse())
     : raw;
   if (skinToneId) {
-    return applySkinToneToSpriteGrid(oriented, skinToneId, normGender);
+    const skinRoles = getFrameSkinRoleMap(normGender, isFront ? 'front' : 'side', animMode, frameIndex);
+    oriented = applySkinToneToSpriteGrid(oriented, skinToneId, normGender, skinRoles);
+  }
+  if (hairColorId) {
+    const hairMask = getFrameSectionMap(normGender, isFront ? 'front' : 'side', animMode, frameIndex, raw)?.hair;
+    oriented = applyHairColorToSpriteGrid(
+      oriented,
+      hairColorId,
+      normGender,
+      hairMask,
+      isFront ? 'front' : 'side',
+      animMode,
+      frameIndex,
+      getFrameHairRoleMap(normGender, isFront ? 'front' : 'side', animMode, frameIndex)
+    );
   }
   return oriented;
 }
@@ -1845,9 +2106,54 @@ export function getAutoDetectedSectionMap(gender, view = 'side', animMode = 'wal
       if (!c) continue;
 
       if (y <= 8 + headDy) {
-        sectionGrid[y][x] = 'head';
+        if (normView === 'side') {
+          if (y <= 3 + headDy) {
+            sectionGrid[y][x] = 'hair';
+          } else if (y >= 4 + headDy && y <= 7 + headDy) {
+            sectionGrid[y][x] = x <= 14 ? 'hair' : 'head';
+          } else if (y === 8 + headDy) {
+            if (normGender === 'female') {
+              sectionGrid[y][x] = x <= 15 ? 'hair' : 'head';
+            } else {
+              if (x <= 14) sectionGrid[y][x] = 'hair';
+              else if (x >= 17) sectionGrid[y][x] = 'head';
+              else sectionGrid[y][x] = 'neck';
+            }
+          }
+        } else {
+          // Front view 32Man / 32Woman head, hair & neck auto-detection
+          if (y <= 3 + headDy) {
+            sectionGrid[y][x] = 'hair';
+          } else if (normGender === 'female') {
+            if (x <= 13 || x >= 17) sectionGrid[y][x] = 'hair';
+            else sectionGrid[y][x] = 'head';
+          } else {
+            if (y <= 6 + headDy) {
+              sectionGrid[y][x] = (x <= 12 || x >= 19) ? 'hair' : 'head';
+            } else if (y === 7 + headDy) {
+              if (x >= 13 && x <= 18) sectionGrid[y][x] = 'neck';
+              else sectionGrid[y][x] = x < 13 ? 'fg_sleeve' : 'bg_sleeve';
+            } else {
+              sectionGrid[y][x] = x <= 11 ? 'fg_sleeve' : (x >= 20 ? 'bg_sleeve' : 'torso');
+            }
+          }
+        }
       } else if (y >= 17 + headDy) {
-        if (y <= 18 + headDy) {
+        if (normView === 'front') {
+          if (y <= 19 + headDy && ((normGender === 'male' && (x <= 11 || x >= 20)) || (normGender === 'female' && (x <= 11 || x >= 19)))) {
+            sectionGrid[y][x] = x <= 15 ? 'fg_hand' : 'bg_hand';
+          } else if (y <= 19 + headDy) {
+            sectionGrid[y][x] = 'fg_leg';
+          } else {
+            const isFoot = y >= 28;
+            const isBoot = y >= 24 && y <= 27;
+            if (x <= 15) {
+              sectionGrid[y][x] = isFoot ? 'fg_foot' : (isBoot ? 'fg_boot' : 'fg_leg');
+            } else {
+              sectionGrid[y][x] = isFoot ? 'bg_foot' : (isBoot ? 'bg_boot' : 'bg_leg');
+            }
+          }
+        } else if (y <= 18 + headDy) {
           sectionGrid[y][x] = 'fg_leg'; // Foreground Leg and waist
         } else if (normView === 'side') {
           let isFar = false;
@@ -1872,17 +2178,6 @@ export function getAutoDetectedSectionMap(gender, view = 'side', animMode = 'wal
             isFar = limb === 'F';
           }
           if (isFar) {
-            sectionGrid[y][x] = isFoot ? 'bg_foot' : (isBoot ? 'bg_boot' : 'bg_leg');
-          } else {
-            sectionGrid[y][x] = isFoot ? 'fg_foot' : (isBoot ? 'fg_boot' : 'fg_leg');
-          }
-        } else {
-          // Front view: left vs right leg
-          const isFoot = y >= 27;
-          const isBoot = y >= 23 && y <= 26;
-          if (x <= 14) {
-            sectionGrid[y][x] = isFoot ? 'fg_foot' : (isBoot ? 'fg_boot' : 'fg_leg');
-          } else if (x >= 17) {
             sectionGrid[y][x] = isFoot ? 'bg_foot' : (isBoot ? 'bg_boot' : 'bg_leg');
           } else {
             sectionGrid[y][x] = isFoot ? 'fg_foot' : (isBoot ? 'fg_boot' : 'fg_leg');
@@ -1930,26 +2225,31 @@ export function getAutoDetectedSectionMap(gender, view = 'side', animMode = 'wal
             } else {
               sectionGrid[y][x] = (y >= 16 + headDy) ? 'fg_hand' : 'fg_arm';
             }
+          } else if (normGender === 'female' && y === 9 + headDy && x <= 15) {
+            sectionGrid[y][x] = 'hair';
+          } else if (
+            (normGender === 'female' && (y === 9 + headDy || y === 10 + headDy) && x >= 16 && x <= 18) ||
+            (normGender === 'male' && (y === 9 + headDy || y === 10 + headDy) && x >= 15 && x <= 18)
+          ) {
+            sectionGrid[y][x] = 'neck';
           } else {
             sectionGrid[y][x] = 'torso';
           }
         } else {
-          // Front view
-          const isSleeveHeight = y <= 13 + headDy;
-          if (x <= 10) {
-            if (isSleeveHeight) {
-              sectionGrid[y][x] = 'fg_sleeve';
-            } else {
-              sectionGrid[y][x] = (y >= 16 + headDy) ? 'fg_hand' : 'fg_arm';
-            }
-          } else if (x >= 21) {
-            if (isSleeveHeight) {
-              sectionGrid[y][x] = 'bg_sleeve';
-            } else {
-              sectionGrid[y][x] = (y >= 16 + headDy) ? 'bg_hand' : 'bg_arm';
-            }
+          // Front view y = 9..16
+          if (normGender === 'female' && y === 9 + headDy) {
+            sectionGrid[y][x] = (x <= 13 || x >= 17) ? 'hair' : 'neck';
           } else {
-            sectionGrid[y][x] = 'torso';
+            const isSleeveHeight = y <= 13 + headDy;
+            const leftArmX = normGender === 'female' ? (isSleeveHeight ? 12 : 11) : 11;
+            const rightArmX = normGender === 'female' ? (isSleeveHeight ? 18 : 19) : 20;
+            if (x <= leftArmX) {
+              sectionGrid[y][x] = isSleeveHeight ? 'fg_sleeve' : 'fg_arm';
+            } else if (x >= rightArmX) {
+              sectionGrid[y][x] = isSleeveHeight ? 'bg_sleeve' : 'bg_arm';
+            } else {
+              sectionGrid[y][x] = 'torso';
+            }
           }
         }
       }
@@ -1961,10 +2261,44 @@ export function getAutoDetectedSectionMap(gender, view = 'side', animMode = 'wal
 
 export function getFrameSectionMap(gender, view = 'side', animMode = 'walk', frameIndex = 0, baseGrid = null) {
   const key = normalizeMaskKey(gender, view, animMode, frameIndex);
-  const custom = CUSTOM_FRAME_MASKS.get(key);
+  const normGender = gender === 'female' ? 'female' : 'male';
+  const normView = view === 'front' ? 'front' : 'side';
+  const custom =
+    CUSTOM_FRAME_MASKS.get(key) ||
+    (normView === 'front' ? CUSTOM_FRAME_MASKS.get(`${normGender}:front:idle:0`) : null);
   if (custom && typeof custom === 'object' && !Array.isArray(custom)) {
     const auto = getAutoDetectedSectionMap(gender, view, animMode, frameIndex, baseGrid);
     const merged = {};
+
+    // Backward-compatibility: if custom has head but not hair, partition hair and head
+    let customHead = custom.head;
+    let customHair = custom.hair;
+    if (Array.isArray(customHead) && !customHair) {
+      const isFem = gender === 'female';
+      customHair = customHead.filter(([x, y]) => {
+        if (isFem) return y <= 4 || (y <= 9 && x <= 15);
+        return y <= 3 || (y <= 7 && x <= 14);
+      });
+      customHead = customHead.filter(([x, y]) => {
+        if (isFem) return !(y <= 4 || (y <= 9 && x <= 15));
+        return !(y <= 3 || (y <= 7 && x <= 14));
+      });
+    }
+
+    // Backward-compatibility: if custom has torso but not neck, partition neck from torso
+    let customTorso = custom.torso;
+    let customNeck = custom.neck;
+    if (Array.isArray(customTorso) && !customNeck) {
+      const isFem = gender === 'female';
+      customNeck = customTorso.filter(([x, y]) => {
+        if (isFem) return (y === 10 || y === 11) && x >= 15 && x <= 18;
+        return (y === 8 || y === 9 || y === 10) && x >= 14 && x <= 18;
+      });
+      customTorso = customTorso.filter(([x, y]) => {
+        if (isFem) return !((y === 10 || y === 11) && x >= 15 && x <= 18);
+        return !((y === 8 || y === 9 || y === 10) && x >= 14 && x <= 18);
+      });
+    }
 
     // Backward-compatibility: if custom has fg_arm but not fg_sleeve, partition fg_arm at y <= 13
     let customFgArm = custom.fg_arm;
@@ -1997,6 +2331,10 @@ export function getFrameSectionMap(gender, view = 'side', animMode = 'walk', fra
 
     const resolved = {
       ...custom,
+      hair: customHair,
+      head: customHead,
+      neck: customNeck,
+      torso: customTorso,
       fg_arm: customFgArm,
       fg_sleeve: customFgSleeve,
       bg_arm: customBgArm,
@@ -2008,10 +2346,23 @@ export function getFrameSectionMap(gender, view = 'side', animMode = 'walk', fra
     };
 
     for (const s of MASK_SECTIONS) {
-      merged[s.id] = Array.isArray(resolved[s.id])
-        ? resolved[s.id].map(([x, y]) => [x, y])
+      const customCoords = resolved[s.id];
+      merged[s.id] = Array.isArray(customCoords) && (s.id !== 'hair' || customCoords.length > 0)
+        ? customCoords.map(([x, y]) => [x, y])
         : (auto[s.id] || []);
     }
+    merged.skinRoles = custom.skinRoles && typeof custom.skinRoles === 'object'
+      ? Object.fromEntries(Object.entries(custom.skinRoles).map(([role, coords]) => [
+        role,
+        Array.isArray(coords) ? coords.map(([x, y]) => [x, y]) : []
+      ]))
+      : {};
+    merged.hairRoles = custom.hairRoles && typeof custom.hairRoles === 'object'
+      ? Object.fromEntries(Object.entries(custom.hairRoles).map(([role, coords]) => [
+        role,
+        Array.isArray(coords) ? coords.map(([x, y]) => [x, y]) : []
+      ]))
+      : {};
     return merged;
   }
   if (Array.isArray(custom)) {
@@ -2024,6 +2375,8 @@ export function getFrameSectionMap(gender, view = 'side', animMode = 'walk', fra
 
 export function setFrameSectionMap(gender, view = 'side', animMode = 'walk', frameIndex = 0, sectionMap = {}) {
   const key = normalizeMaskKey(gender, view, animMode, frameIndex);
+  const normGender = gender === 'female' ? 'female' : 'male';
+  const normView = view === 'front' ? 'front' : 'side';
   const cleaned = {};
   for (const s of MASK_SECTIONS) {
     const coords = sectionMap[s.id];
@@ -2031,7 +2384,96 @@ export function setFrameSectionMap(gender, view = 'side', animMode = 'walk', fra
       .filter(([x, y]) => Number.isInteger(x) && Number.isInteger(y) && x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE)
       .map(([x, y]) => [x, y]);
   }
+  const existing = CUSTOM_FRAME_MASKS.get(key);
+  for (const metadataKey of ['skinRoles', 'hairRoles']) {
+    const roles = sectionMap[metadataKey] || (existing && !Array.isArray(existing) ? existing[metadataKey] : null);
+    if (!roles || typeof roles !== 'object') continue;
+    cleaned[metadataKey] = Object.fromEntries(Object.entries(roles).map(([role, coords]) => [
+      role,
+      Array.isArray(coords)
+        ? coords.filter(([x, y]) => Number.isInteger(x) && Number.isInteger(y) && x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE).map(([x, y]) => [x, y])
+        : []
+    ]));
+  }
   CUSTOM_FRAME_MASKS.set(key, cleaned);
+  if (normView === 'front') {
+    CUSTOM_FRAME_MASKS.set(`${normGender}:front:idle:0`, JSON.parse(JSON.stringify(cleaned)));
+    CUSTOM_FRAME_MASKS.set(`${normGender}:front:walk:0`, JSON.parse(JSON.stringify(cleaned)));
+  }
+  saveCustomMasksToStorage();
+}
+
+export function getFrameSkinRoleMap(gender, view = 'side', animMode = 'walk', frameIndex = 0) {
+  const key = normalizeMaskKey(gender, view, animMode, frameIndex);
+  const custom = CUSTOM_FRAME_MASKS.get(key);
+  const fallback = view === 'front'
+    ? CUSTOM_FRAME_MASKS.get(`${gender === 'female' ? 'female' : 'male'}:front:idle:0`)
+    : null;
+  const roles = custom && !Array.isArray(custom) && custom.skinRoles
+    ? custom.skinRoles
+    : fallback && !Array.isArray(fallback) ? fallback.skinRoles : null;
+  if (!roles || typeof roles !== 'object') return {};
+  return Object.fromEntries(Object.entries(roles).map(([role, coords]) => [
+    role,
+    Array.isArray(coords) ? coords.map(([x, y]) => [x, y]) : []
+  ]));
+}
+
+export function setFrameSkinRoleMap(gender, view = 'side', animMode = 'walk', frameIndex = 0, skinRoles = {}) {
+  const key = normalizeMaskKey(gender, view, animMode, frameIndex);
+  const existing = CUSTOM_FRAME_MASKS.get(key);
+  const sectionMap = existing && !Array.isArray(existing)
+    ? { ...existing }
+    : getFrameSectionMap(gender, view, animMode, frameIndex);
+  sectionMap.skinRoles = Object.fromEntries(Object.entries(skinRoles || {}).map(([role, coords]) => [
+    role,
+    Array.isArray(coords)
+      ? coords.filter(([x, y]) => Number.isInteger(x) && Number.isInteger(y) && x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE).map(([x, y]) => [x, y])
+      : []
+  ]));
+  CUSTOM_FRAME_MASKS.set(key, sectionMap);
+  if (view === 'front' && Number(frameIndex) === 0) {
+    const copy = JSON.parse(JSON.stringify(sectionMap));
+    CUSTOM_FRAME_MASKS.set(`${gender === 'female' ? 'female' : 'male'}:front:idle:0`, copy);
+    CUSTOM_FRAME_MASKS.set(`${gender === 'female' ? 'female' : 'male'}:front:walk:0`, JSON.parse(JSON.stringify(copy)));
+  }
+  saveCustomMasksToStorage();
+}
+
+export function getFrameHairRoleMap(gender, view = 'side', animMode = 'walk', frameIndex = 0) {
+  const key = normalizeMaskKey(gender, view, animMode, frameIndex);
+  const custom = CUSTOM_FRAME_MASKS.get(key);
+  const fallback = view === 'front'
+    ? CUSTOM_FRAME_MASKS.get(`${gender === 'female' ? 'female' : 'male'}:front:idle:0`)
+    : null;
+  const roles = custom && !Array.isArray(custom) && custom.hairRoles
+    ? custom.hairRoles
+    : fallback && !Array.isArray(fallback) ? fallback.hairRoles : null;
+  if (!roles || typeof roles !== 'object') return {};
+  return Object.fromEntries(Object.entries(roles).map(([role, coords]) => [
+    role,
+    Array.isArray(coords) ? coords.map(([x, y]) => [x, y]) : []
+  ]));
+}
+
+export function setFrameHairRoleMap(gender, view = 'side', animMode = 'walk', frameIndex = 0, hairRoles = {}) {
+  const key = normalizeMaskKey(gender, view, animMode, frameIndex);
+  const existing = CUSTOM_FRAME_MASKS.get(key);
+  const sectionMap = existing && !Array.isArray(existing)
+    ? { ...existing }
+    : getFrameSectionMap(gender, view, animMode, frameIndex);
+  sectionMap.hairRoles = Object.fromEntries(Object.entries(hairRoles || {}).map(([role, coords]) => [
+    role,
+    Array.isArray(coords)
+      ? coords.filter(([x, y]) => Number.isInteger(x) && Number.isInteger(y) && x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE).map(([x, y]) => [x, y])
+      : []
+  ]));
+  CUSTOM_FRAME_MASKS.set(key, sectionMap);
+  if (view === 'front' && Number(frameIndex) === 0) {
+    const copy = JSON.parse(JSON.stringify(sectionMap));
+    CUSTOM_FRAME_MASKS.set(`${gender === 'female' ? 'female' : 'male'}:front:idle:0`, copy);
+    CUSTOM_FRAME_MASKS.set(`${gender === 'female' ? 'female' : 'male'}:front:walk:0`, JSON.parse(JSON.stringify(copy)));
+  }
   saveCustomMasksToStorage();
 }
 
@@ -2104,7 +2546,14 @@ export function importMaskOverrides(jsonOrObj) {
     } else if (val && typeof val === 'object') {
       const cleanedObj = {};
       for (const [secId, coords] of Object.entries(val)) {
-        if (Array.isArray(coords)) {
+        if ((secId === 'skinRoles' || secId === 'hairRoles') && coords && typeof coords === 'object' && !Array.isArray(coords)) {
+          cleanedObj[secId] = Object.fromEntries(Object.entries(coords).map(([role, roleCoords]) => [
+            role,
+            Array.isArray(roleCoords)
+              ? roleCoords.filter(([x, y]) => Number.isInteger(x) && Number.isInteger(y) && x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE).map(([x, y]) => [x, y])
+              : []
+          ]));
+        } else if (Array.isArray(coords)) {
           cleanedObj[secId] = coords
             .filter(([x, y]) => Number.isInteger(x) && Number.isInteger(y) && x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE)
             .map(([x, y]) => [x, y]);
@@ -2227,14 +2676,18 @@ export function analyzeBoilerplateFrame(baseGrid, gender, baseOrientation, animM
 
   let sectionMap = null;
   let sectionGrid = null;
+  let sectionBounds = null;
   if (!skipSectionMap) {
     sectionMap = getFrameSectionMap(gender, baseOrientation, animMode, frameIndex, baseGrid);
     sectionGrid = sectionMapToGrid(sectionMap);
+    sectionBounds = computeAnatomicalSectionBounds(sectionMap);
   }
 
   return {
     gender,
     baseOrientation,
+    animMode,
+    frameIndex,
     headTopY,
     headDy,
     headDx,
@@ -2249,14 +2702,86 @@ export function analyzeBoilerplateFrame(baseGrid, gender, baseOrientation, animM
     foregroundZMask: nearHandMask,
     foregroundZPixels: nearHandPixels,
     sectionMap,
-    sectionGrid
+    sectionGrid,
+    sectionBounds
   };
+}
+
+function computeSingleSectionBound(coords = []) {
+  if (!Array.isArray(coords) || coords.length === 0) return null;
+  let minX = GRID_SIZE;
+  let maxX = -1;
+  let minY = GRID_SIZE;
+  let maxY = -1;
+  const byRow = new Map();
+  for (const [x, y] of coords) {
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+    const row = byRow.get(y);
+    if (!row) {
+      byRow.set(y, { minX: x, maxX: x });
+    } else {
+      if (x < row.minX) row.minX = x;
+      if (x > row.maxX) row.maxX = x;
+    }
+  }
+  if (maxX < minX) return null;
+  return {
+    minX,
+    maxX,
+    minY,
+    maxY,
+    width: maxX - minX + 1,
+    height: maxY - minY + 1,
+    centerX: (minX + maxX) / 2,
+    centerY: (minY + maxY) / 2,
+    count: coords.length,
+    byRow
+  };
+}
+
+function computeAnatomicalSectionBounds(sectionMap) {
+  if (!sectionMap) return {};
+  const bounds = {};
+  for (const s of MASK_SECTIONS) {
+    bounds[s.id] = computeSingleSectionBound(sectionMap[s.id] || []);
+  }
+  bounds.cranium = computeSingleSectionBound([
+    ...(sectionMap.hair || []),
+    ...(sectionMap.head || [])
+  ]);
+  bounds.upperBody = computeSingleSectionBound([
+    ...(sectionMap.torso || []),
+    ...(sectionMap.fg_sleeve || []),
+    ...(sectionMap.bg_sleeve || [])
+  ]);
+  bounds.pelvisAndLegs = computeSingleSectionBound([
+    ...(sectionMap.fg_leg || []),
+    ...(sectionMap.bg_leg || []),
+    ...(sectionMap.fg_boot || []),
+    ...(sectionMap.bg_boot || [])
+  ]);
+  return bounds;
+}
+
+function getSectionRowSpan(sectionGrid, y, allowedSections) {
+  let minX = GRID_SIZE;
+  let maxX = -1;
+  for (let x = 0; x < GRID_SIZE; x += 1) {
+    const sec = sectionGrid[y]?.[x];
+    if (sec && allowedSections.has(sec)) {
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+    }
+  }
+  return maxX >= minX ? { minX, maxX } : null;
 }
 
 function getFrontLegSideAndMaxY(baseGrid, frameInfo, x, y) {
   if (x <= 14) return { side: 'left', footMaxY: frameInfo.leftFootMaxY };
   if (x >= 16) return { side: 'right', footMaxY: frameInfo.rightFootMaxY };
-  // x === 15 (center column on female front walk)
   const hasLeft = Boolean(baseGrid[y]?.[14]);
   const hasRight = Boolean(baseGrid[y]?.[16]);
   if (hasLeft && !hasRight) return { side: 'left', footMaxY: frameInfo.leftFootMaxY };
@@ -2275,743 +2800,454 @@ function getContiguousSegmentBounds(baseGrid, y, startX, minX = 0, maxX = GRID_S
 }
 
 function renderFittedPantsOrSkirt(target, baseGrid, frameInfo, preset, palette, hasShoes) {
-  const { gender, baseOrientation, headDy, leftFootMaxY, rightFootMaxY, sideLimb, footBottomY } = frameInfo;
+  const { gender, baseOrientation, headDy, sectionGrid, sectionBounds } = frameInfo;
   const { O, P, S, L, farO, farP, farS, farL } = palette;
-  const pat = preset.patternId || 'trousersJeans';
+  const pat = preset.patternId || "trousersJeans";
+  if (!sectionGrid) return;
 
   if (isSkirtPreset(preset)) {
     const isShort = isShortSkirtPreset(preset);
-    const skirtTopY = 16 + headDy;
-    const skirtBottomY = (isShort ? 22 : 26) + headDy;
-    const H = skirtBottomY - skirtTopY + 1;
+    const legBounds = sectionBounds?.pelvisAndLegs;
+    const fgLegBounds = sectionBounds?.fg_leg;
+    const waistTopY = fgLegBounds?.minY ?? legBounds?.minY ?? (17 + headDy);
+    const maxBootY = Math.max(
+      sectionBounds?.fg_boot?.maxY ?? 25,
+      sectionBounds?.bg_boot?.maxY ?? 25,
+      fgLegBounds?.maxY ?? 24
+    );
+    const skirtBottomY = isShort
+      ? Math.min(maxBootY - 2, (fgLegBounds?.maxY ?? 23))
+      : maxBootY;
+    const effectiveH = Math.max(1, skirtBottomY - waistTopY + 1);
+    const hipSpan = fgLegBounds?.byRow?.get(waistTopY) || legBounds?.byRow?.get(waistTopY) || { minX: 12, maxX: 18 };
+    const hipCenterX = (hipSpan.minX + hipSpan.maxX) / 2;
 
-    if (baseOrientation === 'front') {
-      const hipMinX = 11;
-      const hipMaxX = gender === 'female' ? 19 : 20;
-      const stepSway = leftFootMaxY > rightFootMaxY ? -1 : rightFootMaxY > leftFootMaxY ? 1 : 0;
+    const legSectionSet = new Set(["fg_leg", "bg_leg", "fg_boot", "bg_boot"]);
 
-      for (let y = skirtTopY; y <= skirtBottomY; y += 1) {
-        if (y < 0 || y >= GRID_SIZE) continue;
-        const ry = y - skirtTopY;
-        let rowLeft = hipMinX;
-        let rowRight = hipMaxX;
-        if (ry >= 4 && ry <= 6) {
-          rowLeft = hipMinX - 1;
-          rowRight = hipMaxX + 1;
-        } else if (ry >= 7) {
-          const sway = ry >= 9 ? stepSway : 0;
-          rowLeft = hipMinX - 2 + Math.min(0, sway);
-          rowRight = hipMaxX + 2 + Math.max(0, sway);
-        }
-
-        for (let x = rowLeft; x <= rowRight; x += 1) {
-          if (x < 0 || x >= GRID_SIZE) continue;
-          if (frameInfo.nearHandMask?.has(`${x},${y}`)) continue;
-          if (ry === 0 || ry === H - 1 || x === rowLeft || x === rowRight) {
-            target[y][x] = O;
-          } else if ((isShort && ry === H - 2) || (!isShort && (ry === 5 || ry === H - 2))) {
-            target[y][x] = (x - rowLeft) % 3 === 1 ? L : S;
-          } else if (x <= rowLeft + 2 || x === 15) {
-            target[y][x] = L;
-          } else if (x >= rowRight - 2) {
-            target[y][x] = S;
-          } else {
-            target[y][x] = P;
-          }
-        }
-      }
-
-      if (!isShort) {
-        for (let y = skirtBottomY + 1; y < GRID_SIZE; y += 1) {
-          for (let x = 8; x <= 23; x += 1) {
-            if (!baseGrid[y]?.[x]) continue;
-            if (frameInfo.nearHandMask?.has(`${x},${y}`)) continue;
-            const { footMaxY } = getFrontLegSideAndMaxY(baseGrid, frameInfo, x, y);
-            const shoeH = hasShoes ? 3 : 0;
-            if (footMaxY - y >= shoeH) {
-              target[y][x] = isSpriteOutline(baseGrid[y][x]) ? O : S;
-            }
-          }
-        }
-      }
-      return;
-    }
-
-    // Side view skirt: keep a graceful, consistent bell width anchored to the hip/pelvis
-    // rather than stretching out to the tips of the striding feet.
-    const skirtFixedBottomY = isShort ? (22 + headDy) : 26;
-    const effectiveH = skirtFixedBottomY - skirtTopY + 1;
-    const centerHipX = 15.5 + (frameInfo.headDx > 0 ? 0.5 : 0);
-    let hemLeft = 10;
-    let hemRight = 21;
-
-    for (let y = skirtTopY; y <= skirtFixedBottomY; y += 1) {
+    for (let y = waistTopY; y <= skirtBottomY; y += 1) {
       if (y < 0 || y >= GRID_SIZE) continue;
-      const ry = y - skirtTopY;
+      const ry = y - waistTopY;
       const t = effectiveH > 1 ? ry / (effectiveH - 1) : 0;
-      const halfWidth = 2.5 + t * (isShort ? 2.0 : 3.2);
-      const rowLeft = Math.round(centerHipX - halfWidth);
-      const rowRight = Math.round(centerHipX + halfWidth);
-      hemLeft = rowLeft;
-      hemRight = rowRight;
+      const bellHalfW = (hipSpan.maxX - hipSpan.minX) * 0.5 + 0.5 + t * (isShort ? 2.0 : 3.2);
+      const legSpan = getSectionRowSpan(sectionGrid, y, legSectionSet);
 
-      // Clear any stray bare thigh pixels of the base sprite that poke outside the skirt bell (thighs only, never feet/legs y >= 24!)
-      if (!isShort && ry >= 3 && y < 24) {
-        for (let x = 5; x < rowLeft; x += 1) {
-          if (frameInfo.nearHandMask?.has(`${x},${y}`)) continue;
-          if (baseGrid[y]?.[x]) target[y][x] = null;
-        }
-        for (let x = rowRight + 1; x <= 26; x += 1) {
-          if (frameInfo.nearHandMask?.has(`${x},${y}`)) continue;
-          if (baseGrid[y]?.[x]) target[y][x] = null;
-        }
+      let rowLeft = Math.round(hipCenterX - bellHalfW);
+      let rowRight = Math.round(hipCenterX + bellHalfW);
+      if (legSpan) {
+        rowLeft = Math.min(rowLeft, Math.max(hipSpan.minX - 4, legSpan.minX));
+        rowRight = Math.max(rowRight, Math.min(hipSpan.maxX + 4, legSpan.maxX));
       }
 
       for (let x = rowLeft; x <= rowRight; x += 1) {
         if (x < 0 || x >= GRID_SIZE) continue;
-        if (frameInfo.nearHandMask?.has(`${x},${y}`)) continue;
-        if (ry === 0 || ry === effectiveH - 1 || x === rowLeft || x === rowRight) {
+        const sec = sectionGrid[y]?.[x];
+        if (sec === "fg_arm" || sec === "fg_hand" || sec === "fg_sleeve" || frameInfo.nearHandMask?.has(`${x},${y}`)) {
+          continue;
+        }
+        if (sec === "torso" && ry === 0) continue;
+        if (sec === "fg_foot" || sec === "bg_foot") continue;
+
+        const isTopWaist = ry === 0;
+        const isBottomHem = ry === effectiveH - 1;
+        const isOuterEdge = x === rowLeft || x === rowRight;
+        const isFlounceRow = !isShort && ry === effectiveH - 2;
+        const isTartanBand = isShort && (ry === effectiveH - 2 || ry === Math.floor(effectiveH / 2));
+
+        if (isTopWaist || isBottomHem || isOuterEdge) {
           target[y][x] = O;
-        } else if ((isShort && ry === effectiveH - 2) || (!isShort && (ry === 5 || ry === effectiveH - 2))) {
-          target[y][x] = (x - rowLeft) % 3 === 1 ? L : S;
-        } else if (x <= rowLeft + 2) {
-          target[y][x] = S;
-        } else if (x >= rowRight - 2) {
-          target[y][x] = L;
+        } else if (ry === 1) {
+          target[y][x] = (x === Math.round(hipCenterX)) ? L : S;
+        } else if (isFlounceRow) {
+          target[y][x] = (x - rowLeft) % 2 === 1 ? L : S;
+        } else if (isTartanBand) {
+          target[y][x] = (x - rowLeft) % 2 === 0 ? L : S;
         } else {
-          target[y][x] = P;
-        }
-      }
-    }
-
-    if (!isShort) {
-      for (let y = skirtFixedBottomY + 1; y < GRID_SIZE; y += 1) {
-        for (let x = 5; x <= 26; x += 1) {
-          if (!baseGrid[y]?.[x]) continue;
-          if (frameInfo.nearHandMask?.has(`${x},${y}`)) continue;
-          const limb = sideLimb[y][x] || 'N';
-          const fMax = footBottomY[limb][x] >= 24 ? footBottomY[limb][x] : 29;
-          const shoeH = hasShoes ? 3 : 0;
-          if (fMax - y >= shoeH) {
-            target[y][x] = isSpriteOutline(baseGrid[y][x]) ? O : (limb === 'F' ? farS : S);
-          } else if (x === hemLeft || x === hemRight) {
-            target[y][x] = O;
-          }
-        }
-      }
-    }
-    return;
-  }
-
-  // Trousers, Jeans, Dungarees, Breeches/Shorts
-  if (frameInfo.sectionGrid && !isSkirtPreset(preset)) {
-    const isShortPant = pat === 'breechesShorts';
-    for (let y = 0; y < GRID_SIZE; y += 1) {
-      for (let x = 0; x < GRID_SIZE; x += 1) {
-        if (frameInfo.nearHandMask?.has(`${x},${y}`)) continue;
-        const c = baseGrid[y]?.[x];
-        if (!c) continue;
-        const sec = frameInfo.sectionGrid[y]?.[x];
-        if (!sec) continue;
-
-        const isFgLeg = sec === 'fg_leg' || (!isShortPant && sec === 'fg_boot');
-        const isBgLeg = sec === 'bg_leg' || (!isShortPant && sec === 'bg_boot');
-
-        if (!isFgLeg && !isBgLeg) continue;
-
-        const isFar = isBgLeg;
-        const curO = isFar ? farO : O;
-        const curP = isFar ? farP : P;
-        const curS = isFar ? farS : S;
-        const curL = isFar ? farL : L;
-
-        const isWaistband = sec === 'fg_leg' && (!baseGrid[y - 1]?.[x] || frameInfo.sectionGrid[y - 1]?.[x] === 'torso');
-        const isBoundary =
-          isSpriteOutline(c) ||
-          !baseGrid[y - 1]?.[x] ||
-          !baseGrid[y + 1]?.[x] ||
-          !baseGrid[y]?.[x - 1] ||
-          !baseGrid[y]?.[x + 1] ||
-          isWaistband;
-
-        if (isBoundary) {
-          target[y][x] = curO;
-        } else if (baseOrientation === 'side') {
-          const isFront = !baseGrid[y]?.[x + 1] || (frameInfo.sectionGrid[y]?.[x + 1] !== sec);
-          const isBack = !baseGrid[y]?.[x - 1] || (frameInfo.sectionGrid[y]?.[x - 1] !== sec);
-          if (isFront) {
-            target[y][x] = curL;
-          } else if (isBack) {
-            target[y][x] = curS;
+          const relX = x - rowLeft;
+          const rowW = Math.max(1, rowRight - rowLeft);
+          const isPleatCrease = isShort ? (relX % 2 === 0) : (relX % 3 === 0);
+          if (baseOrientation === "side") {
+            if (x >= rowRight - 2) {
+              target[y][x] = isPleatCrease ? P : L;
+            } else if (x <= rowLeft + 2) {
+              target[y][x] = isPleatCrease ? farS : S;
+            } else {
+              target[y][x] = isPleatCrease ? S : P;
+            }
           } else {
-            target[y][x] = curP;
+            if (relX <= 2 || Math.abs(x - hipCenterX) < 0.8) {
+              target[y][x] = L;
+            } else if (relX >= rowW - 2 || isPleatCrease) {
+              target[y][x] = S;
+            } else {
+              target[y][x] = P;
+            }
           }
-        } else {
-          target[y][x] = x <= 15 ? curL : curP;
         }
       }
     }
     return;
   }
 
-  const isShortPant = pat === 'breechesShorts';
-  const minDistFromFoot = isShortPant ? 5 : (hasShoes ? 2 : 3);
-  const pelvisTopY = 16 + headDy;
-  const pelvisBottomY = 19 + headDy;
+  // Mask-driven Trousers, Jeans, Bell-Bottoms & Breeches/Shorts
+  const isShortPant = pat === "breechesShorts";
+  const isBellBottom = pat === "bellBottomsBaggy";
+  const isDistressed = pat === "distressedJeans";
+  const fgLegSet = new Set(isShortPant ? ["fg_leg"] : ["fg_leg", "fg_boot"]);
+  const bgLegSet = new Set(isShortPant ? ["bg_leg"] : ["bg_leg", "bg_boot"]);
+  const waistTopY = sectionBounds?.fg_leg?.minY ?? (17 + headDy);
 
-  if (baseOrientation === 'front') {
-    const pelvisMinX = 11;
-    const pelvisMaxX = gender === 'female' ? 19 : 20;
+  for (let y = 0; y < GRID_SIZE; y += 1) {
+    const fgSpan = getSectionRowSpan(sectionGrid, y, fgLegSet);
+    const bgSpan = getSectionRowSpan(sectionGrid, y, bgLegSet);
 
-    for (let y = pelvisTopY; y <= pelvisBottomY; y += 1) {
-      if (y < 0 || y >= GRID_SIZE) continue;
-      for (let x = pelvisMinX; x <= pelvisMaxX; x += 1) {
-        if (frameInfo.nearHandMask?.has(`${x},${y}`)) continue;
-        const c = baseGrid[y]?.[x];
-        if (!c) continue;
-        const isEdge = x === pelvisMinX || x === pelvisMaxX || !baseGrid[y]?.[x - 1] || !baseGrid[y]?.[x + 1];
-        if (y === pelvisTopY || isEdge || isSpriteOutline(c)) {
-          target[y][x] = O;
-        } else if (y === pelvisBottomY && (x === 15 || (gender === 'male' && x === 16))) {
-          target[y][x] = O;
-        } else if (x <= pelvisMinX + 2) {
-          target[y][x] = L;
-        } else if (x >= pelvisMaxX - 2) {
-          target[y][x] = S;
-        } else {
-          target[y][x] = P;
-        }
-      }
-    }
-
-    for (let y = pelvisBottomY + 1; y < GRID_SIZE; y += 1) {
-      for (let x = 8; x <= 23; x += 1) {
-        const c = baseGrid[y]?.[x];
-        if (!c) continue;
-        const { side, footMaxY } = getFrontLegSideAndMaxY(baseGrid, frameInfo, x, y);
-        const dist = footMaxY - y;
-        if (dist < minDistFromFoot) continue;
-
-        const subMin = side === 'left' ? 8 : (gender === 'female' ? 15 : 16);
-        const subMax = side === 'left' ? 15 : 23;
-        const { segMin, segMax } = getContiguousSegmentBounds(baseGrid, y, x, subMin, subMax);
-
-        if (x === segMin || x === segMax || isSpriteOutline(c)) {
-          target[y][x] = O;
-        } else if (dist === minDistFromFoot) {
-          target[y][x] = pat === 'bellBottomsBaggy' ? L : S;
-        } else if (pat === 'distressedJeans' && dist === 5) {
-          target[y][x] = L;
-        } else if (x === segMin + 1) {
-          target[y][x] = L;
-        } else if (x === segMax - 1 && segMax - segMin >= 3) {
-          target[y][x] = S;
-        } else {
-          target[y][x] = P;
-        }
-      }
-    }
-    return;
-  }
-
-  // Side view trousers / breeches
-  for (let y = pelvisTopY; y <= pelvisBottomY; y += 1) {
-    if (y < 0 || y >= GRID_SIZE) continue;
-    let rowMin = GRID_SIZE;
-    let rowMax = -1;
-    for (let x = 11; x <= 22; x += 1) {
-      if (baseGrid[y]?.[x] && !frameInfo.nearHandMask?.has(`${x},${y}`)) {
-        rowMin = Math.min(rowMin, x);
-        rowMax = Math.max(rowMax, x);
-      }
-    }
-    if (rowMax < rowMin) {
-      rowMin = 13;
-      rowMax = 18;
-    } else {
-      rowMin = Math.min(rowMin, 13);
-    }
-    for (let x = rowMin; x <= rowMax; x += 1) {
-      if (frameInfo.nearHandMask?.has(`${x},${y}`)) continue;
-      const c = baseGrid[y]?.[x];
-      if (y === pelvisTopY || x === rowMin || x === rowMax || (c && isSpriteOutline(c))) {
-        target[y][x] = O;
-      } else if (x >= rowMax - 1) {
-        target[y][x] = L;
-      } else if (x <= rowMin + 1) {
-        target[y][x] = S;
-      } else {
-        target[y][x] = P;
-      }
-    }
-  }
-
-  for (let y = pelvisBottomY + 1; y < GRID_SIZE; y += 1) {
-    if (y <= 20) {
-      let legMin = GRID_SIZE;
-      let legMax = -1;
-      for (let x = 11; x <= 22; x += 1) {
-        if (baseGrid[y]?.[x] && !frameInfo.nearHandMask?.has(`${x},${y}`)) {
-          legMin = Math.min(legMin, x);
-          legMax = Math.max(legMax, x);
-        }
-      }
-      if (legMax > legMin) {
-        for (let x = legMin; x <= legMax; x += 1) {
-          if (!baseGrid[y]?.[x] && !frameInfo.nearHandMask?.has(`${x},${y}`)) {
-            target[y][x] = S;
-          }
-        }
-      }
-    }
-
-    for (let x = 5; x <= 26; x += 1) {
+    for (let x = 0; x < GRID_SIZE; x += 1) {
       if (frameInfo.nearHandMask?.has(`${x},${y}`)) continue;
       const c = baseGrid[y]?.[x];
       if (!c) continue;
-      const limb = sideLimb[y][x] || 'N';
-      const rawFootMax = footBottomY[limb][x];
-      const footMaxY = rawFootMax >= 24 ? rawFootMax : 29;
-      const dist = footMaxY - y;
-      if (dist < minDistFromFoot) continue;
+      const sec = sectionGrid[y]?.[x];
+      if (!sec) continue;
+      if (sec === "fg_arm" || sec === "fg_hand" || sec === "fg_sleeve") continue;
 
-      const curO = limb === 'F' ? farO : O;
-      const curP = limb === 'F' ? farP : P;
-      const curS = limb === 'F' ? farS : S;
-      const curL = limb === 'F' ? farL : L;
+      const isFg = fgLegSet.has(sec);
+      const isBg = bgLegSet.has(sec);
+      if (!isFg && !isBg) continue;
 
-      const isBoundary =
+      const activeSet = isFg ? fgLegSet : bgLegSet;
+      const span = isFg ? fgSpan : bgSpan;
+      const curO = isFg ? O : farO;
+      const curP = isFg ? P : farP;
+      const curS = isFg ? S : farS;
+      const curL = isFg ? L : farL;
+
+      const upSec = sectionGrid[y - 1]?.[x];
+      const downSec = sectionGrid[y + 1]?.[x];
+      const leftSec = sectionGrid[y]?.[x - 1];
+      const rightSec = sectionGrid[y]?.[x + 1];
+
+      const isWaistRow = y === waistTopY || (sec === "fg_leg" && upSec === "torso");
+      const isBottomCuff =
+        (isShortPant && (downSec === "fg_boot" || downSec === "bg_boot")) ||
+        (!isShortPant && (downSec === "fg_foot" || downSec === "bg_foot" || !baseGrid[y + 1]?.[x]));
+      const isOuterBoundary =
         isSpriteOutline(c) ||
-        sideLimb[y][x - 1] !== limb ||
-        sideLimb[y][x + 1] !== limb;
+        !baseGrid[y - 1]?.[x] ||
+        !baseGrid[y + 1]?.[x] ||
+        !baseGrid[y]?.[x - 1] ||
+        !baseGrid[y]?.[x + 1] ||
+        (leftSec && !activeSet.has(leftSec) && leftSec !== "fg_arm" && leftSec !== "fg_hand") ||
+        (rightSec && !activeSet.has(rightSec) && rightSec !== "fg_arm" && rightSec !== "fg_hand");
 
-      if (isBoundary) {
+      if (isWaistRow) {
+        const isBeltEdge = !span || x === span.minX || x === span.maxX;
+        const isBuckle = span && x === (baseOrientation === "side" ? span.maxX - 1 : Math.round((span.minX + span.maxX) / 2));
+        target[y][x] = isBeltEdge ? curO : (isBuckle ? curL : curS);
+      } else if (isOuterBoundary) {
         target[y][x] = curO;
-      } else if (dist === minDistFromFoot) {
-        target[y][x] = pat === 'bellBottomsBaggy' ? curL : curS;
-      } else if (pat === 'distressedJeans' && dist === 5) {
+      } else if (isBottomCuff) {
+        target[y][x] = (isBellBottom || isShortPant) ? curL : curS;
+      } else if (isDistressed && (sec === "fg_boot" || sec === "bg_boot") && (upSec === "fg_leg" || upSec === "bg_leg")) {
         target[y][x] = curL;
-      } else if (sideLimb[y][x + 2] !== limb) {
-        target[y][x] = curL;
-      } else if (sideLimb[y][x - 2] !== limb) {
-        target[y][x] = curS;
+      } else if (baseOrientation === "side" && span) {
+        if (x >= span.maxX - 1) {
+          target[y][x] = curL;
+        } else if (x <= span.minX + 1) {
+          target[y][x] = curS;
+        } else {
+          target[y][x] = curP;
+        }
       } else {
-        target[y][x] = curP;
+        target[y][x] = x <= 15 ? curL : curP;
+      }
+    }
+
+    // Bell-bottom flare on boot section
+    if (isBellBottom && (fgSpan || bgSpan)) {
+      for (const [span, isFg] of [[fgSpan, true], [bgSpan, false]]) {
+        if (!span) continue;
+        const secAtMin = sectionGrid[y]?.[span.minX];
+        if (secAtMin !== "fg_boot" && secAtMin !== "bg_boot") continue;
+        const curO = isFg ? O : farO;
+        const curL = isFg ? L : farL;
+        if (span.maxX + 1 < GRID_SIZE && !target[y][span.maxX + 1]) {
+          target[y][span.maxX] = curL;
+          target[y][span.maxX + 1] = curO;
+        }
       }
     }
   }
 }
 
 function renderFittedShoes(target, baseGrid, frameInfo, preset, palette) {
-  const { gender, baseOrientation, sideLimb, footBottomY } = frameInfo;
+  const { baseOrientation, sectionGrid, sectionBounds } = frameInfo;
   const { O, P, S, L, farO, farP, farS, farL } = palette;
-  const pat = preset.patternId || 'boots';
-  const shoeHeight = pat === 'tallRidingBoots' ? 5 : pat === 'boots' ? 4 : 3;
+  const pat = preset.patternId || "boots";
+  if (!sectionGrid) return;
 
-  if (frameInfo.sectionGrid) {
-    const isTall = pat === 'tallRidingBoots' || pat === 'boots';
-    for (let y = 0; y < GRID_SIZE; y += 1) {
-      for (let x = 0; x < GRID_SIZE; x += 1) {
-        const c = baseGrid[y]?.[x];
-        if (!c) continue;
-        const sec = frameInfo.sectionGrid[y]?.[x];
-        if (!sec) continue;
+  const isTallRiding = pat === "tallRidingBoots";
+  const isWorkBoot = pat === "boots";
+  const isSneaker = pat === "sneakersShoes";
+  const fgBootMinY = sectionBounds?.fg_boot?.minY ?? 24;
+  const fgBootMaxY = sectionBounds?.fg_boot?.maxY ?? 26;
+  const bgBootMinY = sectionBounds?.bg_boot?.minY ?? 24;
+  const bgBootMaxY = sectionBounds?.bg_boot?.maxY ?? 26;
 
-        const isFgShoe = sec === 'fg_foot' || (isTall && sec === 'fg_boot');
-        const isBgShoe = sec === 'bg_foot' || (isTall && sec === 'bg_boot');
-
-        if (!isFgShoe && !isBgShoe) continue;
-
-        const isFar = isBgShoe;
-        const curO = isFar ? farO : O;
-        const curP = isFar ? farP : P;
-        const curS = isFar ? farS : S;
-        const curL = isFar ? farL : L;
-
-        const isSoleRow = !baseGrid[y + 1]?.[x] || (!baseGrid[y + 1]?.[x - 1] && !baseGrid[y + 1]?.[x + 1]);
-        const isBootTop = isTall && (sec === 'fg_boot' || sec === 'bg_boot') &&
-          (!baseGrid[y - 1]?.[x] || frameInfo.sectionGrid[y - 1]?.[x] === 'fg_leg' || frameInfo.sectionGrid[y - 1]?.[x] === 'bg_leg');
-
-        const isBoundary =
-          isSpriteOutline(c) ||
-          !baseGrid[y - 1]?.[x] ||
-          !baseGrid[y + 1]?.[x] ||
-          !baseGrid[y]?.[x - 1] ||
-          !baseGrid[y]?.[x + 1] ||
-          isSoleRow ||
-          isBootTop;
-
-        if (isBoundary) {
-          target[y][x] = curO;
-        } else if (isSoleRow) {
-          target[y][x] = curS;
-        } else if (baseOrientation === 'side') {
-          const isFront = !baseGrid[y]?.[x + 1] || (frameInfo.sectionGrid[y]?.[x + 1] !== sec);
-          const isBack = !baseGrid[y]?.[x - 1] || (frameInfo.sectionGrid[y]?.[x - 1] !== sec);
-          if (isFront) {
-            target[y][x] = curL;
-          } else if (isBack) {
-            target[y][x] = curS;
-          } else {
-            target[y][x] = curP;
-          }
-        } else {
-          target[y][x] = x <= 15 ? curL : curP;
-        }
-      }
-    }
-    return;
-  }
-
-  if (baseOrientation === 'front') {
-    for (let y = 22; y < GRID_SIZE; y += 1) {
-      for (let x = 8; x <= 23; x += 1) {
-        const c = baseGrid[y]?.[x];
-        if (!c) continue;
-        const { side, footMaxY } = getFrontLegSideAndMaxY(baseGrid, frameInfo, x, y);
-        const dist = footMaxY - y;
-        if (dist < 0 || dist >= shoeHeight) continue;
-
-        const subMin = side === 'left' ? 8 : (gender === 'female' ? 15 : 16);
-        const subMax = side === 'left' ? 15 : 23;
-        const { segMin, segMax } = getContiguousSegmentBounds(baseGrid, y, x, subMin, subMax);
-
-        if (dist === 0 || x === segMin || x === segMax || isSpriteOutline(c)) {
-          target[y][x] = O;
-        } else if (dist === 1) {
-          target[y][x] = (pat === 'sneakersShoes' || x === segMin + 1) ? L : P;
-        } else if (dist === shoeHeight - 1) {
-          target[y][x] = pat === 'tallRidingBoots' ? L : S;
-        } else {
-          target[y][x] = x <= (segMin + segMax) / 2 ? P : S;
-        }
-      }
-    }
-    return;
-  }
-
-  // Side view shoes
-  for (let y = 22; y < GRID_SIZE; y += 1) {
-    for (let x = 5; x <= 26; x += 1) {
+  for (let y = 0; y < GRID_SIZE; y += 1) {
+    for (let x = 0; x < GRID_SIZE; x += 1) {
       const c = baseGrid[y]?.[x];
       if (!c) continue;
-      const limb = sideLimb[y][x] || 'N';
-      const footMaxY = footBottomY[limb][x];
-      if (footMaxY < 25) continue;
-      const dist = footMaxY - y;
-      if (dist < 0 || dist >= shoeHeight) continue;
+      const sec = sectionGrid[y]?.[x];
+      if (!sec) continue;
 
-      const curO = limb === 'F' ? farO : O;
-      const curP = limb === 'F' ? farP : P;
-      const curS = limb === 'F' ? farS : S;
-      const curL = limb === 'F' ? farL : L;
+      const isFgBootIncluded =
+        sec === "fg_boot" &&
+        (isTallRiding || (isWorkBoot && y >= fgBootMinY + 1) || (isSneaker && y >= fgBootMaxY));
+      const isBgBootIncluded =
+        sec === "bg_boot" &&
+        (isTallRiding || (isWorkBoot && y >= bgBootMinY + 1) || (isSneaker && y >= bgBootMaxY));
 
-      const isBoundary =
+      const isFgShoe = sec === "fg_foot" || isFgBootIncluded;
+      const isBgShoe = sec === "bg_foot" || isBgBootIncluded;
+      if (!isFgShoe && !isBgShoe) continue;
+
+      const isFar = isBgShoe;
+      const curO = isFar ? farO : O;
+      const curP = isFar ? farP : P;
+      const curS = isFar ? farS : S;
+      const curL = isFar ? farL : L;
+
+      const upSec = sectionGrid[y - 1]?.[x];
+      const downSec = sectionGrid[y + 1]?.[x];
+      const leftSec = sectionGrid[y]?.[x - 1];
+      const rightSec = sectionGrid[y]?.[x + 1];
+
+      const isSoleRow = !baseGrid[y + 1]?.[x] || !downSec;
+      const isTopCollar =
+        !upSec ||
+        upSec === "fg_leg" ||
+        upSec === "bg_leg" ||
+        (!isTallRiding && (upSec === "fg_boot" || upSec === "bg_boot"));
+
+      const isOuterEdge =
         isSpriteOutline(c) ||
-        sideLimb[y][x - 1] !== limb ||
-        sideLimb[y][x + 1] !== limb;
+        !baseGrid[y]?.[x - 1] ||
+        !baseGrid[y]?.[x + 1] ||
+        (isFgShoe && (leftSec === "bg_foot" || leftSec === "bg_boot")) ||
+        (isBgShoe && (rightSec === "fg_foot" || rightSec === "fg_boot"));
 
-      if (dist === 0 || isBoundary) {
+      if (isSoleRow) {
+        const isToeOrHeelCorner = !baseGrid[y]?.[x - 1] || !baseGrid[y]?.[x + 1];
+        target[y][x] = (isSneaker && !isToeOrHeelCorner) ? curL : curO;
+      } else if (isOuterEdge) {
         target[y][x] = curO;
-      } else if (dist === 1) {
-        target[y][x] = (sideLimb[y][x + 2] !== limb || pat === 'sneakersShoes') ? curL : curP;
-      } else if (dist === shoeHeight - 1) {
-        target[y][x] = pat === 'tallRidingBoots' ? curL : curS;
+      } else if (isTopCollar) {
+        target[y][x] = (isTallRiding || isSneaker) ? curL : curO;
+      } else if (baseOrientation === "side") {
+        const isToeFront = !baseGrid[y]?.[x + 2] || sectionGrid[y]?.[x + 2] !== sec;
+        const isHeelBack = !baseGrid[y]?.[x - 2] || sectionGrid[y]?.[x - 2] !== sec;
+        if (isToeFront) {
+          target[y][x] = curL;
+        } else if (isHeelBack) {
+          target[y][x] = isTallRiding && y === (isFar ? bgBootMaxY : fgBootMaxY) ? curL : curS;
+        } else {
+          target[y][x] = isSneaker && ((x + y) % 2 === 0) ? curL : curP;
+        }
       } else {
-        target[y][x] = sideLimb[y][x + 2] !== limb ? curL : curP;
+        target[y][x] = x <= 15 ? curL : curP;
       }
     }
   }
 }
 
 function renderFittedShirt(target, baseGrid, frameInfo, preset, palette) {
-  const { gender, baseOrientation, headDy } = frameInfo;
+  const { baseOrientation, headDy, sectionGrid, sectionBounds } = frameInfo;
   const { O, P, S, L, farO, farP, farS, farL } = palette;
-  const pat = preset.patternId || 'teeHoodie';
-  const isSleeveless = pat === 'vestJerkin' || pat === 'sleevelessTank';
-  const isLongSleeve = pat === 'suitJacket' || pat === 'doubletCoat' || pat === 'capeletCoat';
-  const hasHighCollar = pat === 'turtleneckSweater' || pat === 'calicoBodice';
-  const isCapelet = pat === 'capeletCoat';
+  const pat = preset.patternId || "teeHoodie";
+  if (!sectionGrid) return;
 
-  if (frameInfo.sectionGrid) {
-    for (let y = 0; y < GRID_SIZE; y += 1) {
-      for (let x = 0; x < GRID_SIZE; x += 1) {
-        const c = baseGrid[y]?.[x];
-        if (!c) continue;
-        const sec = frameInfo.sectionGrid[y]?.[x];
+  const isSleeveless = pat === "vestJerkin" || pat === "sleevelessTank";
+  const isLongSleeve =
+    pat === "fringedBuckskin" ||
+    pat === "suitJacket" ||
+    pat === "doubletCoat" ||
+    pat === "capeletCoat" ||
+    pat === "turtleneckSweater";
+  const hasHighCollar =
+    pat === "turtleneckSweater" ||
+    pat === "calicoBodice" ||
+    pat === "doubletCoat";
+  const isCapelet = pat === "capeletCoat";
 
-        const isCollar = hasHighCollar && sec === 'head' && y >= 7 + headDy;
-        const isTorso = sec === 'torso';
-        const isFgSleeve = !isSleeveless && (sec === 'fg_sleeve' || (isLongSleeve && sec === 'fg_arm'));
-        const isBgSleeve = !isSleeveless && (sec === 'bg_sleeve' || (isLongSleeve && sec === 'bg_arm'));
+  const torsoBounds = sectionBounds?.torso;
+  const torsoMinY = torsoBounds?.minY ?? (9 + headDy);
+  const torsoMaxY = torsoBounds?.maxY ?? (16 + headDy);
+  const torsoCenterX = torsoBounds?.centerX ?? 16;
 
-        if (!isCollar && !isTorso && !isFgSleeve && !isBgSleeve) continue;
-
-        if (isTorso && frameInfo.nearHandMask?.has(`${x},${y}`)) continue;
-
-        const isFar = isBgSleeve;
-        const curO = isFar ? farO : O;
-        const curP = isFar ? farP : P;
-        const curS = isFar ? farS : S;
-        const curL = isFar ? farL : L;
-
-        const isSleeveHem = isFgSleeve && sec === 'fg_sleeve' && frameInfo.sectionGrid[y + 1]?.[x] === 'fg_arm';
-        const isShirtHem = isTorso && frameInfo.sectionGrid[y + 1]?.[x] === 'fg_leg';
-        const isBoundary =
-          isSpriteOutline(c) ||
-          !baseGrid[y - 1]?.[x] ||
-          !baseGrid[y + 1]?.[x] ||
-          !baseGrid[y]?.[x - 1] ||
-          !baseGrid[y]?.[x + 1] ||
-          isSleeveHem ||
-          isShirtHem;
-
-        if (isBoundary) {
-          target[y][x] = curO;
-        } else if (isFgSleeve) {
-          const isTopShoulder = !baseGrid[y - 1]?.[x] || frameInfo.sectionGrid[y - 1]?.[x] === 'head';
-          const isFront = !baseGrid[y]?.[x + 1] || frameInfo.sectionGrid[y]?.[x + 1] !== 'fg_sleeve';
-          target[y][x] = (isTopShoulder || isFront) ? curL : curP;
-        } else if (isBgSleeve) {
-          target[y][x] = curP;
-        } else if (isCollar) {
-          target[y][x] = curP;
-        } else if (pat === 'fringedBuckskin') {
-          const isSuspender = baseOrientation === 'side'
-            ? (x === 15 || x === 16)
-            : (x === 13 || x === 17);
-          const isBuckle = isSuspender && (y === 11 + headDy || y === 12 + headDy);
-          const isCenterPlacket = baseOrientation === 'front' && Math.abs(x - 15.5) <= 0.6;
-          const isButton = isCenterPlacket && (y % 2 === 0);
-
-          if (isBuckle) {
-            target[y][x] = curL;
-          } else if (isSuspender) {
-            target[y][x] = curS;
-          } else if (isButton) {
-            target[y][x] = curL;
-          } else if (isCenterPlacket) {
-            target[y][x] = shadeHex(curP, 18);
-          } else if (baseOrientation === 'side') {
-            if (x >= 17) {
-              target[y][x] = shadeHex(curP, 16);
-            } else if (x <= 13) {
-              target[y][x] = shadeHex(curP, -16);
-            } else {
-              target[y][x] = curP;
-            }
-          } else {
-            target[y][x] = x <= 15 ? shadeHex(curP, 16) : curP;
-          }
-        } else if (pat === 'calicoBodice') {
-          target[y][x] = (x === 16 || x === 17) ? curL : curP;
-        } else if (isCapelet) {
-          target[y][x] = y <= 11 + headDy ? curL : curP;
-        } else {
-          if (baseOrientation === 'side') {
-            target[y][x] = x >= 17 ? curL : (x <= 13 ? curS : curP);
-          } else {
-            target[y][x] = x <= 15 ? curL : curP;
-          }
-        }
-      }
-    }
-    return;
-  }
-
-  if (baseOrientation === 'front') {
-    const torsoMinX = 11;
-    const torsoMaxX = gender === 'female' ? 19 : 20;
-    const cx = gender === 'female' ? 15.0 : 15.5;
-    const neckY = 8 + headDy;
-    const topY = 9 + headDy;
-    const bottomY = 16 + headDy;
-
-    if (hasHighCollar && neckY >= 0 && neckY < GRID_SIZE) {
-      const cMin = 13;
-      const cMax = gender === 'female' ? 17 : 18;
-      for (let x = cMin; x <= cMax; x += 1) {
-        if (!baseGrid[neckY]?.[x]) continue;
-        target[neckY][x] = (x === cMin || x === cMax) ? O : (x <= cx ? L : S);
-      }
-    }
-
-    for (let y = topY; y <= bottomY; y += 1) {
-      if (y < 0 || y >= GRID_SIZE) continue;
-      const ry = y - topY;
-
-      for (let x = 7; x <= 24; x += 1) {
-        const c = baseGrid[y]?.[x];
-        if (!c) continue;
-        const inTorso = x >= torsoMinX && x <= torsoMaxX;
-        if (!inTorso && isSleeveless) continue;
-
-        if (!inTorso) {
-          // Sleeve pixel
-          const isSleeveEdge = y === bottomY || isSpriteOutline(c) || !baseGrid[y]?.[x - 1] || !baseGrid[y]?.[x + 1];
-          if (isSleeveEdge) {
-            target[y][x] = O;
-          } else if (isCapelet && ry <= 2) {
-            target[y][x] = L;
-          } else {
-            target[y][x] = x < cx ? L : P;
-          }
-          continue;
-        }
-
-        // Torso pixel
-        if (pat === 'sleevelessTank' && ry === 0 && Math.abs(x - cx) <= 1.5 && !isSpriteUndies(c)) {
-          continue;
-        }
-
-        const isTorsoOutline =
-          x === torsoMinX ||
-          x === torsoMaxX ||
-          (ry === 0 && (x <= torsoMinX + 1 || x >= torsoMaxX - 1)) ||
-          (!baseGrid[y]?.[x - 1] || !baseGrid[y]?.[x + 1]);
-
-        if (isTorsoOutline) {
-          target[y][x] = O;
-        } else if (pat === 'fringedBuckskin') {
-          const isStrap = x === torsoMinX + 2 || x === torsoMaxX - 2;
-          const isCenterPlacket = Math.abs(x - cx) <= 0.6;
-          const isButton = isCenterPlacket && (ry === 2 || ry === 4 || ry === 6);
-          const isBuckle = isStrap && ry === 3;
-          if (isBuckle) {
-            target[y][x] = L;
-          } else if (isStrap) {
-            target[y][x] = (ry <= 1) ? shadeHex(S, 20) : S;
-          } else if (isButton) {
-            target[y][x] = L;
-          } else if (isCenterPlacket) {
-            target[y][x] = shadeHex(P, 18);
-          } else if (x < cx) {
-            target[y][x] = ry <= 2 ? shadeHex(P, 20) : P;
-          } else {
-            target[y][x] = ry >= 4 ? shadeHex(P, -16) : P;
-          }
-        } else if (y === bottomY) {
-          target[y][x] = O;
-        } else if (y === bottomY - 1) {
-          target[y][x] = S;
-        } else if (pat === 'calicoBodice') {
-          if (Math.abs(x - cx) <= 1.5) {
-            target[y][x] = ry <= 3 ? L : S;
-          } else {
-            target[y][x] = P;
-          }
-        } else if (pat === 'suitJacket') {
-          if (Math.abs(x - cx) <= 0.6) {
-            target[y][x] = ry <= 2 ? L : S;
-          } else if (Math.abs(x - cx) <= 1.6 && ry <= 3) {
-            target[y][x] = S;
-          } else {
-            target[y][x] = x < cx ? L : P;
-          }
-        } else if (pat === 'doubletCoat' || pat === 'vestJerkin') {
-          if (Math.abs(x - cx) <= 0.6) {
-            target[y][x] = ry % 2 === 1 ? L : S;
-          } else {
-            target[y][x] = (ry <= 2 && x < cx) ? L : P;
-          }
-        } else if (isCapelet) {
-          if (ry <= 1) target[y][x] = x <= cx ? L : P;
-          else if (ry === 2) target[y][x] = O;
-          else target[y][x] = x <= cx ? P : S;
-        } else {
-          target[y][x] = (ry <= 2 && x <= cx) ? L : P;
-        }
-      }
-    }
-    return;
-  }
-
-  // Side view shirt
-  const neckY = (gender === 'female' ? 9 : 8) + headDy;
-  const topY = (gender === 'female' ? 10 : 9) + headDy;
-  const bottomY = 16 + headDy;
-
-  if (hasHighCollar && neckY >= 0 && neckY < GRID_SIZE) {
-    for (let x = 12; x <= 18; x += 1) {
-      const c = baseGrid[neckY]?.[x];
-      if (!c) continue;
-      target[neckY][x] = isSpriteOutline(c) ? O : (x <= 15 ? L : S);
-    }
-  }
-
-  for (let y = topY; y <= bottomY; y += 1) {
-    if (y < 0 || y >= GRID_SIZE) continue;
-    const ry = y - topY;
-
-    for (let x = 8; x <= 22; x += 1) {
+  for (let y = 0; y < GRID_SIZE; y += 1) {
+    const torsoRow = torsoBounds?.byRow?.get(y);
+    for (let x = 0; x < GRID_SIZE; x += 1) {
       const c = baseGrid[y]?.[x];
       if (!c) continue;
+      const sec = sectionGrid[y]?.[x];
+      if (!sec) continue;
 
-      // Preserve swinging bare hands at extreme forward/backward arm reach
-      if (y >= 15 + headDy && (x <= 9 || x >= 21)) continue;
+      const isCollar = hasHighCollar && sec === "neck";
+      const isTorso = sec === "torso";
+      const isFgSleeve = !isSleeveless && (sec === "fg_sleeve" || (isLongSleeve && sec === "fg_arm"));
+      const isBgSleeve = !isSleeveless && (sec === "bg_sleeve" || (isLongSleeve && sec === "bg_arm"));
 
-      if (isSleeveless) {
-        // Keep foreground shoulder & arm (x <= 14 on ry >= 1) and swinging arms bare
-        if (x < 14 || x > 18) continue;
-        if (ry >= 1 && x <= 14 && !isSpriteUndies(c)) continue;
+      if (!isCollar && !isTorso && !isFgSleeve && !isBgSleeve) continue;
+      if (frameInfo.nearHandMask?.has(`${x},${y}`)) continue;
+
+      if (pat === "sleevelessTank" && isTorso && y === torsoMinY && torsoRow && x >= torsoRow.maxX - 1) {
+        continue;
       }
 
-      const isFar = isSpriteFarLimb(c, y, headDy) || (x >= 19 && y >= 14 + headDy);
+      const isFar = isBgSleeve;
       const curO = isFar ? farO : O;
       const curP = isFar ? farP : P;
       const curS = isFar ? farS : S;
       const curL = isFar ? farL : L;
 
-      const isEdge =
+      const upSec = sectionGrid[y - 1]?.[x];
+      const downSec = sectionGrid[y + 1]?.[x];
+      const leftSec = sectionGrid[y]?.[x - 1];
+      const rightSec = sectionGrid[y]?.[x + 1];
+
+      const isShortSleeveCuff = !isLongSleeve && isFgSleeve && sec === "fg_sleeve" && downSec === "fg_arm";
+      const isLongSleeveCuff = isLongSleeve && isFgSleeve && sec === "fg_arm" && (downSec === "fg_hand" || rightSec === "fg_hand");
+      const isWaistHem = isTorso && (downSec === "fg_leg" || downSec === "bg_leg" || y === torsoMaxY);
+      const isArmTorsoSeam = isFgSleeve && (rightSec === "torso" || downSec === "torso") && !isCapelet;
+
+      const isOuterBoundary =
         isSpriteOutline(c) ||
+        !baseGrid[y - 1]?.[x] ||
+        !baseGrid[y + 1]?.[x] ||
         !baseGrid[y]?.[x - 1] ||
         !baseGrid[y]?.[x + 1] ||
-        (y === bottomY && (x <= 12 || x >= 19));
+        isWaistHem;
 
-      if (isEdge) {
-        target[y][x] = curO;
-      } else if (isCapelet && ry <= 2) {
-        target[y][x] = ry === 2 ? curO : curL;
-      } else if (pat === 'fringedBuckskin') {
-        const isSuspender = x === 16;
-        const isBuckle = isSuspender && (ry === 3 || ry === 4);
-        if (isBuckle) {
-          target[y][x] = curL;
-        } else if (isSuspender) {
-          target[y][x] = curS;
-        } else if (x >= 17) {
-          target[y][x] = ry <= 2 ? shadeHex(curP, 20) : curP;
-        } else if (x <= 13) {
-          target[y][x] = ry <= 2 ? shadeHex(curP, 16) : curP;
+      if (isCollar) {
+        const isCollarEdge = isSpriteOutline(c) || !baseGrid[y]?.[x - 1] || !baseGrid[y]?.[x + 1];
+        target[y][x] = isCollarEdge ? curO : curL;
+        continue;
+      }
+
+      if (isShortSleeveCuff || isLongSleeveCuff) {
+        target[y][x] = isSpriteOutline(c) ? curO : curL;
+        continue;
+      }
+
+      if (isOuterBoundary) {
+        if (pat === "fringedBuckskin" && isWaistHem && !isSpriteOutline(c)) {
+          target[y][x] = (x % 2 === 0) ? curL : curO;
         } else {
-          target[y][x] = shadeHex(curP, -18);
+          target[y][x] = curO;
         }
-      } else if ((pat === 'suitJacket' || pat === 'calicoBodice' || pat === 'doubletCoat') && x === 17 && ry <= 3) {
-        target[y][x] = curL;
-      } else if (x <= 14) {
-        target[y][x] = curL;
-      } else {
+        continue;
+      }
+
+      if (isArmTorsoSeam) {
+        target[y][x] = curS;
+        continue;
+      }
+
+      if (isFgSleeve) {
+        const isShoulderCrown = upSec === "hair" || upSec === "head" || upSec === "neck" || !upSec;
+        if (pat === "doubletCoat" && isShoulderCrown) {
+          target[y][x] = curL;
+        } else if (isCapelet && y <= torsoMinY + 3) {
+          target[y][x] = (y === torsoMinY + 3) ? curO : curL;
+        } else if (pat === "turtleneckSweater") {
+          target[y][x] = (y % 2 === 0) ? curL : curP;
+        } else {
+          const isSleeveFront = rightSec !== sec;
+          target[y][x] = (isShoulderCrown || isSleeveFront) ? curL : curP;
+        }
+        continue;
+      }
+
+      if (isBgSleeve) {
         target[y][x] = curP;
+        continue;
       }
-    }
-  }
 
-  // Harmonize any remaining far-arm shadow pixels on swinging hands/wrists (y <= 19 + headDy)
-  const handShadowSkin = gender === 'female' ? '#d67256' : '#c56749';
-  for (let y = 14 + headDy; y <= Math.min(GRID_SIZE - 1, 19 + headDy); y += 1) {
-    for (let x = 7; x <= 24; x += 1) {
-      if (isSpriteFarLimb(target[y][x], y, headDy)) {
-        target[y][x] = handShadowSkin;
-      }
-    }
-  }
+      // Interior Torso Detailing by Pattern
+      const ry = y - torsoMinY;
+      const rowMin = torsoRow?.minX ?? 14;
+      const rowMax = torsoRow?.maxX ?? 19;
+      const isFrontChestEdge = baseOrientation === "side" ? (x >= rowMax - 1) : (Math.abs(x - torsoCenterX) <= 0.8);
+      const isBackTorsoEdge = baseOrientation === "side" ? (x <= rowMin + 1) : (x <= rowMin + 1 || x >= rowMax - 1);
 
-  // Clean up any remaining undergarment pixels on row 17 + headDy
-  const waistSeamY = 17 + headDy;
-  if (waistSeamY >= 0 && waistSeamY < GRID_SIZE) {
-    for (let x = 11; x <= 20; x += 1) {
-      if (isSpriteUndies(target[waistSeamY][x])) {
-        target[waistSeamY][x] = O;
+      if (pat === "fringedBuckskin") {
+        if (ry === 2) {
+          target[y][x] = (x % 2 === 0) ? curL : curS;
+        } else if (ry < 2) {
+          target[y][x] = curL;
+        } else if (isFrontChestEdge) {
+          target[y][x] = (ry % 2 === 0) ? curL : curS;
+        } else if (isBackTorsoEdge) {
+          target[y][x] = curS;
+        } else {
+          target[y][x] = curP;
+        }
+      } else if (pat === "calicoBodice") {
+        if (y >= torsoMaxY - 1) {
+          target[y][x] = curS;
+        } else if (isFrontChestEdge && ry <= 2) {
+          target[y][x] = curL;
+        } else {
+          target[y][x] = ((x + y) % 2 === 0) ? curL : curP;
+        }
+      } else if (pat === "suitJacket") {
+        if (isFrontChestEdge && ry <= 2) {
+          target[y][x] = curL;
+        } else if ((baseOrientation === "side" && x === rowMax - 2 && ry <= 3) || (baseOrientation === "front" && Math.abs(x - torsoCenterX) <= 1.6 && ry <= 3)) {
+          target[y][x] = curS;
+        } else if (isFrontChestEdge && ry > 2) {
+          target[y][x] = (ry % 2 === 1) ? curL : curS;
+        } else if (isBackTorsoEdge) {
+          target[y][x] = curS;
+        } else {
+          target[y][x] = curP;
+        }
+      } else if (pat === "doubletCoat") {
+        if (ry % 2 === 1 && !isBackTorsoEdge) {
+          target[y][x] = curL;
+        } else if (isFrontChestEdge) {
+          target[y][x] = curS;
+        } else {
+          target[y][x] = isBackTorsoEdge ? curS : curP;
+        }
+      } else if (isCapelet) {
+        if (ry <= 2) {
+          target[y][x] = isFrontChestEdge ? curL : curP;
+        } else if (ry === 3) {
+          target[y][x] = curO;
+        } else {
+          target[y][x] = isFrontChestEdge ? curP : curS;
+        }
+      } else if (pat === "vestJerkin") {
+        if (isFrontChestEdge) {
+          target[y][x] = (ry === 0) ? curS : ((ry % 2 === 1) ? curL : curS);
+        } else if (isBackTorsoEdge) {
+          target[y][x] = curS;
+        } else {
+          target[y][x] = curP;
+        }
+      } else if (pat === "turtleneckSweater") {
+        target[y][x] = (x % 2 === 0) ? curL : (isBackTorsoEdge ? curS : curP);
+      } else if (pat === "sleevelessTank") {
+        target[y][x] = isFrontChestEdge ? curL : (isBackTorsoEdge ? curS : curP);
+      } else {
+        if (ry === 0 && isFrontChestEdge) {
+          target[y][x] = curS;
+        } else if (isFrontChestEdge) {
+          target[y][x] = curL;
+        } else if (isBackTorsoEdge) {
+          target[y][x] = curS;
+        } else {
+          target[y][x] = curP;
+        }
       }
     }
   }
@@ -3023,7 +3259,7 @@ function drawPatternRowsAt(target, startX, startY, rows, palette) {
     if (y < 0 || y >= GRID_SIZE) return;
     for (let dx = 0; dx < rowStr.length; dx += 1) {
       const ch = rowStr[dx];
-      if (!ch || ch === '.' || ch === ' ') continue;
+      if (!ch || ch === "." || ch === " ") continue;
       const x = startX + dx;
       if (x < 0 || x >= GRID_SIZE) continue;
       const color = palette[ch];
@@ -3033,960 +3269,713 @@ function drawPatternRowsAt(target, startX, startY, rows, palette) {
 }
 
 function renderFittedAccessory(target, baseGrid, frameInfo, preset, palette) {
-  const { gender, baseOrientation, headTopY, headDy, headDx } = frameInfo;
+  const { gender, baseOrientation, headDy, sectionGrid, sectionBounds } = frameInfo;
   const { O, P, S, L } = palette;
-  const pat = preset.patternId || '';
+  const pat = preset.patternId || "";
   const pal = { O, P, S, L };
 
-  // 1. Eye / Face Accessories
-  const eyeY = headTopY + (gender === 'female' ? 5 : 4);
+  const headBounds = sectionBounds?.head;
+  const hairBounds = sectionBounds?.hair;
+  const neckBounds = sectionBounds?.neck;
+  const torsoBounds = sectionBounds?.torso;
+  const fgLegBounds = sectionBounds?.fg_leg;
+
+  // 1. Mask-driven Eyewear
+  const eyeY = (headBounds?.minY ?? (4 + headDy)) + 1;
+  const faceMinX = headBounds?.minX ?? 15;
+  const faceMaxX = headBounds?.maxX ?? 19;
+  const templeMinX = hairBounds?.minX ?? 13;
+
   if (
-    pat === 'monocleChain' ||
-    pat === 'aviatorGoggles' ||
-    pat === 'hornRimGlasses' ||
-    pat === 'roundPeaceShades' ||
-    pat === 'neonWayfarerShades' ||
-    pat === 'y2kRimlessShades'
+    pat === "monocleChain" ||
+    pat === "aviatorGoggles" ||
+    pat === "hornRimGlasses" ||
+    pat === "roundPeaceShades" ||
+    pat === "neonWayfarerShades" ||
+    pat === "y2kRimlessShades"
   ) {
-    if (baseOrientation === 'front') {
-      const isFem = gender === 'female';
-      if (pat === 'monocleChain') {
-        const mx = isFem ? 15 : 16;
-        drawPatternRowsAt(target, mx, eyeY - 1, [
-          'OOO',
-          'OLO',
-          'OOO',
-          '..S'
-        ], pal);
+    if (baseOrientation === "front") {
+      const isFem = gender === "female";
+      if (pat === "monocleChain") {
+        drawPatternRowsAt(target, isFem ? 15 : 16, eyeY - 1, ["OOO", "OLO", "OOO", "..S"], pal);
         return;
       }
-      if (pat === 'y2kRimlessShades') {
-        const rows = isFem
-          ? ['PLLSLPL']
-          : ['PLLSLLPL'];
-        drawPatternRowsAt(target, isFem ? 12 : 12, eyeY, rows, pal);
+      if (pat === "y2kRimlessShades") {
+        drawPatternRowsAt(target, 12, eyeY, [isFem ? "PLLSLPL" : "PLLSLLPL"], pal);
         return;
       }
-      const frameChar = pat === 'neonWayfarerShades' ? 'P' : 'O';
+      const frameChar = pat === "neonWayfarerShades" ? "P" : "O";
       const rows = isFem
-        ? [
-            `.${frameChar}${frameChar}.${frameChar}${frameChar}.`,
-            `${frameChar}PLO${frameChar}LP${frameChar}`
-          ]
-        : [
-            `.${frameChar}${frameChar}..${frameChar}${frameChar}.`,
-            `${frameChar}PLOOPL${frameChar}`
-          ];
+        ? [`.${frameChar}${frameChar}.${frameChar}${frameChar}.`, `${frameChar}PLO${frameChar}LP${frameChar}`]
+        : [`.${frameChar}${frameChar}..${frameChar}${frameChar}.`, `${frameChar}PLOOPL${frameChar}`];
       drawPatternRowsAt(target, 12, eyeY - 1, rows, pal);
       return;
     }
 
-    // Side view eyewear
-    const sx = 14 + headDx;
-    if (pat === 'monocleChain') {
-      drawPatternRowsAt(target, sx + 1, eyeY - 1, [
-        '.OOO',
-        '.OLO',
-        '.OOO',
-        '.S..'
-      ], pal);
+    // Side view eyewear anchored to headBounds eye level
+    if (pat === "monocleChain") {
+      drawPatternRowsAt(target, faceMaxX - 3, eyeY - 1, [".OOO", ".OLO", ".OOO", ".S.."], pal);
       return;
     }
-    if (pat === 'y2kRimlessShades') {
-      drawPatternRowsAt(target, sx, eyeY, ['SSPLL'], pal);
+    if (pat === "y2kRimlessShades") {
+      for (let x = faceMinX - 1; x <= faceMaxX; x += 1) {
+        if (x < 0 || x >= GRID_SIZE) continue;
+        target[eyeY][x] = x >= faceMaxX - 2 ? L : S;
+      }
       return;
     }
-    const frameChar = pat === 'neonWayfarerShades' ? 'P' : 'O';
-    drawPatternRowsAt(target, sx, eyeY - 1, [
-      `..${frameChar}${frameChar}${frameChar}`,
-      `OOPL${frameChar}`
-    ], pal);
+    const frameCol = pat === "neonWayfarerShades" ? P : O;
+    for (let x = Math.max(templeMinX + 1, faceMinX - 1); x <= faceMaxX; x += 1) {
+      if (x >= faceMaxX - 2) {
+        if (eyeY - 1 >= 0) target[eyeY - 1][x] = frameCol;
+        target[eyeY][x] = (x === faceMaxX - 1) ? L : P;
+        if (pat === "aviatorGoggles" && eyeY + 1 < GRID_SIZE) target[eyeY + 1][x] = frameCol;
+      } else {
+        target[eyeY][x] = frameCol; // Temple arm back to ear
+      }
+    }
     return;
   }
 
-  // 2. Trail Bandana & Pack
-  if (pat === 'trailBandana') {
-    if (baseOrientation === 'front') {
-      const isFem = gender === 'female';
-      const rows = isFem
-        ? [
-            'OO.....OO',
-            'OLO...OLO',
-            'OOPPPPPOO',
-            '..OPJPO..'.replace('J', 'L'),
-            '...OPO...'
-          ]
-        : [
-            'OO......OO',
-            'OLO....OLO',
-            'OOPPPPPPOO',
-            '..OPLLPO..',
-            '...OPPO...'
-          ];
-      drawPatternRowsAt(target, 11, 8 + headDy, rows, pal);
+  // 2. Neck & Chest Accessories anchored to neckBounds & torsoBounds
+  const neckY = neckBounds?.minY ?? ((torsoBounds?.minY ?? (10 + headDy)) - 1);
+  const torsoMinY = torsoBounds?.minY ?? (neckY + 1);
+  const torsoMaxY = torsoBounds?.maxY ?? (16 + headDy);
+  const topTorsoRow = torsoBounds?.byRow?.get(torsoMinY) || { minX: 14, maxX: 18 };
+
+  if (pat === "trailBandana") {
+    if (baseOrientation === "front") {
+      const isFem = gender === "female";
+      drawPatternRowsAt(target, 11, neckY, isFem
+        ? ["OO.....OO", "OLO...OLO", "OOPPPPPOO", "..OPLPO..", "...OPO..."]
+        : ["OO......OO", "OLO....OLO", "OOPPPPPPOO", "..OPLLPO..", "...OPPO..."], pal);
       return;
     }
-    drawPatternRowsAt(target, 8, 8 + headDy, [
-      'OOOO.......',
-      'OLLLOOOOOO.',
-      'OLSLLOPPPPO',
-      'OOOOO.OPPPO',
-      '.OSSS..OPO.',
-      '.OSSS......',
-      '.OOOO......'
-    ], pal);
+    // Side view: knotted trail bandana on neck + upper chest & frontier canvas pack on back of torso
+    for (const [nx, ny] of (frameInfo.sectionMap?.neck || [])) {
+      target[ny][nx] = (nx >= (neckBounds?.maxX ?? 17)) ? L : P;
+    }
+    for (let dy = 0; dy <= 2; dy += 1) {
+      const y = torsoMinY + dy;
+      const rSpan = torsoBounds?.byRow?.get(y) || topTorsoRow;
+      for (let x = rSpan.maxX - (2 - dy); x <= rSpan.maxX + (dy === 0 ? 1 : 0); x += 1) {
+        if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) continue;
+        target[y][x] = (dy === 2 || x === rSpan.maxX + 1) ? O : (x === rSpan.maxX ? L : P);
+      }
+    }
+    // Frontier bedroll / canvas pack strapped behind torso/sleeve
+    const packRightX = (sectionBounds?.fg_sleeve?.minX ?? topTorsoRow.minX) - 1;
+    const packLeftX = Math.max(1, packRightX - 3);
+    for (let y = torsoMinY; y <= Math.min(GRID_SIZE - 2, torsoMinY + 5); y += 1) {
+      const ry = y - torsoMinY;
+      for (let x = packLeftX; x <= packRightX; x += 1) {
+        if (ry === 0 || ry === 5 || x === packLeftX || x === packRightX) {
+          target[y][x] = O;
+        } else if (ry === 1) {
+          target[y][x] = L;
+        } else {
+          target[y][x] = S;
+        }
+      }
+    }
     return;
   }
 
-  // 3. Neck / Collar / Chest Accessories
   if (
-    pat === 'tudorRuff' ||
-    pat === 'collarRuffCravat' ||
-    pat === 'bowtieCollar' ||
-    pat === 'drapedScarf' ||
-    pat === 'neckHeadphones'
+    pat === "tudorRuff" ||
+    pat === "collarRuffCravat" ||
+    pat === "bowtieCollar" ||
+    pat === "drapedScarf" ||
+    pat === "neckHeadphones"
   ) {
-    if (baseOrientation === 'front') {
-      const isFem = gender === 'female';
+    if (baseOrientation === "front") {
+      const isFem = gender === "female";
       const rowsByPat = {
-        tudorRuff: isFem ? ['OOOOOOO', 'OLLPLLO', 'OLPLPLO'] : ['OOOOOOOO', 'OLLPPLLO', 'OLPLLPLO'],
-        collarRuffCravat: isFem ? ['.OOOOO.', 'OOLLLOO', '.OLPLO.'] : ['.OOOOOO.', 'OOLLLLOO', '.OLLPPO.'],
-        bowtieCollar: isFem ? ['.OLLLO.', 'OPSSSPO', '.O...O.'] : ['.OLLLL0.'.replace('0', 'O'), 'OPPSSPPO', '.O....O.'],
-        drapedScarf: isFem ? ['OLLPPSSO', 'OPLSSSPO', '.OO..OO.'] : ['OLLPPPSSO', 'OPLLSSSPO', '.OO...OO.'],
-        neckHeadphones: isFem ? ['OS...SO', 'OPLSLPO', '.O...O.'] : ['OS....SO', 'OPLSSLPO', '.O....O.']
+        tudorRuff: isFem ? ["OOOOOOO", "OLLPLLO", "OLPLPLO"] : ["OOOOOOOO", "OLLPPLLO", "OLPLLPLO"],
+        collarRuffCravat: isFem ? [".OOOOO.", "OOLLLOO", ".OLPLO."] : [".OOOOOO.", "OOLLLLOO", ".OLLPPO."],
+        bowtieCollar: isFem ? [".OLLLO.", "OPSSSPO", ".O...O."] : [".OLLLL0.".replace("0", "O"), "OPPSSPPO", ".O....O."],
+        drapedScarf: isFem ? ["OLLPPSSO", "OPLSSSPO", ".OO..OO."] : ["OLLPPPSSO", "OPLLSSSPO", ".OO...OO."],
+        neckHeadphones: isFem ? ["OS...SO", "OPLSLPO", ".O...O."] : ["OS....SO", "OPLSSLPO", ".O....O."]
       };
-      drawPatternRowsAt(target, 12, 8 + headDy, rowsByPat[pat] || rowsByPat.drapedScarf, pal);
+      drawPatternRowsAt(target, 12, neckY, rowsByPat[pat] || rowsByPat.drapedScarf, pal);
       return;
     }
-    const sideRowsByPat = {
-      tudorRuff: ['OOOOOO', 'OLLPLO', 'OLPLLO'],
-      collarRuffCravat: ['OOOOO.', '.OLLLO', '..OLPO'],
-      bowtieCollar: ['OLLLO.', '..OPSO', '..OOO.'],
-      drapedScarf: ['OLLPSO', 'OPLSSO', '.O..O.'],
-      neckHeadphones: ['.OOO..', '.OSOPO', '..OOO.']
-    };
-    drawPatternRowsAt(target, 13, 8 + headDy, sideRowsByPat[pat] || sideRowsByPat.drapedScarf, pal);
+    const nMinX = (neckBounds?.minX ?? topTorsoRow.minX) - 1;
+    const nMaxX = (neckBounds?.maxX ?? topTorsoRow.maxX) + 1;
+    for (let y = neckY; y <= neckY + 1; y += 1) {
+      if (y < 0 || y >= GRID_SIZE) continue;
+      for (let x = nMinX; x <= nMaxX; x += 1) {
+        if (x < 0 || x >= GRID_SIZE) continue;
+        if (pat === "tudorRuff") {
+          target[y][x] = ((x + y) % 2 === 0) ? L : P;
+        } else if (pat === "bowtieCollar") {
+          target[y][x] = x >= nMaxX - 1 ? P : L;
+        } else if (pat === "neckHeadphones") {
+          target[y][x] = (x === nMinX + 1 || x === nMaxX - 1) ? P : S;
+        } else {
+          target[y][x] = x === nMinX || x === nMaxX ? O : (x >= nMaxX - 2 ? L : P);
+        }
+      }
+    }
+    if (pat === "drapedScarf" || pat === "collarRuffCravat") {
+      for (let dy = 1; dy <= 3; dy += 1) {
+        const y = torsoMinY + dy;
+        const rSpan = torsoBounds?.byRow?.get(y) || topTorsoRow;
+        const sx = pat === "drapedScarf" ? rSpan.minX + 1 : rSpan.maxX - 1;
+        if (y < GRID_SIZE && sx >= 0 && sx < GRID_SIZE) {
+          target[y][sx] = dy === 3 ? O : (pat === "collarRuffCravat" ? L : S);
+        }
+      }
+    }
     return;
   }
 
-  if (pat === 'longNecktie' || pat === 'pearlBeadNecklace' || pat === 'discoMedallion') {
-    if (baseOrientation === 'front') {
-      const isFem = gender === 'female';
-      if (pat === 'longNecktie') {
-        drawPatternRowsAt(target, isFem ? 13 : 13, 8 + headDy, isFem ? [
-          'OLLLO',
-          '.OPO.',
-          '.OPO.',
-          '.OSO.',
-          '.OPO.',
-          '..O..'
-        ] : [
-          'OLLLL0'.replace('0', 'O'),
-          '.OPPO.',
-          '.OPPO.',
-          '.OSSO.',
-          '.OPPO.',
-          '..OO..'
-        ], pal);
+  if (pat === "longNecktie" || pat === "pearlBeadNecklace" || pat === "discoMedallion") {
+    if (baseOrientation === "front") {
+      const isFem = gender === "female";
+      if (pat === "longNecktie") {
+        drawPatternRowsAt(target, 13, neckY, isFem
+          ? ["OLLLO", ".OPO.", ".OPO.", ".OSO.", ".OPO.", "..O.."]
+          : ["OLLLL0".replace("0", "O"), ".OPPO.", ".OPPO.", ".OSSO.", ".OPPO.", "..OO.."], pal);
         return;
       }
-      if (pat === 'pearlBeadNecklace') {
-        drawPatternRowsAt(target, 13, 8 + headDy, isFem ? [
-          'LP.PL',
-          'L...L',
-          '.LPL.',
-          '..P..'
-        ] : [
-          'LP..PL',
-          'L....L',
-          '.LPPL.',
-          '..PP..'
-        ], pal);
+      if (pat === "pearlBeadNecklace") {
+        drawPatternRowsAt(target, 13, neckY, isFem
+          ? ["LP.PL", "L...L", ".LPL.", "..P.."]
+          : ["LP..PL", "L....L", ".LPPL.", "..PP.."], pal);
         return;
       }
-      drawPatternRowsAt(target, 13, 8 + headDy, isFem ? [
-        'S...S',
-        '.SOS.',
-        '.OLO.',
-        '.OPO.',
-        '..O..'
-      ] : [
-        'S....S',
-        '.SOOS.',
-        '.OLLO.',
-        '.OPPO.',
-        '..OO..'
-      ], pal);
+      drawPatternRowsAt(target, 13, neckY, isFem
+        ? ["S...S", ".SOS.", ".OLO.", ".OPO.", "..O.."]
+        : ["S....S", ".SOOS.", ".OLLO.", ".OPPO.", "..OO.."], pal);
       return;
     }
-    // Side view tie / necklace / medallion
-    if (pat === 'longNecktie') {
-      drawPatternRowsAt(target, 14, 9 + headDy, [
-        'OLLO',
-        '..PO',
-        '..PO',
-        '..SO',
-        '..OO'
-      ], pal);
-      return;
+    // Side view anchored to neck and leading edge of torso
+    for (let dy = 0; dy <= 4; dy += 1) {
+      const y = torsoMinY + dy;
+      if (y < 0 || y >= GRID_SIZE) continue;
+      const rSpan = torsoBounds?.byRow?.get(y) || topTorsoRow;
+      const tx = rSpan.maxX - 1;
+      if (pat === "longNecktie") {
+        target[y][tx] = dy === 0 ? L : (dy === 4 ? O : P);
+        if (tx + 1 <= rSpan.maxX) target[y][tx + 1] = O;
+      } else if (pat === "pearlBeadNecklace" && dy <= 2) {
+        target[y][tx - (2 - dy)] = (dy % 2 === 0) ? L : P;
+      } else if (pat === "discoMedallion" && dy <= 3) {
+        target[y][tx] = dy < 2 ? S : (dy === 2 ? L : P);
+      }
     }
-    if (pat === 'pearlBeadNecklace') {
-      drawPatternRowsAt(target, 14, 9 + headDy, [
-        'LP..',
-        '.LP.',
-        '..LP'
-      ], pal);
-      return;
-    }
-    drawPatternRowsAt(target, 14, 9 + headDy, [
-      'S...',
-      '.SO.',
-      '.OLO',
-      '.OPO'
-    ], pal);
     return;
   }
 
-  // 4. Suspenders & Crossbody Bag
-  if (pat === 'suspendersBraces' || pat === 'crossbodyBag') {
-    if (baseOrientation === 'front') {
-      const isFem = gender === 'female';
-      if (pat === 'suspendersBraces') {
+  // 3. Suspenders & Crossbody Bag anchored to torsoBounds
+  if (pat === "suspendersBraces" || pat === "crossbodyBag") {
+    if (baseOrientation === "front") {
+      const isFem = gender === "female";
+      if (pat === "suspendersBraces") {
         const rx = isFem ? 17 : 18;
-        for (let y = 9 + headDy; y <= 15 + headDy; y += 1) {
+        for (let y = torsoMinY; y <= torsoMaxY; y += 1) {
           if (y < 0 || y >= GRID_SIZE) continue;
-          const c = y === 15 + headDy ? L : S;
+          const c = y === torsoMaxY - 1 ? L : S;
           if (baseGrid[y]?.[13]) target[y][13] = c;
           if (baseGrid[y]?.[rx]) target[y][rx] = c;
         }
         return;
       }
-      drawPatternRowsAt(target, 12, 9 + headDy, [
-        'OO.....',
-        '.LP....',
-        '..PO...',
-        '...SO..',
-        '....OLO',
-        '...OPPO',
-        '...OOOO'
+      drawPatternRowsAt(target, 12, torsoMinY, [
+        "OO.....", ".LP....", "..PO...", "...SO..", "....OLO", "...OPPO", "...OOOO"
       ], pal);
       return;
     }
-    if (pat === 'suspendersBraces') {
-      for (let y = 9 + headDy; y <= 15 + headDy; y += 1) {
-        if (y < 0 || y >= GRID_SIZE) continue;
-        if (baseGrid[y]?.[15]) target[y][15] = y === 15 + headDy ? L : S;
-        if (baseGrid[y]?.[16]) target[y][16] = O;
-      }
-      return;
-    }
-    drawPatternRowsAt(target, 13, 9 + headDy, [
-      '.OO..',
-      '.LP..',
-      '..PO.',
-      '.OLLO',
-      '.OPPO',
-      '.OOOO'
-    ], pal);
-    return;
-  }
-
-  // 5. Waist Belts, Fanny Pack, and Pioneer Apron
-  if (pat === 'pioneerApron') {
-    if (baseOrientation === 'front') {
-      const isFem = gender === 'female';
-      drawPatternRowsAt(target, 12, 16 + headDy, isFem ? [
-        'OOOOOOO',
-        'OLLLLPO',
-        'OLLLLPO',
-        'OLLPPLO',
-        'OLLLLPO',
-        'OPPPSSO',
-        '.OOOOO.'
-      ] : [
-        'OOOOOOOO',
-        'OLLLLLPO',
-        'OLLLLLPO',
-        'OLLPPPLO',
-        'OLLLLLPO',
-        'OPPPPSSO',
-        '.OOOOOO.'
-      ], pal);
-      return;
-    }
-    drawPatternRowsAt(target, 13, 16 + headDy, [
-      'OOOOOO',
-      'OSSLLO',
-      '..OLLO',
-      '..OPLO',
-      '..OLLO',
-      '..OSSO',
-      '...OOO'
-    ], pal);
-    return;
-  }
-
-  // beltChainSash / fannyPackWaist
-  if (baseOrientation === 'front') {
-    const isFem = gender === 'female';
-    const rows = pat === 'fannyPackWaist'
-      ? (isFem ? ['OOOOOOO', 'OSOLPPO', '..OPPO.', '...OO..'] : ['OOOOOOOO', 'OSOLLPPO', '..OPPPO.', '...OOO..'])
-      : (isFem ? ['OOOOOOO', 'OSPPLSO', 'OOOOOOO'] : ['OOOOOOOO', 'OSPPLLSO', 'OOOOOOOO']);
-    drawPatternRowsAt(target, 12, 15 + headDy, rows, pal);
-    return;
-  }
-  const sideRows = pat === 'fannyPackWaist'
-    ? ['OOOOOO', 'OSOLPO', '..OPPO', '...OO.']
-    : ['OOOOOO', 'OSPPLO', 'OOOOOO'];
-  drawPatternRowsAt(target, 13, 15 + headDy, sideRows, pal);
-}
-
-const FITTED_HEADWEAR_MAPS = {
-  sunbonnet: {
-    front: [
-      '..OOOOOOOO..',
-      '.OLLLLPPPPO.',
-      'OPLLPPPPSSPO',
-      'OPLLSSSSSSPO',
-      'OPO......OPO',
-      'OSO......OSO',
-      '.OO......OO.',
-      '..L......S..'
-    ],
-    side: [
-      '..OOOOOOO...',
-      '.OLLLLPPPO..',
-      'OPLLPPPPPSSO',
-      'OPPPSSSSSLLO',
-      'OPPPSSO..OO.',
-      '.OSSSSO.....',
-      '..OO.L......',
-      '.....S......'
-    ]
-  },
-  slouchHat: {
-    front: [
-      '...OOOOOOOO...',
-      '..OLLLLPPPPO..',
-      '.OOSSSSSSSSOO.',
-      'OLLLLPPPPPPLSO',
-      '.OOOOOOOOOOOO.',
-      '...O......O...',
-      '...OSSSSSSO...',
-      '...OSSLLSSO...',
-      '....OOOOOO....'
-    ],
-    side: [
-      '...OOOOOO...',
-      '..OLLLLPPO..',
-      '.OOSSSSSSOO.',
-      'OLLLPPPPPLSO',
-      '.OOOOOOOOOO.',
-      '....OO......',
-      '....OSSSSOO.',
-      '.....OSSSSO.',
-      '.....OOOOOO.'
-    ]
-  },
-  coonskinCap: {
-    front: [
-      '..OOOOOOOO..',
-      '.OLLPPLLPPO.',
-      'OPLPSSSSPPPO',
-      '.OOOOOOOOOO.',
-      '.........OO.',
-      '........OPLO',
-      '........OSSO',
-      '.........OO.'
-    ],
-    side: [
-      '...OOOOOOOO.',
-      '..OLLPPLLPPO',
-      '.OPLPSSSSPPO',
-      '..OOOOOOOOOO',
-      '.OO.........',
-      'OPLO........',
-      'OSSO........',
-      '.OO.........'
-    ]
-  },
-  beret: {
-    front: [
-      '..OOOOOOOO..',
-      '.OLLLLPPPPO.',
-      'OPLLPPPPSSPO',
-      '.OOOOOOOOOO.'
-    ],
-    side: [
-      '..OOOOOOOO..',
-      '.OLLLLPPPSO.',
-      'OPLLPPPPPSSO',
-      '.OOOOOOOOOO.'
-    ]
-  },
-  plumedHat: {
-    front: [
-      '..OOOLLLLOOO..',
-      '.OLLLLPPPPSSO.',
-      'OOOOLLLPPSSOOO',
-      '.OOOOOOOOOOOO.'
-    ],
-    side: [
-      '..OOOLLLLOO...',
-      '.OLLLLPPPPSSO.',
-      'OOOOLLLPPSSOOO',
-      '.OOOOOOOOOOOO.'
-    ]
-  },
-  puritanCapotain: {
-    front: [
-      '...OOOOOOOO...',
-      '..OPLLPPSSPO..',
-      '..OOSSSLLSSOO.',
-      'OOOOLLPPPSSOOO',
-      '.OOOOOOOOOOOO.'
-    ],
-    side: [
-      '...OOOOOOOO..',
-      '..OPLLPPSSPO.',
-      '..OSSSLLSSSSO',
-      'OOOOLLPPPSSOO',
-      '.OOOOOOOOOOOO'
-    ]
-  },
-  tricorne: {
-    front: [
-      '.OOO....OOO.',
-      'OOLLOOOOLLOO',
-      'OPLLPPPPSSPO',
-      '.OOOOOOOOOO.'
-    ],
-    side: [
-      '..OOOOOOOO..',
-      '.OOLLLLLLSSO',
-      'OPLLPPPPPPSS',
-      '.OOOOOOOOOO.'
-    ]
-  },
-  bicorne: {
-    front: [
-      '..OOOOOOOO..',
-      '.OLLPPLLPPSO',
-      'OPLLPPPPSSPO',
-      'OOOOOOOOOOOO'
-    ],
-    side: [
-      '..OOOOOOOO..',
-      '.OLLLLPPPSSO',
-      'OPLLPPPPPPSO',
-      'OOOOOOOOOOOO'
-    ]
-  },
-  topHat: {
-    front: [
-      '..OOOOOOOO..',
-      '..OPLLPPSSPO',
-      '..OPLLPPSSPO',
-      '..OSSSLLSSSO',
-      'OOOOOOOOOOOO'
-    ],
-    side: [
-      '..OOOOOOOO..',
-      '..OPLLPPSSO.',
-      '..OPLLPPSSO.',
-      '..OSSSLLSSO.',
-      'OOOOOOOOOOOO'
-    ]
-  },
-  bowlerDerby: {
-    front: [
-      '..OOOOOOOO..',
-      '.OPLLPPPPSSO',
-      '.OSSSLLLLSSO',
-      'OOOOOOOOOOOO'
-    ],
-    side: [
-      '..OOOOOOOO..',
-      '.OPLLPPPPSSO',
-      '.OSSSLLLLSSO',
-      'OOOOOOOOOOOO'
-    ]
-  },
-  boaterFedora: {
-    front: [
-      '...OOOOOOOO...',
-      '..OPLLPPSSPO..',
-      '..OOSSSLLSSOO.',
-      'OOOOLLPPPSSOOO',
-      '.OOOOOOOOOOOO.'
-    ],
-    side: [
-      '...OOOOOOOO..',
-      '..OPLLPPPSSO.',
-      '..OSSSLLLSSO.',
-      'OOOOLLPPPSSOO',
-      '.OOOOOOOOOOOO'
-    ]
-  },
-  newsboyFlatCap: {
-    front: [
-      '..OOOOOOOO..',
-      '.OLLLLPPPPO.',
-      'OPLLPPPPSSPO',
-      '.OOOOOOOOOO.'
-    ],
-    side: [
-      '..OOOOOOOO..',
-      '.OLLLLPPPSO.',
-      'OPLLPPPPPSSO',
-      '.OOOOOOOOOOO'
-    ]
-  },
-  clocheBellHat: {
-    front: [
-      '..OOOOOOOO..',
-      '.OLLLLPPPPO.',
-      'OPLLSSSSSSPO',
-      '.OOOOOOOOOO.'
-    ],
-    side: [
-      '..OOOOOOOO..',
-      '.OLLLLPPPSO.',
-      'OPLLSSSSSPSO',
-      '.OOOOOOOOOO.'
-    ]
-  },
-  steelHelmet: {
-    front: [
-      '..OOOOOOOO..',
-      '.OLLLLPPPPO.',
-      'OOSSSSSSSSOO',
-      'OOOOOOOOOOOO'
-    ],
-    side: [
-      '..OOOOOOOO..',
-      '.OLLLLPPPSO.',
-      'OOSSSSSSSSOO',
-      'OOOOOOOOOOOO'
-    ]
-  },
-  capBeanie: {
-    front: [
-      '..OOOOOOOO..',
-      '.OLLLLPPPPO.',
-      'OPLLPPPPSSPO',
-      '.OOOOOOOOOO.'
-    ],
-    side: [
-      '..OOOOOOOO..',
-      '.OLLLLPPPSO.',
-      '.OPLLPPPPSSO',
-      '..OOOOOOOOOO'
-    ]
-  },
-  backwardsCap: {
-    front: [
-      '..OOOOOOOO..',
-      '.OLLLLPPPPO.',
-      'OPLLSSSSPPPO',
-      '.OOOOOOOOOO.'
-    ],
-    side: [
-      '...OOOOOOOO.',
-      '..OLLLLPPPSO',
-      'OOPLLPPPPSSO',
-      'OOOOOOOOOOO.'
-    ]
-  },
-  headbandBandana: {
-    front: [
-      '.OO..OOOO..OO.',
-      'OPLOLLLLPPOLPO',
-      '.OPLLPPPPSSPO.',
-      '..OOOOOOOOOO..'
-    ],
-    side: [
-      '.OO..OOOOOO.',
-      'OPLOLLLLPPSO',
-      '.OPLLPPPPSSO',
-      '..OOOOOOOOOO'
-    ]
-  },
-  longWavyFlow: {
-    front: [
-      '...OOOOOOOO...',
-      '..OLLLLPPPPO..',
-      '.OPLLPPPPSSPO.',
-      '.OPLSO..OLSPO.',
-      'OPLPO....OPLPO',
-      'OPLPO....OPLPO',
-      'OOLPO....OPLOO',
-      '.OPSO....OSPO.',
-      '.OOLO....OLOO.',
-      '..OO......OO..'
-    ],
-    side: [
-      '...OOOOOOOO..',
-      '..OLLLLPPPSO.',
-      '.OPLLPPPPPSSO',
-      'OOPLLPPSSSSPO',
-      'OPLPPSSO.....',
-      'OPLPSSO......',
-      '.OPLPSSO.....',
-      '.OPPPSSO.....',
-      '..OPSSO......',
-      '...OO........'
-    ]
-  },
-  longTwinBraids: {
-    front: [
-      '...OOOOOOOO...',
-      '..OLLPPLLPPO..',
-      '.OPLLPPPPSSPO.',
-      '.OPLSO..OLSPO.',
-      '.OOLO....OLOO.',
-      '..OPO....OPO..',
-      '.OOLO....OLOO.',
-      '..OPO....OPO..',
-      '.OOLO....OLOO.',
-      '..OO......OO..'
-    ],
-    side: [
-      '...OOOOOOOO..',
-      '..OLLPPPPPSSO',
-      '.OPLLPPPPPSSO',
-      '.OPLLPPSSSSPO',
-      'OOPPPSSO.....',
-      '.OPLPSSO.....',
-      '.OOLPPO......',
-      '..OSSSSO.....',
-      '..OOPLPO.....',
-      '...OOO.......'
-    ]
-  },
-  curlsWig: {
-    front: [
-      '..OOOOOOOOOO..',
-      '.OLLPPLLPPPPO.',
-      'OPLLPPPPPPSSPO',
-      'OPLSO....OLSPO',
-      'OOLPO....OPLOO',
-      'OPLSO....OLSPO',
-      'OOLPO....OPLOO',
-      '.OPSO....OSPO.',
-      '..OO......OO..'
-    ],
-    side: [
-      '...OOOOOOOO..',
-      '..OLLPPLLPPSO',
-      '.OPLLPPPPPSSO',
-      'OOPLLPPSSSSPO',
-      'OOLPPSSO.....',
-      'OPLPPSSO.....',
-      '.OOLPSSO.....',
-      '.OPLPSSO.....',
-      '..OOOO.......'
-    ]
-  },
-  ponytailQueue: {
-    front: [
-      '..OOOOOOOO..',
-      '.OLLLLPPPPO.',
-      'OPLLPPPPSSPO',
-      'OPLSO..OLSPO',
-      '.OO......OO.'
-    ],
-    side: [
-      '...OOOOOOOO.',
-      '..OLLLLPPPSO',
-      '.OPLLPPPPSSO',
-      'OOSSSSO.....',
-      'OPLPPPO.....',
-      '.OPLPO......',
-      '..OSSO......',
-      '..OO........'
-    ]
-  },
-  frontierBeardHair: {
-    front: [
-      '..OOOOOOOO..',
-      '.OLLLLPPPPO.',
-      'OPLLPPPPSSPO',
-      'OPLSO..OLSPO',
-      'OPO......OSO',
-      '.OSSSSSSSSO.',
-      '.OSSLLLLSSO.',
-      '..OSSSSSSSO.',
-      '...OOOOOOO..'
-    ],
-    side: [
-      '..OOOOOOOO..',
-      '.OLLLLPPPSO.',
-      'OPLLPPPPPSSO',
-      'OPLPPSSO....',
-      'OPLPSO......',
-      '.OSSO..OOOO.',
-      '..OO..OSSSSO',
-      '......OSSLLO',
-      '.......OOOO.'
-    ]
-  },
-  longPartedCascade: {
-    front: [
-      '...OOOOOOOO...',
-      '..OLLPPLLPPO..',
-      '.OPLLPPPPSSPO.',
-      '.OPLSO..OLSPO.',
-      'OOLPO....OPSOO',
-      'OPLPO....OPSPO',
-      '.OPLO....OLPO.',
-      '..OO......OO..'
-    ],
-    side: [
-      '...OOOOOOOO..',
-      '..OLLPPLLPPSO',
-      '.OPLLPPPPPSSO',
-      'OOPLLPPSSSSPO',
-      'OPLPPSSO.....',
-      '.OPLPSSO.....',
-      '.OPPPSSO.....',
-      '..OSSO.......',
-      '...OO........'
-    ]
-  },
-  pioneerBun: {
-    front: [
-      '...OOOOOO...',
-      '..OLLLLPPO..',
-      '.OOOPPPPOOO.',
-      'OPLLPPPPSSPO',
-      'OPLSO..OLSPO',
-      '.OO......OO.'
-    ],
-    side: [
-      '.OOOO.......',
-      'OPLPSOOOOO..',
-      'OPPSOLLLLPSO',
-      'OOPLLPPPPPPO',
-      '.OPPPSSO....',
-      '..OSSO......',
-      '...OO.......'
-    ]
-  },
-  bobPageboy: {
-    front: [
-      '..OOOOOOOO..',
-      '.OLLLLPPPPO.',
-      'OPLLPPPPSSPO',
-      'OPLSO..OLSPO',
-      'OPO......OSO',
-      '.OO......OO.'
-    ],
-    side: [
-      '..OOOOOOOO..',
-      '.OLLLLPPPSO.',
-      'OPLLPPPPPSSO',
-      'OPPPSSSSPPO.',
-      '.OPPPSSO....',
-      '..OSSO......'
-    ]
-  },
-  pompadourAfro: {
-    front: [
-      '.OOOOOOOOOO.',
-      'OLLLLPPPPSSO',
-      'OPLLPPPPSSPO',
-      'OPLSO..OLSPO',
-      '.OO......OO.'
-    ],
-    side: [
-      '.OOOOOOOOO..',
-      'OLLLLPPPPSOO',
-      'OPLLPPPPPSSO',
-      '.OPPPSSO....',
-      '..OOOO......'
-    ]
-  },
-  spikyCurtains: {
-    front: [
-      'OO..OOOO..OO',
-      'OPLOLLLLPOLO',
-      'OPLLPPPPSSPO',
-      'OPLSO..OLSPO',
-      '.OO......OO.'
-    ],
-    side: [
-      'OO..OOOO..OO',
-      'OPLOLLLLPOLO',
-      'OPLLPPPPPSSO',
-      '.OPPPSSO....',
-      '..OOO.......'
-    ]
-  },
-  braidedCrown: {
-    front: [
-      '.OOOOOOOOOO.',
-      'OLLPPLLLLPPO',
-      'OSSSLLLLSSSO',
-      'OPLSO..OLSPO',
-      '.OO......OO.'
-    ],
-    side: [
-      '..OOOOOOOO..',
-      '.OLLPPLLLLPO',
-      '.OSSSSSSSSPO',
-      'OOSSSSO.....',
-      '.OPLPPO.....',
-      '..OOOO......'
-    ]
-  },
-  buzzFadeTop: {
-    front: [
-      '..OOOOOOOO..',
-      '.OLLLLPPPPO.',
-      '.OPLLPPSSPO.',
-      '.OSO....OSO.'
-    ],
-    side: [
-      '..OOOOOOOO..',
-      '.OLLLLPPPPO.',
-      '.OPLLPPPPSO.',
-      '..OOOO......'
-    ]
-  }
-};
-
-function renderFittedHeadwear(target, baseGrid, frameInfo, preset, palette) {
-  const { gender, baseOrientation, headTopY, headDy, headDx } = frameInfo;
-  const { O, P, S, L } = palette;
-  const pat = preset.patternId || (preset.subType === 'hair' ? 'bobPageboy' : 'beret');
-  const isHair = preset.subType === 'hair';
-
-  // When a hairstyle is equipped, harmonize any built-in hair pixels on the head
-  // so dark slate/brown base hair never clashes with the selected hairstyle color.
-  if (isHair) {
-    for (let y = Math.max(0, headTopY); y <= Math.min(GRID_SIZE - 1, 8 + headDy); y += 1) {
-      for (let x = 8; x <= 23; x += 1) {
-        const c = baseGrid[y]?.[x];
-        if (isSpriteBaseHair(c, y, headDy)) {
-          target[y][x] = y <= headTopY + 2 ? L : (x <= 15 ? P : S);
-        }
-      }
-    }
-  }
-
-  const mapEntry = FITTED_HEADWEAR_MAPS[pat] || (isHair ? FITTED_HEADWEAR_MAPS.bobPageboy : FITTED_HEADWEAR_MAPS.beret);
-  const rows = baseOrientation === 'side' ? mapEntry.side : mapEntry.front;
-  if (!rows || !rows.length) return;
-
-  const width = rows[0].length;
-  const centerX = baseOrientation === 'side'
-    ? 15.5 + headDx
-    : (gender === 'female' ? 15.0 : 15.5);
-  const startX = Math.round(centerX - width / 2);
-
-  // Determine vertical start row so hats/hair sit on the crown without covering the eyes
-  const hasTallCrown = pat === 'slouchHat' || pat === 'puritanCapotain' || pat === 'topHat' || pat === 'boaterFedora';
-  const startY = hasTallCrown ? Math.max(0, headTopY - 1) : headTopY;
-
-  const eyeRow = headTopY + (gender === 'female' ? 5 : 4);
-  const hasBeard = pat === 'slouchHat' || pat === 'frontierBeardHair';
-
-  rows.forEach((rowStr, rIdx) => {
-    const y = startY + rIdx;
-    if (y < 0 || y >= GRID_SIZE) return;
-    for (let cIdx = 0; cIdx < rowStr.length; cIdx += 1) {
-      const ch = rowStr[cIdx];
-      if (!ch || ch === '.' || ch === ' ') continue;
-      const x = startX + cIdx;
-      if (x < 0 || x >= GRID_SIZE) continue;
-
-      // Protect eyes and central face from being overwritten by hair or hat brims
-      if (baseOrientation === 'front') {
-        const faceMinX = gender === 'female' ? 13 : 13;
-        const faceMaxX = gender === 'female' ? 17 : 18;
-        const inCentralFaceX = x >= faceMinX && x <= faceMaxX;
-        if (inCentralFaceX && y >= eyeRow - 1 && y <= eyeRow) {
-          continue;
-        }
-        if (!hasBeard && inCentralFaceX && y >= eyeRow && y <= headTopY + 6) {
-          continue;
+    for (let y = torsoMinY; y <= torsoMaxY; y += 1) {
+      if (y < 0 || y >= GRID_SIZE) continue;
+      const rSpan = torsoBounds?.byRow?.get(y);
+      if (!rSpan) continue;
+      const ry = y - torsoMinY;
+      if (pat === "suspendersBraces") {
+        const sx = Math.min(rSpan.maxX - 1, Math.max(rSpan.minX + 1, Math.round((rSpan.minX + rSpan.maxX) / 2)));
+        if (!frameInfo.nearHandMask?.has(`${sx},${y}`)) {
+          target[y][sx] = (y === torsoMaxY - 1) ? L : S;
         }
       } else {
-        // Side view (facing east): face profile is on the east side (x >= 16 + headDx)
-        const inEastFaceX = x >= 16 + headDx && x <= 19 + headDx;
-        if (inEastFaceX && y >= eyeRow - 1 && y <= eyeRow) {
-          continue;
-        }
-        if (!hasBeard && inEastFaceX && y >= eyeRow - 1 && y <= headTopY + 6) {
-          continue;
+        const sx = Math.min(rSpan.maxX - 1, rSpan.minX + 1 + Math.floor(ry * 0.5));
+        if (!frameInfo.nearHandMask?.has(`${sx},${y}`)) {
+          target[y][sx] = (y >= torsoMaxY - 1) ? P : L;
+          if (y >= torsoMaxY - 1 && sx - 1 >= rSpan.minX) target[y][sx - 1] = O;
         }
       }
-
-      // Lower cascading hair (below shoulder line) drapes behind/around the torso rather than overwriting central chest
-      if (isHair && !hasBeard && y >= headTopY + 8) {
-        if (baseOrientation === 'front') {
-          const innerChestMin = gender === 'female' ? 13 : 13;
-          const innerChestMax = gender === 'female' ? 17 : 18;
-          if (x >= innerChestMin && x <= innerChestMax && target[y][x]) continue;
-        } else if (x >= 15 + headDx && target[y][x]) {
-          continue;
-        }
-      }
-
-      let color = palette[ch];
-      if (!color) continue;
-      if (ch !== 'O') {
-        color = applyDirectional16BitShading(
-          color,
-          x,
-          y,
-          baseOrientation,
-          'hats',
-          preset.subType || null,
-          ch === 'P' ? 'primary' : ch === 'S' ? 'secondary' : 'highlight'
-        );
-      }
-      target[y][x] = color;
     }
-  });
+    return;
+  }
+
+  // 4. Pioneer Apron, Belt & Fanny Pack anchored to fg_leg waist
+  const waistY = fgLegBounds?.minY ?? (torsoMaxY + 1);
+  const waistSpan = fgLegBounds?.byRow?.get(waistY) || { minX: 12, maxX: 18 };
+
+  if (pat === "pioneerApron") {
+    if (baseOrientation === "front") {
+      const isFem = gender === "female";
+      drawPatternRowsAt(target, 12, waistY, isFem
+        ? ["OOOOOOO", "OLLLLPO", "OLLLLPO", "OLLPPLO", "OLLLLPO", "OPPPSSO", ".OOOOO."]
+        : ["OOOOOOOO", "OLLLLLPO", "OLLLLLPO", "OLLPPPLO", "OLLLLLPO", "OPPPPSSO", ".OOOOOO."], pal);
+      return;
+    }
+    const apronBottomY = Math.min(GRID_SIZE - 2, waistY + 6);
+    for (let y = waistY; y <= apronBottomY; y += 1) {
+      const ry = y - waistY;
+      const legRow = fgLegBounds?.byRow?.get(y) || waistSpan;
+      const aMinX = ry === 0 ? legRow.minX : Math.max(legRow.minX + 1, legRow.maxX - 3);
+      const aMaxX = legRow.maxX;
+      for (let x = aMinX; x <= aMaxX; x += 1) {
+        const sec = sectionGrid?.[y]?.[x];
+        if (sec === "fg_arm" || sec === "fg_hand" || frameInfo.nearHandMask?.has(`${x},${y}`)) continue;
+        if (ry === 0 || y === apronBottomY || x === aMinX || x === aMaxX) {
+          target[y][x] = O;
+        } else if (x === aMaxX - 1) {
+          target[y][x] = L;
+        } else {
+          target[y][x] = P;
+        }
+      }
+    }
+    return;
+  }
+
+  // beltChainSash & fannyPackWaist
+  for (let dy = 0; dy <= (pat === "fannyPackWaist" ? 2 : 1); dy += 1) {
+    const y = waistY + dy;
+    if (y < 0 || y >= GRID_SIZE) continue;
+    const legRow = fgLegBounds?.byRow?.get(y) || waistSpan;
+    for (let x = legRow.minX; x <= legRow.maxX; x += 1) {
+      const sec = sectionGrid?.[y]?.[x];
+      if (sec === "fg_arm" || sec === "fg_hand" || frameInfo.nearHandMask?.has(`${x},${y}`)) continue;
+      if (dy === 0) {
+        const isBuckle = x === (baseOrientation === "side" ? legRow.maxX - 1 : Math.round((legRow.minX + legRow.maxX) / 2));
+        target[y][x] = (x === legRow.minX || x === legRow.maxX) ? O : (isBuckle ? L : S);
+      } else if (pat === "fannyPackWaist" && x >= legRow.maxX - 3) {
+        target[y][x] = (dy === 2 || x === legRow.maxX - 3 || x === legRow.maxX) ? O : (x === legRow.maxX - 1 ? L : P);
+      }
+    }
+  }
 }
 
-function overlayFittedClothing(baseGrid, appearance, baseOrientation = 'front', animMode = 'idle', frameIndex = 0) {
+function setHeadwearPixelSafe(target, frameInfo, x, y, color, allowOnFace = false) {
+  if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE || !color) return;
+  if (!allowOnFace) {
+    const sec = frameInfo.sectionGrid?.[y]?.[x];
+    const headMinY = frameInfo.sectionBounds?.head?.minY ?? (4 + frameInfo.headDy);
+    // Protect eyes, nose, cheeks, and mouth in the head section
+    if (sec === "head" && y >= headMinY) {
+      return;
+    }
+  }
+  target[y][x] = color;
+}
+
+function renderFittedHeadwear(target, baseGrid, frameInfo, preset, palette) {
+  const { gender, baseOrientation, headTopY, headDy, sectionGrid, sectionBounds, sectionMap } = frameInfo;
+  const { O, P, S, L } = palette;
+  const pat = preset.patternId || (preset.subType === "hair" ? "bobPageboy" : "beret");
+  const isHair = preset.subType === "hair";
+
+  const hairBounds = sectionBounds?.hair;
+  const headBounds = sectionBounds?.head;
+  const craniumBounds = sectionBounds?.cranium;
+  const neckBounds = sectionBounds?.neck;
+  const torsoBounds = sectionBounds?.torso;
+
+  const hMinX = hairBounds?.minX ?? craniumBounds?.minX ?? 13;
+  const hMaxX = hairBounds?.maxX ?? craniumBounds?.maxX ?? 19;
+  const hMinY = hairBounds?.minY ?? craniumBounds?.minY ?? headTopY;
+  const hMaxY = hairBounds?.maxY ?? (8 + headDy);
+  const faceMinY = headBounds?.minY ?? (hMinY + 3);
+  const faceMaxX = headBounds?.maxX ?? hMaxX;
+  const faceMaxY = headBounds?.maxY ?? (8 + headDy);
+
+  if (isHair) {
+    // 1. Shade all pixels inside the anatomical hair mask with directional 16-bit cluster shading
+    const hairCoords = sectionMap?.hair || [];
+    for (const [hx, hy] of hairCoords) {
+      const orig = baseGrid[hy]?.[hx];
+      if (!orig) continue;
+      if (isSpriteOutline(orig) || orig === "#050004" || orig === "#120e26" || orig === "#140c1c") {
+        target[hy][hx] = O;
+        continue;
+      }
+      const relY = hy - hMinY;
+      if (pat === "buzzFadeTop" && hy >= hMaxY - 1) {
+        target[hy][hx] = S;
+      } else if (relY <= 1 || (relY === 2 && hx >= hMinX + 2)) {
+        target[hy][hx] = L;
+      } else if (hx <= hMinX + 1 || hy >= hMaxY - 1) {
+        target[hy][hx] = S;
+      } else {
+        target[hy][hx] = P;
+      }
+    }
+
+    // 2. Sculpt distinctive hairstyle silhouettes anchored directly to the hair/head mask bounds
+    if (pat === "buzzFadeTop") {
+      return;
+    }
+
+    if (pat === "bobPageboy") {
+      // Rounded bob back & tucked lower curl
+      for (let y = hMinY + 1; y <= hMaxY; y += 1) {
+        const rowSpan = hairBounds?.byRow?.get(y);
+        if (!rowSpan) continue;
+        const bx = rowSpan.minX - 1;
+        if (bx >= 0) {
+          setHeadwearPixelSafe(target, frameInfo, bx, y, O);
+          setHeadwearPixelSafe(target, frameInfo, rowSpan.minX, y, y <= hMinY + 3 ? L : P);
+        }
+      }
+      for (let x = hMinX; x <= hMinX + 3; x += 1) {
+        setHeadwearPixelSafe(target, frameInfo, x, hMaxY + 1, O);
+      }
+      return;
+    }
+
+    if (pat === "pioneerBun") {
+      // Sculpted 4x4 coiled chignon bun at the back of the crown with hairpin highlight
+      const bunX = Math.max(1, hMinX - 3);
+      const bunY = hMinY + 2;
+      const bunRows = [
+        ".OO.",
+        "OLLO",
+        "OPSO",
+        ".OO."
+      ];
+      drawPatternRowsAt(target, bunX, bunY, bunRows, { O, P, S, L });
+      setHeadwearPixelSafe(target, frameInfo, hMinX, bunY + 1, L); // Hairpin / ribbon accent
+      return;
+    }
+
+    if (pat === "ponytailQueue") {
+      // Ribbon tie at nape + flowing ponytail cascading behind shoulder
+      const tieX = hMinX - 1;
+      const tieY = hMinY + 3;
+      setHeadwearPixelSafe(target, frameInfo, tieX, tieY, L);
+      const tailRows = [
+        ".OO.",
+        "OLLO",
+        "OPPO",
+        "OSSO",
+        ".OO."
+      ];
+      drawPatternRowsAt(target, Math.max(1, hMinX - 3), tieY + 1, tailRows, { O, P, S, L });
+      return;
+    }
+
+    if (pat === "longTwinBraids") {
+      // Woven braid plait draping down from behind the temple over the shoulder
+      const braidX = hMinX + 1;
+      for (let dy = 0; dy <= 6; dy += 1) {
+        const y = hMaxY - 1 + dy;
+        if (y >= GRID_SIZE - 1) break;
+        setHeadwearPixelSafe(target, frameInfo, braidX - 1, y, O);
+        setHeadwearPixelSafe(target, frameInfo, braidX, y, dy === 5 ? L : (dy % 2 === 0 ? L : S));
+        setHeadwearPixelSafe(target, frameInfo, braidX + 1, y, dy === 6 ? O : (dy % 2 === 0 ? P : L));
+        setHeadwearPixelSafe(target, frameInfo, braidX + 2, y, O);
+      }
+      return;
+    }
+
+    if (pat === "longWavyFlow" || pat === "longPartedCascade") {
+      // Voluminous crown wave + long flowing locks cascading down the upper back
+      for (let x = hMinX + 1; x <= hMaxX - 1; x += 1) {
+        setHeadwearPixelSafe(target, frameInfo, x, hMinY - 1, O);
+        setHeadwearPixelSafe(target, frameInfo, x, hMinY, L);
+      }
+      for (let dy = 0; dy <= 5; dy += 1) {
+        const y = hMaxY - 1 + dy;
+        if (y >= GRID_SIZE - 1) break;
+        const waveShift = (pat === "longWavyFlow" && dy % 2 === 1) ? -1 : 0;
+        const lx = Math.max(1, hMinX - 1 + waveShift);
+        setHeadwearPixelSafe(target, frameInfo, lx, y, O);
+        setHeadwearPixelSafe(target, frameInfo, lx + 1, y, dy % 2 === 0 ? L : P);
+        setHeadwearPixelSafe(target, frameInfo, lx + 2, y, dy >= 4 ? O : S);
+        setHeadwearPixelSafe(target, frameInfo, lx + 3, y, O);
+      }
+      return;
+    }
+
+    if (pat === "curlsWig") {
+      // High powdered/baroque bouffant with tiered horizontal ringlet curls
+      for (let x = hMinX; x <= hMaxX; x += 1) {
+        setHeadwearPixelSafe(target, frameInfo, x, hMinY - 1, O);
+        setHeadwearPixelSafe(target, frameInfo, x, hMinY, L);
+      }
+      for (let y = hMinY + 2; y <= hMaxY + 2; y += 1) {
+        const curlCol = (y - hMinY) % 2 === 0 ? L : S;
+        for (let x = hMinX - 1; x <= hMinX + 2; x += 1) {
+          if (x === hMinX - 1 || y === hMaxY + 2) {
+            setHeadwearPixelSafe(target, frameInfo, x, y, O);
+          } else {
+            setHeadwearPixelSafe(target, frameInfo, x, y, curlCol);
+          }
+        }
+      }
+      return;
+    }
+
+    if (pat === "spikyCurtains") {
+      // Dynamic jagged spike tips rising above the crown + parted front bangs
+      for (let x = hMinX; x <= hMaxX; x += 2) {
+        setHeadwearPixelSafe(target, frameInfo, x, Math.max(0, hMinY - 2), O);
+        setHeadwearPixelSafe(target, frameInfo, x, Math.max(0, hMinY - 1), L);
+        if (x + 1 <= hMaxX) {
+          setHeadwearPixelSafe(target, frameInfo, x + 1, Math.max(0, hMinY - 1), O);
+          setHeadwearPixelSafe(target, frameInfo, x + 1, hMinY, P);
+        }
+      }
+      return;
+    }
+
+    if (pat === "pompadourAfro") {
+      // Full rounded halo / pompadour volume expanding above & forward from crown
+      const topY = Math.max(0, hMinY - 2);
+      for (let y = topY; y <= faceMinY; y += 1) {
+        const isTopOrBot = y === topY;
+        const rLeft = hMinX - (y >= hMinY ? 2 : 1);
+        const rRight = hMaxX + (y <= faceMinY - 1 ? 1 : 0);
+        for (let x = rLeft; x <= rRight; x += 1) {
+          if (isTopOrBot || x === rLeft || x === rRight) {
+            setHeadwearPixelSafe(target, frameInfo, x, y, O);
+          } else {
+            setHeadwearPixelSafe(target, frameInfo, x, y, ((x + y) % 2 === 0) ? L : P);
+          }
+        }
+      }
+      return;
+    }
+
+    if (pat === "frontierBeardHair") {
+      // Bushy mountain-man hair + full sculpted trail beard across lower jaw & neck
+      const jawStartY = Math.max(faceMinY + 2, faceMaxY - 1);
+      const beardEndY = Math.min(GRID_SIZE - 2, faceMaxY + 3);
+      for (let y = jawStartY; y <= beardEndY; y += 1) {
+        const dy = y - jawStartY;
+        const bMinX = (neckBounds?.minX ?? 15) - (dy <= 1 ? 1 : 0);
+        const bMaxX = faceMaxX - (dy >= 3 ? 1 : 0);
+        for (let x = bMinX; x <= bMaxX; x += 1) {
+          if (y === beardEndY || x === bMinX || x === bMaxX) {
+            setHeadwearPixelSafe(target, frameInfo, x, y, O, true);
+          } else if (dy === 0) {
+            setHeadwearPixelSafe(target, frameInfo, x, y, L, true); // Mustache highlight
+          } else {
+            setHeadwearPixelSafe(target, frameInfo, x, y, dy >= 2 ? S : P, true);
+          }
+        }
+      }
+      return;
+    }
+    return;
+  }
+
+  // ============================================================================
+  // MASK-DRIVEN HATS & HELMETS (anchored to hairBounds & headBounds)
+  // ============================================================================
+  const brimY = Math.max(2, faceMinY);
+  const crownTopY = Math.max(0, hMinY - 1);
+
+  if (pat === "sunbonnet") {
+    // Pioneer Prairie Sunbonnet wrapping the back of hair with a projecting front poke-brim & chin ribbon
+    for (let y = crownTopY; y <= hMaxY; y += 1) {
+      const hRow = hairBounds?.byRow?.get(y) || { minX: hMinX, maxX: hMaxX };
+      const bLeft = hRow.minX - 1;
+      const bRight = y <= brimY + 1 ? faceMaxX + 2 : Math.min(faceMaxX - 2, hRow.maxX);
+      for (let x = bLeft; x <= bRight; x += 1) {
+        if (y === crownTopY || y === hMaxY || x === bLeft || x === bRight) {
+          setHeadwearPixelSafe(target, frameInfo, x, y, O);
+        } else if (x >= bRight - 2 && y <= brimY + 1) {
+          setHeadwearPixelSafe(target, frameInfo, x, y, L); // Sunlit poke-brim
+        } else if (x <= bLeft + 2) {
+          setHeadwearPixelSafe(target, frameInfo, x, y, S); // Gathered bonnet back
+        } else {
+          setHeadwearPixelSafe(target, frameInfo, x, y, P);
+        }
+      }
+    }
+    // Chin ribbon bow at neck
+    if (neckBounds) {
+      setHeadwearPixelSafe(target, frameInfo, neckBounds.minX, neckBounds.minY, L, true);
+      setHeadwearPixelSafe(target, frameInfo, neckBounds.minX, neckBounds.minY + 1, S, true);
+    }
+    return;
+  }
+
+  if (pat === "coonskinCap") {
+    // Mottled fur dome over crown + striped raccoon tail hanging behind head
+    for (let y = crownTopY; y <= brimY; y += 1) {
+      const rLeft = hMinX - 1;
+      const rRight = hMaxX;
+      for (let x = rLeft; x <= rRight; x += 1) {
+        if (y === crownTopY || x === rLeft || x === rRight) {
+          setHeadwearPixelSafe(target, frameInfo, x, y, O);
+        } else {
+          const furCol = (x + y) % 3 === 0 ? L : ((x + y) % 2 === 0 ? P : S);
+          setHeadwearPixelSafe(target, frameInfo, x, y, furCol);
+        }
+      }
+    }
+    // Ringed raccoon tail at back
+    const tailX = Math.max(1, hMinX - 3);
+    for (let dy = 0; dy <= 5; dy += 1) {
+      const y = brimY + dy;
+      setHeadwearPixelSafe(target, frameInfo, tailX, y, O);
+      setHeadwearPixelSafe(target, frameInfo, tailX + 1, y, dy === 5 ? O : (dy % 2 === 0 ? L : S));
+      setHeadwearPixelSafe(target, frameInfo, tailX + 2, y, O);
+    }
+    return;
+  }
+
+  if (pat === "topHat" || pat === "puritanCapotain") {
+    // Tall stovepipe / pilgrim capotain cylinder rising above hairMinY with flat brim at brimY
+    const tallTopY = Math.max(0, hMinY - 2);
+    for (let y = tallTopY; y <= brimY; y += 1) {
+      const isBrim = y === brimY;
+      const rLeft = isBrim ? hMinX - 2 : hMinX;
+      const rRight = isBrim ? faceMaxX + 1 : hMaxX - 1;
+      for (let x = rLeft; x <= rRight; x += 1) {
+        if (y === tallTopY || isBrim || x === rLeft || x === rRight) {
+          setHeadwearPixelSafe(target, frameInfo, x, y, O);
+        } else if (y === brimY - 1) {
+          const isBuckle = pat === "puritanCapotain" && x >= rRight - 2;
+          setHeadwearPixelSafe(target, frameInfo, x, y, isBuckle ? L : S); // Hatband & pilgrim buckle
+        } else {
+          setHeadwearPixelSafe(target, frameInfo, x, y, x >= rRight - 2 ? L : P);
+        }
+      }
+    }
+    return;
+  }
+
+  if (pat === "slouchHat" || pat === "boaterFedora" || pat === "plumedHat") {
+    // Pinched frontier crown + hatband + sweeping wide brim
+    const topY = Math.max(0, hMinY - 1);
+    for (let y = topY; y <= brimY; y += 1) {
+      const isBrim = y === brimY;
+      const rLeft = isBrim ? hMinX - 2 : hMinX + (y === topY ? 1 : 0);
+      const rRight = isBrim ? faceMaxX + 2 : hMaxX - (y === topY ? 1 : 0);
+      for (let x = rLeft; x <= rRight; x += 1) {
+        if (y === topY || x === rLeft || x === rRight) {
+          setHeadwearPixelSafe(target, frameInfo, x, y, O);
+        } else if (isBrim) {
+          setHeadwearPixelSafe(target, frameInfo, x, y, (x === rLeft + 1 || x === rRight - 1) ? P : O);
+        } else if (y === brimY - 1) {
+          setHeadwearPixelSafe(target, frameInfo, x, y, x === rRight - 1 ? L : S); // Hatband
+        } else {
+          setHeadwearPixelSafe(target, frameInfo, x, y, x >= rRight - 2 ? L : P);
+        }
+      }
+    }
+    if (pat === "plumedHat") {
+      // Sweeping feather plume arching off the back of the crown
+      setHeadwearPixelSafe(target, frameInfo, hMinX - 1, topY, L);
+      setHeadwearPixelSafe(target, frameInfo, hMinX - 2, topY + 1, L);
+      setHeadwearPixelSafe(target, frameInfo, hMinX - 3, topY + 2, P);
+    }
+    return;
+  }
+
+  if (pat === "tricorne" || pat === "bicorne") {
+    // Cocked upturned triangular dark brim with gold/lace trim along the top crest & cockade rosette
+    const topY = Math.max(0, hMinY - 1);
+    for (let y = topY; y <= brimY; y += 1) {
+      const dy = y - topY;
+      const rLeft = hMinX - dy;
+      const rRight = hMaxX + (dy >= 2 ? 1 : 0);
+      for (let x = rLeft; x <= rRight; x += 1) {
+        if (x === rLeft || x === rRight || y === brimY) {
+          setHeadwearPixelSafe(target, frameInfo, x, y, O);
+        } else if (y === topY) {
+          setHeadwearPixelSafe(target, frameInfo, x, y, L); // Gold lace trim along cocked crest
+        } else if (x === Math.round((rLeft + rRight) / 2) && dy === 2) {
+          setHeadwearPixelSafe(target, frameInfo, x, y, L); // Cockade rosette
+        } else {
+          setHeadwearPixelSafe(target, frameInfo, x, y, dy === 1 ? P : S);
+        }
+      }
+    }
+    return;
+  }
+
+  if (pat === "headbandBandana") {
+    // Wraparound headband / sweatband across forehead row with knot tails at back
+    for (let x = hMinX - 1; x <= faceMaxX; x += 1) {
+      setHeadwearPixelSafe(target, frameInfo, x, brimY - 1, (x === hMinX - 1 || x === faceMaxX) ? O : (x >= faceMaxX - 2 ? L : P));
+      setHeadwearPixelSafe(target, frameInfo, x, brimY, O);
+    }
+    setHeadwearPixelSafe(target, frameInfo, hMinX - 2, brimY, S);
+    setHeadwearPixelSafe(target, frameInfo, hMinX - 3, brimY + 1, P);
+    return;
+  }
+
+  // Default fitted caps, berets, cloches, flat caps, beanies & steel helmets
+  const isVisorCap = pat === "capBeanie" || pat === "newsboyFlatCap" || pat === "backwardsCap";
+  const isBackwards = pat === "backwardsCap";
+  const isCloche = pat === "clocheBellHat" || pat === "steelHelmet";
+
+  for (let y = hMinY; y <= brimY; y += 1) {
+    const isBrimRow = y === brimY;
+    let rLeft = hMinX - (isBrimRow && isBackwards ? 2 : (isCloche ? 1 : 0));
+    let rRight = hMaxX + (isBrimRow && isVisorCap && !isBackwards ? 2 : (isCloche ? 1 : 0));
+    for (let x = rLeft; x <= rRight; x += 1) {
+      if (y === hMinY || x === rLeft || x === rRight || (isBrimRow && !isVisorCap)) {
+        setHeadwearPixelSafe(target, frameInfo, x, y, O);
+      } else if (isBrimRow && isVisorCap) {
+        setHeadwearPixelSafe(target, frameInfo, x, y, (x >= hMaxX || x <= hMinX) ? L : O);
+      } else if (x >= rRight - 2) {
+        setHeadwearPixelSafe(target, frameInfo, x, y, L);
+      } else if (x <= rLeft + 1) {
+        setHeadwearPixelSafe(target, frameInfo, x, y, S);
+      } else {
+        setHeadwearPixelSafe(target, frameInfo, x, y, P);
+      }
+    }
+  }
+}
+
+function overlayFittedClothing(baseGrid, appearance, baseOrientation = "front", animMode = "idle", frameIndex = 0) {
   const target = baseGrid.map((row) => [...row]);
-  const gender = appearance?.gender === 'female' ? 'female' : 'male';
+  const gender = appearance?.gender === "female" ? "female" : "male";
   const frameInfo = analyzeBoilerplateFrame(baseGrid, gender, baseOrientation, animMode, frameIndex);
 
-  const pantsPresetId = String(appearance?.equippedPresets?.pants || '');
+  const pantsPresetId = String(appearance?.equippedPresets?.pants || "");
   const pantsPreset = (INITIAL_CLOTHING_BOILERPLATE.pants || []).find((entry) => entry.id === pantsPresetId);
-  const shoesPresetId = String(appearance?.equippedPresets?.shoes || '');
+  const shoesPresetId = String(appearance?.equippedPresets?.shoes || "");
   const shoesPreset = (INITIAL_CLOTHING_BOILERPLATE.shoes || []).find((entry) => entry.id === shoesPresetId);
+  const shirtsPresetId = String(appearance?.equippedPresets?.shirts || "");
+  const shirtsPreset = (INITIAL_CLOTHING_BOILERPLATE.shirts || []).find((entry) => entry.id === shirtsPresetId);
   const hasShoes = Boolean(shoesPreset && !shoesPreset.isNone);
-  const isSkirt = isSkirtPreset(pantsPreset);
 
-  const drawOrder = ['pants', 'shoes', 'shirts', 'accessories', 'hats'];
+  const drawOrder = ["pants", "shoes", "shirts", "accessories", "hats"];
 
   for (const category of drawOrder) {
-    const presetId = String(appearance?.equippedPresets?.[category] || '');
+    const presetId = String(appearance?.equippedPresets?.[category] || "");
     const preset = (INITIAL_CLOTHING_BOILERPLATE[category] || []).find((entry) => entry.id === presetId);
     if (!preset || preset.isNone) continue;
 
-    const dyeId = appearance?.categoryDyes?.[category] || 'default';
-    const palette = resolveGarmentPalette(preset, dyeId);
+    const dyeId = appearance?.categoryDyes?.[category] || "default";
+    const palette = resolveGarmentPalette(preset, dyeId, appearance?.hairColorId);
 
     const frameSpecificKey = `clothing:${presetId}:${baseOrientation}:${animMode}:${frameIndex}`;
     const orientationKey = `clothing:${presetId}:${baseOrientation}`;
     const hasSpecific = CUSTOM_SPRITE_OVERRIDES.has(frameSpecificKey);
-    const customGrid = hasSpecific
+    let customGrid = hasSpecific
       ? CUSTOM_SPRITE_OVERRIDES.get(frameSpecificKey)
       : CUSTOM_SPRITE_OVERRIDES.get(orientationKey);
+    if (customGrid && category === 'hats' && preset.subType === 'hair' && dyeId === 'default') {
+      customGrid = recolorCustomHairGrid(customGrid, preset, appearance?.hairColorId);
+    }
     if (customGrid) {
       let shiftX = 0;
       let shiftY = 0;
-      if (!hasSpecific && (category === 'hats' || category === 'accessories')) {
-        const refBase = getBaseBoilerplateGrid(gender, baseOrientation, 'walk', 0);
+      if (!hasSpecific && (category === "hats" || category === "accessories")) {
+        const refBase = getBaseBoilerplateGrid(gender, baseOrientation, "walk", 0);
         if (refBase) {
-          const refInfo = analyzeBoilerplateFrame(refBase, gender, baseOrientation, 'walk', 0);
+          const refInfo = analyzeBoilerplateFrame(refBase, gender, baseOrientation, "walk", 0);
           shiftX = (frameInfo.headDx || 0) - (refInfo.headDx || 0);
           shiftY = (frameInfo.headDy || 0) - (refInfo.headDy || 0);
         }
@@ -4004,21 +3993,45 @@ function overlayFittedClothing(baseGrid, appearance, baseOrientation = 'front', 
         }
       }
     } else {
-      if (category === 'pants') {
+      if (category === "pants") {
         renderFittedPantsOrSkirt(target, baseGrid, frameInfo, preset, palette, hasShoes);
-      } else if (category === 'shoes') {
+      } else if (category === "shoes") {
         renderFittedShoes(target, baseGrid, frameInfo, preset, palette);
-      } else if (category === 'shirts') {
+      } else if (category === "shirts") {
         renderFittedShirt(target, baseGrid, frameInfo, preset, palette);
-      } else if (category === 'accessories') {
+      } else if (category === "accessories") {
         renderFittedAccessory(target, baseGrid, frameInfo, preset, palette);
-      } else if (category === 'hats') {
+      } else if (category === "hats") {
         renderFittedHeadwear(target, baseGrid, frameInfo, preset, palette);
       }
     }
   }
 
-  if (frameInfo.nearHandPixels && frameInfo.nearHandPixels.length > 0) {
+  // Restore foreground hand pixels (and bare foreground forearm/shoulder when not covered by long/short sleeves)
+  const shirtPat = shirtsPreset && !shirtsPreset.isNone ? (shirtsPreset.patternId || "teeHoodie") : "none";
+  const shirtCoversForearm =
+    shirtPat === "fringedBuckskin" ||
+    shirtPat === "suitJacket" ||
+    shirtPat === "doubletCoat" ||
+    shirtPat === "capeletCoat" ||
+    shirtPat === "turtleneckSweater";
+  const shirtCoversSleeve = shirtPat !== "none" && shirtPat !== "vestJerkin" && shirtPat !== "sleevelessTank";
+
+  if (frameInfo.sectionMap) {
+    for (const [hx, hy] of (frameInfo.sectionMap.fg_hand || [])) {
+      if (baseGrid[hy]?.[hx]) target[hy][hx] = baseGrid[hy][hx];
+    }
+    if (!shirtCoversForearm) {
+      for (const [ax, ay] of (frameInfo.sectionMap.fg_arm || [])) {
+        if (baseGrid[ay]?.[ax]) target[ay][ax] = baseGrid[ay][ax];
+      }
+    }
+    if (!shirtCoversSleeve) {
+      for (const [sx, sy] of (frameInfo.sectionMap.fg_sleeve || [])) {
+        if (baseGrid[sy]?.[sx]) target[sy][sx] = baseGrid[sy][sx];
+      }
+    }
+  } else if (frameInfo.nearHandPixels && frameInfo.nearHandPixels.length > 0) {
     for (const { x, y, color } of frameInfo.nearHandPixels) {
       target[y][x] = color;
     }
@@ -4052,13 +4065,27 @@ export function getCharacterFrameGrid(appearance, view = 'front', animMode = 'wa
     const effectiveMode = gender === 'female' && animMode === 'walk' ? 'walk' : 'idle';
     const rawGrid = getBaseSpriteGrid(gender, 'south', effectiveMode, frameIndex);
     if (!rawGrid) return getLegacyCharacterFrameGrid(appearance, view, animMode, frameIndex);
-    const spriteGrid = applySkinToneToSpriteGrid(rawGrid, appearance?.skinToneId, gender);
+    const skinGrid = applySkinToneToSpriteGrid(
+      rawGrid,
+      appearance?.skinToneId,
+      gender,
+      getFrameSkinRoleMap(gender, 'front', effectiveMode, frameIndex)
+    );
+    const hairMask = getFrameSectionMap(gender, 'front', effectiveMode, frameIndex, rawGrid)?.hair;
+    const spriteGrid = applyHairColorToSpriteGrid(skinGrid, appearance?.hairColorId, gender, hairMask, 'front', effectiveMode, frameIndex, getFrameHairRoleMap(gender, 'front', effectiveMode, frameIndex));
     return overlayFittedClothing(spriteGrid, appearance, 'front', effectiveMode, frameIndex);
   }
 
   const rawGrid = getBaseSpriteGrid(gender, 'east', animMode, frameIndex);
   if (!rawGrid) return getLegacyCharacterFrameGrid(appearance, view, animMode, frameIndex);
-  const eastGrid = applySkinToneToSpriteGrid(rawGrid, appearance?.skinToneId, gender);
+  const skinGrid = applySkinToneToSpriteGrid(
+    rawGrid,
+    appearance?.skinToneId,
+    gender,
+    getFrameSkinRoleMap(gender, 'side', animMode, frameIndex)
+  );
+  const hairMask = getFrameSectionMap(gender, 'side', animMode, frameIndex, rawGrid)?.hair;
+  const eastGrid = applyHairColorToSpriteGrid(skinGrid, appearance?.hairColorId, gender, hairMask, 'side', animMode, frameIndex, getFrameHairRoleMap(gender, 'side', animMode, frameIndex));
   const dressedEast = overlayFittedClothing(eastGrid, appearance, 'side', animMode, frameIndex);
   return isSideLeft ? dressedEast.map((row) => [...row].reverse()) : dressedEast;
 }
@@ -4069,7 +4096,14 @@ export function getCharacterOutfitGrid(appearance, view = 'front') {
   const dir = isSide ? 'east' : 'south';
   const rawGrid = getBaseSpriteGrid(gender, dir, 'idle', 0);
   if (!rawGrid) return buildNeutralCompositeGrid(appearance, isSide ? 'side' : 'front');
-  const spriteGrid = applySkinToneToSpriteGrid(rawGrid, appearance?.skinToneId, gender);
+  const skinGrid = applySkinToneToSpriteGrid(
+    rawGrid,
+    appearance?.skinToneId,
+    gender,
+    getFrameSkinRoleMap(gender, isSide ? 'side' : 'front', 'idle', 0)
+  );
+  const hairMask = getFrameSectionMap(gender, isSide ? 'side' : 'front', 'idle', 0, rawGrid)?.hair;
+  const spriteGrid = applyHairColorToSpriteGrid(skinGrid, appearance?.hairColorId, gender, hairMask, isSide ? 'side' : 'front', 'idle', 0, getFrameHairRoleMap(gender, isSide ? 'side' : 'front', 'idle', 0));
   const dressed = overlayFittedClothing(spriteGrid, appearance, isSide ? 'side' : 'front', 'idle', 0);
   return view === 'side_left' ? dressed.map((row) => [...row].reverse()) : dressed;
 }
@@ -4145,7 +4179,7 @@ export function mapBiomeToBackdropId(biome = 'plains', weather = {}) {
 
 export function drawPixelBackdropParallaxLayer(ctx, width, backdropId, charFootY, layer, scrollOffset = 0) {
   const backdrop = BACKDROPS[backdropId] || BACKDROPS.prairie;
-  const horizonY = Math.max(12, charFootY - 20);
+  const horizonY = Math.max(12, charFootY - 26);
 
   if (layer === 'sky') {
     const skyBand1 = Math.floor(horizonY * 0.38);
@@ -4158,10 +4192,10 @@ export function drawPixelBackdropParallaxLayer(ctx, width, backdropId, charFootY
     ctx.fillRect(0, skyBand2, width, horizonY - skyBand2);
 
     const sunX = Math.floor(width * 0.78);
-    const sunY = Math.max(4, Math.floor(horizonY * 0.25));
+    const sunY = Math.max(5, Math.floor(horizonY * 0.26));
     ctx.fillStyle = backdrop.sunColor;
-    ctx.fillRect(sunX - 2, sunY - 3, 5, 7);
-    ctx.fillRect(sunX - 3, sunY - 2, 7, 5);
+    ctx.fillRect(sunX - 3, sunY - 4, 7, 9);
+    ctx.fillRect(sunX - 4, sunY - 3, 9, 7);
     return;
   }
 
@@ -4169,11 +4203,12 @@ export function drawPixelBackdropParallaxLayer(ctx, width, backdropId, charFootY
     const cloudScroll = Math.floor(scrollOffset * 0.15);
     ctx.fillStyle = backdropId === 'desert' ? '#f6d6bd' : '#ffffff';
     for (let cloud = 0; cloud < 4; cloud += 1) {
-      const cloudX = (((cloud * 47 + 12 - cloudScroll) % (width + 24)) + (width + 24)) % (width + 24) - 12;
-      const cloudY = 4 + (cloud % 2) * 5;
-      if (cloudY + 3 >= horizonY) continue;
-      ctx.fillRect(cloudX, cloudY + 1, 10, 2);
-      ctx.fillRect(cloudX + 2, cloudY, 6, 1);
+      const cloudX = (((cloud * 52 + 12 - cloudScroll) % (width + 32)) + (width + 32)) % (width + 32) - 16;
+      const cloudY = 4 + (cloud % 2) * 6;
+      if (cloudY + 4 >= horizonY) continue;
+      ctx.fillRect(cloudX, cloudY + 2, 16, 2);
+      ctx.fillRect(cloudX + 2, cloudY + 1, 12, 1);
+      ctx.fillRect(cloudX + 4, cloudY, 7, 1);
     }
     return;
   }
@@ -4187,30 +4222,30 @@ export function drawPixelBackdropParallaxLayer(ctx, width, backdropId, charFootY
     const worldX = x + farScroll;
     if (backdropId === 'mountains' || backdropId === 'snow') {
       const peakWave =
-        Math.abs(((worldX * 0.7) % 36) - 18) * 0.8
-        + Math.abs(((worldX * 0.35 + 11) % 24) - 12) * 0.5;
-      const peakTop = Math.max(3, Math.floor(horizonY - 18 + peakWave));
+        Math.abs(((worldX * 0.7) % 44) - 22) * 0.85
+        + Math.abs(((worldX * 0.35 + 11) % 28) - 14) * 0.55;
+      const peakTop = Math.max(3, Math.floor(horizonY - 22 + peakWave));
       ctx.fillStyle = backdrop.distantColor;
       ctx.fillRect(x, peakTop, 1, horizonY - peakTop);
-      const snowLine = peakTop + Math.min(5, Math.floor((horizonY - peakTop) * 0.38));
+      const snowLine = peakTop + Math.min(7, Math.floor((horizonY - peakTop) * 0.4));
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(x, peakTop, 1, Math.max(1, snowLine - peakTop));
     } else if (backdropId === 'desert') {
-      const mod = ((worldX % 52) + 52) % 52;
-      let mesaHeight = 3;
-      if (mod >= 8 && mod <= 28) mesaHeight = 13;
-      else if (mod === 6 || mod === 7 || mod === 29 || mod === 30) mesaHeight = 9;
-      else if (mod === 4 || mod === 5 || mod === 31 || mod === 32) mesaHeight = 5;
+      const mod = ((worldX % 58) + 58) % 58;
+      let mesaHeight = 4;
+      if (mod >= 8 && mod <= 32) mesaHeight = 16;
+      else if (mod === 6 || mod === 7 || mod === 33 || mod === 34) mesaHeight = 11;
+      else if (mod === 4 || mod === 5 || mod === 35 || mod === 36) mesaHeight = 6;
       const topY = horizonY - mesaHeight;
       ctx.fillStyle = backdrop.distantColor;
       ctx.fillRect(x, topY, 1, mesaHeight);
-      if (mesaHeight >= 9) {
+      if (mesaHeight >= 11) {
         ctx.fillStyle = '#de5d3a';
-        ctx.fillRect(x, topY + 3, 1, 1);
-        ctx.fillRect(x, topY + 7, 1, 1);
+        ctx.fillRect(x, topY + 3, 1, 2);
+        ctx.fillRect(x, topY + 8, 1, 2);
       }
     } else {
-      const hillH = Math.floor(4 + Math.sin(worldX * 0.08) * 2.5 + Math.cos(worldX * 0.035) * 2);
+      const hillH = Math.floor(6 + Math.sin(worldX * 0.065) * 3.5 + Math.cos(worldX * 0.03) * 2.5);
       ctx.fillStyle = backdrop.distantColor;
       ctx.fillRect(x, horizonY - hillH, 1, hillH);
     }
@@ -4231,9 +4266,9 @@ export function drawPixelBackdropScene(
   drawRiverWater = true
 ) {
   const bd = BACKDROPS[backdropId] || BACKDROPS.prairie;
-  const horizonY = Math.max(12, charFootY - 20);
-  const pathStartY = Math.max(18, charFootY - 6);
-  const pathEndY = Math.min(H - 2, charFootY + 4);
+  const horizonY = Math.max(12, charFootY - 26);
+  const pathStartY = Math.max(18, charFootY - 10);
+  const pathEndY = Math.min(H - 2, charFootY + 6);
   const riverProfile = getRiverVisualProfile(river);
   const effectiveWaterlineOffsetPx = Number.isFinite(waterlineOffsetPx)
     ? waterlineOffsetPx
@@ -4254,65 +4289,75 @@ export function drawPixelBackdropScene(
   const midScroll = Math.floor(scrollOffset * 0.65);
   if (backdropId === 'prairie') {
     ctx.fillStyle = bd.nearGrassColor;
-    ctx.fillRect(0, pathStartY - 3, W, 3);
+    ctx.fillRect(0, pathStartY - 5, W, 5);
     for (let gx = 0; gx < W; gx += 2) {
       const wx = Math.floor((gx + midScroll) / 2);
       const r = hashInt(wx);
-      if (r > 0.35) {
-        ctx.fillStyle = r > 0.78 ? '#f7e26b' : r > 0.65 ? '#ec273f' : '#a3ce27';
-        ctx.fillRect(gx, pathStartY - 5, 1, 2);
+      if (r > 0.30) {
+        ctx.fillStyle = r > 0.80 ? '#f7e26b' : r > 0.66 ? '#ec273f' : '#a3ce27';
+        ctx.fillRect(gx, pathStartY - 8, 1, 3);
       }
     }
     for (let x = 0; x < W; x++) {
-      const wx = (((x + midScroll) % 48) + 48) % 48;
-      if (wx === 20) {
+      const wx = (((x + midScroll) % 64) + 64) % 64;
+      if (wx === 24) {
+        // Scaled-up frontier wooden milepost / guidepost
+        ctx.fillStyle = '#442434';
+        ctx.fillRect(x, pathStartY - 12, 3, 11);
         ctx.fillStyle = '#663931';
-        ctx.fillRect(x, pathStartY - 7, 2, 6);
+        ctx.fillRect(x + 1, pathStartY - 11, 1, 10);
+        ctx.fillStyle = '#442434';
+        ctx.fillRect(x - 3, pathStartY - 10, 9, 4);
         ctx.fillStyle = '#e4a672';
-        ctx.fillRect(x - 1, pathStartY - 6, 4, 2);
+        ctx.fillRect(x - 2, pathStartY - 9, 7, 2);
       }
     }
   } else if (backdropId === 'mountains' || backdropId === 'snow') {
-    for (let x = -6; x < W + 6; x++) {
-      const wx = (((x + midScroll) % 18) + 18) % 18;
-      if (wx === 9) {
+    for (let x = -8; x < W + 8; x++) {
+      const wx = (((x + midScroll) % 24) + 24) % 24;
+      if (wx === 11) {
         const treeBaseY = pathStartY - 1;
         ctx.fillStyle = '#442434';
-        ctx.fillRect(x, treeBaseY - 2, 2, 2);
+        ctx.fillRect(x, treeBaseY - 4, 3, 4);
         ctx.fillStyle = backdropId === 'snow' ? '#2f484e' : '#140c1c';
-        ctx.fillRect(x - 2, treeBaseY - 5, 6, 3);
-        ctx.fillRect(x - 1, treeBaseY - 8, 4, 3);
-        ctx.fillRect(x, treeBaseY - 10, 2, 2);
+        ctx.fillRect(x - 4, treeBaseY - 8, 11, 4);
+        ctx.fillRect(x - 3, treeBaseY - 12, 9, 4);
+        ctx.fillRect(x - 2, treeBaseY - 15, 7, 3);
+        ctx.fillRect(x - 1, treeBaseY - 17, 5, 2);
+        ctx.fillRect(x, treeBaseY - 19, 3, 2);
         if (backdropId === 'snow') {
           ctx.fillStyle = '#ffffff';
-          ctx.fillRect(x - 2, treeBaseY - 5, 6, 1);
-          ctx.fillRect(x - 1, treeBaseY - 8, 4, 1);
+          ctx.fillRect(x - 4, treeBaseY - 8, 11, 1);
+          ctx.fillRect(x - 3, treeBaseY - 12, 9, 1);
+          ctx.fillRect(x - 2, treeBaseY - 15, 7, 1);
         }
       }
     }
   } else if (backdropId === 'desert') {
-    for (let x = -6; x < W + 6; x++) {
-      const wx = (((x + midScroll) % 34) + 34) % 34;
-      if (wx === 14) {
+    for (let x = -8; x < W + 8; x++) {
+      const wx = (((x + midScroll) % 42) + 42) % 42;
+      if (wx === 16) {
         const cBase = pathStartY - 1;
         ctx.fillStyle = '#44891a';
-        ctx.fillRect(x, cBase - 9, 2, 9);
-        ctx.fillRect(x - 2, cBase - 6, 2, 1);
-        ctx.fillRect(x - 2, cBase - 8, 1, 3);
-        ctx.fillRect(x + 2, cBase - 5, 2, 1);
-        ctx.fillRect(x + 3, cBase - 7, 1, 3);
+        ctx.fillRect(x, cBase - 14, 3, 14);
+        ctx.fillRect(x - 3, cBase - 9, 3, 2);
+        ctx.fillRect(x - 3, cBase - 13, 2, 5);
+        ctx.fillRect(x + 3, cBase - 8, 3, 2);
+        ctx.fillRect(x + 4, cBase - 12, 2, 5);
         ctx.fillStyle = '#a3ce27';
-        ctx.fillRect(x, cBase - 9, 1, 8);
-      } else if (wx === 28) {
+        ctx.fillRect(x, cBase - 14, 1, 13);
+      } else if (wx === 34) {
         ctx.fillStyle = '#743f39';
-        ctx.fillRect(x, pathStartY - 3, 3, 2);
+        ctx.fillRect(x, pathStartY - 4, 5, 3);
+        ctx.fillStyle = '#b86f50';
+        ctx.fillRect(x + 1, pathStartY - 5, 3, 1);
       }
     }
   } else if (backdropId === 'river') {
     const firstBankRow = drawRiverWater ? horizonY + 2 : horizonY;
     for (let y = firstBankRow; y < pathStartY; y += 1) {
       const bounds = riverBoundsAtY(W, y, horizonY, pathEndY, H, landmarkId);
-      ctx.fillStyle = y >= pathStartY - 3 ? '#a3ce27' : bd.midHillColor;
+      ctx.fillStyle = y >= pathStartY - 4 ? '#a3ce27' : bd.midHillColor;
       ctx.fillRect(0, y, bounds.start, 1);
       ctx.fillRect(bounds.end, y, W - bounds.end, 1);
       if (drawRiverWater) {
@@ -4321,12 +4366,13 @@ export function drawPixelBackdropScene(
     }
   }
 
-  // 6. Trail Path Surface
+  // 6. Scaled-Up Trail Road Surface & Wheel Ruts
   const pathScroll = Math.floor(scrollOffset);
+  const pathH = pathEndY - pathStartY;
   if (backdropId === 'river') {
     for (let y = pathStartY; y < pathEndY; y += 1) {
       const bounds = riverBoundsAtY(W, y, horizonY, pathEndY, H, landmarkId);
-      ctx.fillStyle = y === pathStartY ? '#e4a672' : y === pathEndY - 1 ? '#8f563b' : '#b86f50';
+      ctx.fillStyle = y <= pathStartY + 1 ? '#e4a672' : y >= pathEndY - 2 ? '#8f563b' : '#b86f50';
       ctx.fillRect(0, y, bounds.start, 1);
       ctx.fillRect(bounds.end, y, W - bounds.end, 1);
       if (drawRiverWater) {
@@ -4334,26 +4380,56 @@ export function drawPixelBackdropScene(
       }
     }
   } else {
+    // Upper sunlit road verge (2px)
     ctx.fillStyle = bd.pathTop;
-    ctx.fillRect(0, pathStartY, W, 1);
+    ctx.fillRect(0, pathStartY, W, 2);
+    // Main packed dirt road bed
     ctx.fillStyle = bd.pathMain;
-    ctx.fillRect(0, pathStartY + 1, W, pathEndY - pathStartY - 1);
+    ctx.fillRect(0, pathStartY + 2, W, Math.max(1, pathH - 4));
+    // Lower shaded road embankment (2px)
     ctx.fillStyle = bd.pathRut;
-    ctx.fillRect(0, pathEndY - 1, W, 1);
-  }
+    ctx.fillRect(0, pathEndY - 2, W, 2);
 
-  for (let x = 0; x < W; x++) {
-    const wx = x + pathScroll;
-    if (backdropId !== 'river') {
-      if (wx % 7 === 0) {
+    // Dual parallel wagon wheel rut bands with ridge highlights
+    const upperRutY = pathStartY + 4;
+    const lowerRutY = pathEndY - 5;
+    ctx.fillStyle = bd.pathRut;
+    ctx.fillRect(0, upperRutY, W, 1);
+    ctx.fillRect(0, lowerRutY, W, 1);
+    ctx.fillStyle = bd.pathTop;
+    ctx.fillRect(0, upperRutY + 1, W, 1);
+    ctx.fillRect(0, lowerRutY - 1, W, 1);
+
+    // Textured wagon tracks, cobbles, pebbles & verge grass tufts
+    for (let x = 0; x < W; x++) {
+      const wx = x + pathScroll;
+      // Interrupted wheel-track grooves
+      if (((wx % 8) + 8) % 8 < 5) {
         ctx.fillStyle = bd.pathRut;
-        ctx.fillRect(x, pathStartY + 2, 2, 1);
-        ctx.fillRect(x, pathEndY - 3, 2, 1);
+        ctx.fillRect(x, upperRutY, 1, 2);
+        ctx.fillRect(x, lowerRutY, 1, 2);
+      } else {
+        ctx.fillStyle = bd.pathMain;
+        ctx.fillRect(x, upperRutY, 1, 1);
+        ctx.fillRect(x, lowerRutY, 1, 1);
       }
-      if (hashInt(wx) > 0.75) {
+      // Roadway stones & gravel clusters
+      const h1 = hashInt(wx * 3);
+      if (h1 > 0.82) {
+        const stoneY = pathStartY + 2 + (Math.floor(hashInt(wx + 17) * 100) % Math.max(1, pathH - 5));
+        ctx.fillStyle = bd.pathRut;
+        ctx.fillRect(x, stoneY, 2, 2);
         ctx.fillStyle = bd.pathTop;
-        const py = pathStartY + 2 + (Math.floor(hashInt(wx + 9) * 100) % Math.max(1, pathEndY - pathStartY - 3));
-        ctx.fillRect(x, py, 1, 1);
+        ctx.fillRect(x, stoneY, 1, 1);
+      } else if (h1 < 0.14) {
+        const pebbleY = pathStartY + 3 + (Math.floor(hashInt(wx + 31) * 100) % Math.max(1, pathH - 6));
+        ctx.fillStyle = bd.pathTop;
+        ctx.fillRect(x, pebbleY, 2, 1);
+      }
+      // Grass overhang along top edge of road
+      if (wx % 5 === 0 && hashInt(wx + 5) > 0.45) {
+        ctx.fillStyle = backdropId === 'prairie' ? bd.nearGrassColor : bd.midHillColor;
+        ctx.fillRect(x, pathStartY, 2, 1);
       }
     }
   }
@@ -4410,9 +4486,9 @@ export function drawPixelBackdropScene(
       && x < foregroundRiverBounds.end + 3
     ) continue;
     const wx = x + pathScroll;
-    if (hashInt(wx * 2) > 0.5) {
+    if (hashInt(wx * 2) > 0.45) {
       ctx.fillStyle = bd.midHillColor;
-      ctx.fillRect(x, pathEndY, 2, 1);
+      ctx.fillRect(x, pathEndY, 2, 2);
     }
   }
 
@@ -4430,109 +4506,193 @@ export function drawPixelBackdropScene(
 
 /**
  * Draws an Era/Location-Appropriate Home on the left of the landscape stage
+ * Scaled for 1.0x (32x32) characters (~56px wide x 52-56px tall, 24px doors)
  */
 export function drawEraHomeBuilding(ctx, eraId, baseX, groundY) {
   const x = Math.round(baseX);
   const y = Math.round(groundY);
-  if (x + 48 < 0 || x > 640) return;
+  if (x + 68 < 0 || x > 640) return;
 
   if (eraId === '1500s' || eraId === '1600s') {
-    // Tudor / Baroque Half-Timbered or Stone Manor
+    // Tudor / Baroque Half-Timbered Manor (56px wide, 54px tall)
     ctx.fillStyle = '#f6d6bd';
-    ctx.fillRect(x + 2, y - 18, 24, 18);
-    ctx.fillStyle = '#442434'; // Timber beams
-    ctx.fillRect(x + 2, y - 18, 24, 2);
-    ctx.fillRect(x + 2, y - 10, 24, 2);
-    ctx.fillRect(x + 2, y - 18, 2, 18);
-    ctx.fillRect(x + 13, y - 18, 2, 18);
-    ctx.fillRect(x + 24, y - 18, 2, 18);
-    // Steep gabled roof
-    for (let r = 0; r < 8; r++) {
-      ctx.fillStyle = eraId === '1500s' ? '#743f39' : '#3a4466';
-      ctx.fillRect(x + r, y - 19 - r, 28 - r * 2, 1);
-    }
-    // Arched oak door & leaded windows
-    ctx.fillStyle = '#663931';
-    ctx.fillRect(x + 11, y - 8, 5, 8);
-    ctx.fillStyle = '#f7e26b';
-    ctx.fillRect(x + 5, y - 15, 5, 4);
-    ctx.fillRect(x + 18, y - 15, 5, 4);
-  } else if (eraId === '1700s' || eraId === '1800s' || eraId === '1900_1920') {
-    // Colonial Brick / Victorian / Edwardian Townhouse
-    ctx.fillStyle = eraId === '1700s' ? '#ac2847' : eraId === '1800s' ? '#5a6988' : '#e4a672';
-    ctx.fillRect(x + 2, y - 20, 24, 20);
-    // Roof & chimney
-    ctx.fillStyle = '#262b44';
-    ctx.fillRect(x + 20, y - 26, 4, 6);
-    for (let r = 0; r < 6; r++) {
-      ctx.fillRect(x + r, y - 20 - r, 28 - r * 2, 1);
-    }
-    // White trim & windows
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(x + 2, y - 20, 24, 1);
-    ctx.fillRect(x + 5, y - 16, 4, 5);
-    ctx.fillRect(x + 19, y - 16, 4, 5);
-    ctx.fillStyle = '#f7e26b';
-    ctx.fillRect(x + 6, y - 15, 2, 3);
-    ctx.fillRect(x + 20, y - 15, 2, 3);
-    // Front door with pediment
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(x + 11, y - 10, 6, 10);
+    ctx.fillRect(x + 4, y - 36, 48, 36);
+    // Heavy oak timber framing
     ctx.fillStyle = '#442434';
-    ctx.fillRect(x + 12, y - 9, 4, 9);
+    ctx.fillRect(x + 4, y - 36, 48, 3);
+    ctx.fillRect(x + 4, y - 20, 48, 3);
+    ctx.fillRect(x + 4, y - 3, 48, 3);
+    ctx.fillRect(x + 4, y - 36, 3, 36);
+    ctx.fillRect(x + 26, y - 36, 3, 36);
+    ctx.fillRect(x + 49, y - 36, 3, 36);
+    // Steep gabled roof (16px high)
+    for (let r = 0; r < 16; r++) {
+      ctx.fillStyle = eraId === '1500s' ? '#743f39' : '#3a4466';
+      ctx.fillRect(x + r, y - 37 - r, 56 - r * 2, 1);
+    }
+    // Tall arched oak doorway (12x24px) & leaded casement windows
+    ctx.fillStyle = '#442434';
+    ctx.fillRect(x + 32, y - 24, 12, 24);
+    ctx.fillStyle = '#663931';
+    ctx.fillRect(x + 34, y - 22, 8, 22);
+    ctx.fillStyle = '#f3a833';
+    ctx.fillRect(x + 40, y - 12, 1, 2);
+    // Windows
+    ctx.fillStyle = '#442434';
+    ctx.fillRect(x + 10, y - 31, 12, 10);
+    ctx.fillRect(x + 10, y - 15, 12, 10);
+    ctx.fillStyle = '#f7e26b';
+    ctx.fillRect(x + 12, y - 29, 8, 6);
+    ctx.fillRect(x + 12, y - 13, 8, 6);
+  } else if (eraId === '1700s' || eraId === '1800s' || eraId === '1900_1920') {
+    // Colonial Brick / Victorian / Edwardian Townhouse (56px wide, 56px tall)
+    ctx.fillStyle = eraId === '1700s' ? '#ac2847' : eraId === '1800s' ? '#5a6988' : '#e4a672';
+    ctx.fillRect(x + 4, y - 38, 48, 38);
+    // Tall brick chimney & pitched slate roof
+    ctx.fillStyle = '#262b44';
+    ctx.fillRect(x + 40, y - 54, 7, 16);
+    for (let r = 0; r < 13; r++) {
+      ctx.fillRect(x + r, y - 39 - r, 56 - r * 2, 1);
+    }
+    // White cornice & window trim
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(x + 3, y - 38, 50, 2);
+    for (const wy of [y - 33, y - 18]) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(x + 10, wy, 9, 10);
+      ctx.fillRect(x + 23, wy, 9, 10);
+      ctx.fillStyle = '#262b44';
+      ctx.fillRect(x + 11, wy + 1, 7, 8);
+      ctx.fillRect(x + 24, wy + 1, 7, 8);
+      ctx.fillStyle = '#f7e26b';
+      ctx.fillRect(x + 12, wy + 2, 5, 6);
+      ctx.fillRect(x + 25, wy + 2, 5, 6);
+    }
+    // Pedimented front doorway (12x25px) on right side facing trail
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(x + 35, y - 25, 13, 25);
+    ctx.fillRect(x + 34, y - 27, 15, 2);
+    ctx.fillStyle = '#442434';
+    ctx.fillRect(x + 37, y - 23, 9, 23);
+    ctx.fillStyle = '#f3a833';
+    ctx.fillRect(x + 44, y - 12, 1, 2);
   } else if (eraId === '1921_1940' || eraId === '1941_1950' || eraId === '1950s' || eraId === '1960s' || eraId === '1970s') {
-    // Mid-20th Century Art Deco / Diner Ranch / Brownstone
+    // Mid-20th Century Art Deco / Diner Ranch / Brownstone (56px wide, 46px tall)
     const wallColor = eraId === '1950s' ? '#b2dce8' : eraId === '1960s' ? '#f3a833' : eraId === '1970s' ? '#b86f50' : '#c2c3c7';
     ctx.fillStyle = wallColor;
-    ctx.fillRect(x + 1, y - 17, 26, 17);
-    // Stepped or flat mid-century roof line
+    ctx.fillRect(x + 2, y - 34, 52, 34);
+    // Stepped mid-century roofline
     ctx.fillStyle = eraId === '1950s' ? '#ec273f' : '#3a4466';
-    ctx.fillRect(x, y - 20, 28, 3);
+    ctx.fillRect(x, y - 39, 56, 5);
     if (eraId === '1921_1940') {
-      ctx.fillRect(x + 6, y - 23, 16, 3);
+      ctx.fillRect(x + 12, y - 45, 32, 6);
     }
-    // Picture window & door
+    // Wide picture window & 12x24px front door
+    ctx.fillStyle = '#442434';
+    ctx.fillRect(x + 7, y - 26, 22, 15);
     ctx.fillStyle = '#f7e26b';
-    ctx.fillRect(x + 4, y - 13, 10, 6);
+    ctx.fillRect(x + 9, y - 24, 18, 11);
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(x + 4, y - 13, 10, 1);
+    ctx.fillRect(x + 8, y - 26, 20, 2);
     ctx.fillStyle = '#262b44';
-    ctx.fillRect(x + 18, y - 11, 6, 11);
+    ctx.fillRect(x + 35, y - 24, 13, 24);
+    ctx.fillStyle = '#8f563b';
+    ctx.fillRect(x + 37, y - 22, 9, 22);
   } else if (eraId === '1980s' || eraId === '1990s' || eraId === '2000s' || eraId === '2010s' || eraId === '2020s') {
-    // Late 20th / 21st Century Home (80s Neon Synthwave / 90s-00s Suburban / 10s-20s Modern Glass & Steel)
+    // Late 20th / 21st Century Home (56px wide, 46px tall)
     ctx.fillStyle = eraId === '1980s' ? '#262b44' : eraId === '2020s' ? '#140c1c' : '#5a6988';
-    ctx.fillRect(x + 1, y - 19, 26, 19);
-    // Modern cantilevered roof or neon trim
+    ctx.fillRect(x + 2, y - 36, 52, 36);
     ctx.fillStyle = eraId === '1980s' ? '#ec273f' : eraId === '2020s' ? '#00ff66' : '#3a4466';
-    ctx.fillRect(x, y - 21, 29, 2);
+    ctx.fillRect(x, y - 40, 56, 4);
     // Large modern glass panes
     ctx.fillStyle = eraId === '1980s' ? '#31a2f2' : '#b2dce8';
-    ctx.fillRect(x + 4, y - 15, 11, 7);
+    ctx.fillRect(x + 7, y - 28, 22, 16);
     ctx.fillStyle = '#f7e26b';
-    ctx.fillRect(x + 6, y - 13, 7, 3);
-    // Door
-    ctx.fillStyle = '#8f563b';
-    ctx.fillRect(x + 19, y - 11, 5, 11);
-  } else {
-    // Default 'oregon_trail' 1848 Frontier Log Homestead Cabin
-    ctx.fillStyle = '#663931'; // Stone chimney on left
-    ctx.fillRect(x + 1, y - 21, 4, 21);
-    ctx.fillStyle = '#8f563b'; // Notched log walls
-    ctx.fillRect(x + 4, y - 15, 22, 15);
-    ctx.fillStyle = '#663931'; // Log seams
-    for (let ly = y - 13; ly < y; ly += 3) {
-      ctx.fillRect(x + 4, ly, 22, 1);
-    }
-    // Wood-shingle gable roof
-    for (let r = 0; r < 6; r++) {
-      ctx.fillStyle = '#442434';
-      ctx.fillRect(x + 2 + r, y - 16 - r, 26 - r * 2, 1);
-    }
-    // Warm lantern window & plank door
-    ctx.fillStyle = '#f7e26b';
-    ctx.fillRect(x + 8, y - 11, 5, 5);
+    ctx.fillRect(x + 10, y - 24, 16, 8);
+    // Full-height 12x24px entry door
     ctx.fillStyle = '#442434';
-    ctx.fillRect(x + 17, y - 10, 5, 10);
+    ctx.fillRect(x + 35, y - 24, 13, 24);
+    ctx.fillStyle = '#8f563b';
+    ctx.fillRect(x + 37, y - 22, 9, 22);
+  } else {
+    // Default 'oregon_trail' 1848 Frontier Log Homestead Cabin (58px wide, 54px tall)
+    // 1. Heavy fieldstone hearth & chimney on the left (9px wide x 52px tall)
+    ctx.fillStyle = '#3a4466';
+    ctx.fillRect(x + 1, y - 50, 9, 50);
+    ctx.fillStyle = '#5a6988';
+    for (let cy = y - 48; cy < y - 2; cy += 4) {
+      ctx.fillRect(x + 2 + ((cy % 8 === 0) ? 1 : 0), cy, 6, 2);
+    }
+    ctx.fillStyle = '#262b44';
+    ctx.fillRect(x, y - 52, 11, 3);
+
+    // 2. Notched timber log cabin walls (46px wide x 32px tall)
+    ctx.fillStyle = '#8f563b';
+    ctx.fillRect(x + 8, y - 32, 46, 32);
+    // Alternating sunlit log highlights & dark mortar chinking
+    for (let ly = y - 30; ly < y; ly += 4) {
+      ctx.fillStyle = '#b86f50';
+      ctx.fillRect(x + 9, ly, 44, 1);
+      ctx.fillStyle = '#442434';
+      ctx.fillRect(x + 8, ly + 2, 46, 1);
+    }
+    // Interlocking saddle-notched log ends at corners
+    for (let ly = y - 31; ly < y - 1; ly += 4) {
+      ctx.fillStyle = '#e4a672';
+      ctx.fillRect(x + 6, ly, 3, 2);
+      ctx.fillRect(x + 53, ly, 3, 2);
+      ctx.fillStyle = '#442434';
+      ctx.fillRect(x + 6, ly + 2, 3, 1);
+      ctx.fillRect(x + 53, ly + 2, 3, 1);
+    }
+
+    // 3. Steep wood-shingle gable roof (18px tall peak)
+    for (let r = 0; r < 18; r++) {
+      ctx.fillStyle = r % 3 === 0 ? '#2c1e31' : '#442434';
+      ctx.fillRect(x + 4 + r, y - 33 - r, 54 - r * 2, 1);
+    }
+    ctx.fillStyle = '#663931';
+    ctx.fillRect(x + 4, y - 33, 54, 1);
+
+    // 4. Multi-pane frontier lantern window (12x12px) with shutters
+    ctx.fillStyle = '#442434';
+    ctx.fillRect(x + 14, y - 24, 14, 13);
+    ctx.fillStyle = '#f7e26b';
+    ctx.fillRect(x + 16, y - 22, 10, 9);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(x + 17, y - 21, 3, 3);
+    // Window muntin crossbars & sill
+    ctx.fillStyle = '#442434';
+    ctx.fillRect(x + 20, y - 22, 2, 9);
+    ctx.fillRect(x + 16, y - 18, 10, 2);
+    ctx.fillStyle = '#e4a672';
+    ctx.fillRect(x + 13, y - 11, 16, 2);
+
+    // 5. Full-height plank doorway (13px wide x 25px tall, scaled for 30px pioneers)
+    ctx.fillStyle = '#2c1e31';
+    ctx.fillRect(x + 34, y - 25, 14, 25);
+    ctx.fillStyle = '#663931';
+    ctx.fillRect(x + 36, y - 23, 10, 23);
+    ctx.fillStyle = '#442434';
+    ctx.fillRect(x + 39, y - 23, 1, 23);
+    ctx.fillRect(x + 42, y - 23, 1, 23);
+    // Iron latch & wooden lintel
+    ctx.fillStyle = '#e4a672';
+    ctx.fillRect(x + 33, y - 26, 16, 2);
+    ctx.fillStyle = '#f3a833';
+    ctx.fillRect(x + 44, y - 13, 2, 2);
+
+    // 6. Raised timber front porch step & rain barrel
+    ctx.fillStyle = '#442434';
+    ctx.fillRect(x + 31, y - 2, 26, 3);
+    ctx.fillStyle = '#b86f50';
+    ctx.fillRect(x + 32, y - 2, 24, 1);
+    // Rain barrel at corner
+    ctx.fillStyle = '#663931';
+    ctx.fillRect(x + 50, y - 9, 6, 8);
+    ctx.fillStyle = '#262b44';
+    ctx.fillRect(x + 50, y - 7, 6, 1);
+    ctx.fillRect(x + 50, y - 4, 6, 1);
   }
 }
 
@@ -4629,92 +4789,164 @@ export function drawCharacterGridAt(ctx, grid, baseX, baseY, scale = 1) {
 
 /**
  * Draws the 1848 Independence General Store ("MATT'S OUTFITTING POST")
+ * Scaled for 1.0x (32x32) characters (~78px wide x 66px tall, 35px porch clearance)
  */
 export function drawGeneralStoreBuilding(ctx, baseX, groundY, animTick = 0) {
   const x = Math.round(baseX);
   const y = Math.round(groundY);
-  if (x + 56 < 0 || x > 640) return;
+  if (x + 88 < 0 || x > 640) return;
 
-  // Stepped false-front western timber facade
-  ctx.fillStyle = '#442434';
-  ctx.fillRect(x + 3, y - 29, 36, 2);
-  ctx.fillRect(x + 7, y - 31, 28, 2);
+  // 1. Stepped 2-story false-front western timber facade (72px wide x 64px tall)
+  ctx.fillStyle = '#2c1e31';
+  ctx.fillRect(x + 2, y - 61, 72, 3);
+  ctx.fillRect(x + 10, y - 66, 56, 5);
+  ctx.fillStyle = '#e4a672';
+  ctx.fillRect(x + 12, y - 64, 52, 1);
+
+  // Main timber building body
   ctx.fillStyle = '#8f563b';
-  ctx.fillRect(x + 4, y - 27, 34, 27);
+  ctx.fillRect(x + 4, y - 58, 68, 58);
+  // Horizontal clapboard siding courses & corner pilasters
+  ctx.fillStyle = '#442434';
+  ctx.fillRect(x + 4, y - 58, 3, 58);
+  ctx.fillRect(x + 69, y - 58, 3, 58);
   ctx.fillStyle = '#663931';
-  ctx.fillRect(x + 4, y - 27, 34, 2);
-  ctx.fillRect(x + 4, y - 19, 34, 2);
-  for (let py = y - 17; py < y; py += 3) {
-    ctx.fillRect(x + 4, py, 34, 1);
+  ctx.fillRect(x + 4, y - 58, 68, 2);
+  ctx.fillRect(x + 4, y - 39, 68, 2);
+  for (let py = y - 55; py < y; py += 4) {
+    ctx.fillStyle = '#663931';
+    ctx.fillRect(x + 7, py, 62, 1);
+    ctx.fillStyle = '#b86f50';
+    ctx.fillRect(x + 7, py + 1, 62, 1);
   }
 
-  // Signboard banner on false front
-  ctx.fillStyle = '#442434';
-  ctx.fillRect(x + 6, y - 26, 30, 7);
-  ctx.fillStyle = '#f6d6bd';
-  ctx.fillRect(x + 7, y - 25, 28, 5);
-  ctx.fillStyle = '#442434';
-  // Pixel-art "STORE" lettering blocks
-  ctx.fillRect(x + 9, y - 24, 3, 3);
-  ctx.fillRect(x + 14, y - 24, 3, 3);
-  ctx.fillRect(x + 19, y - 24, 3, 3);
-  ctx.fillRect(x + 24, y - 24, 3, 3);
-  ctx.fillRect(x + 29, y - 24, 3, 3);
-
-  // Porch overhang, shingled awning & support posts
-  ctx.fillStyle = '#442434';
-  ctx.fillRect(x - 1, y - 14, 42, 2);
-  ctx.fillStyle = '#663931';
-  ctx.fillRect(x, y - 12, 40, 1);
+  // 2. Large Signboard Banner on False Front ("STORE")
+  ctx.fillStyle = '#2c1e31';
+  ctx.fillRect(x + 9, y - 55, 58, 14);
   ctx.fillStyle = '#e4a672';
-  ctx.fillRect(x + 1, y - 11, 2, 11);
-  ctx.fillRect(x + 37, y - 11, 2, 11);
+  ctx.fillRect(x + 10, y - 54, 56, 12);
+  ctx.fillStyle = '#f6d6bd';
+  ctx.fillRect(x + 11, y - 53, 54, 10);
 
-  // Raised wooden boardwalk porch deck
+  // Crisp 5x7 pixel-art "STORE" lettering
+  ctx.fillStyle = '#2c1e31';
+  const ly = y - 51;
+  // S (x + 16)
+  ctx.fillRect(x + 16, ly, 5, 1);
+  ctx.fillRect(x + 16, ly + 1, 2, 2);
+  ctx.fillRect(x + 16, ly + 3, 5, 1);
+  ctx.fillRect(x + 19, ly + 4, 2, 2);
+  ctx.fillRect(x + 16, ly + 6, 5, 1);
+  // T (x + 25)
+  ctx.fillRect(x + 25, ly, 5, 1);
+  ctx.fillRect(x + 27, ly + 1, 2, 6);
+  // O (x + 34)
+  ctx.fillRect(x + 34, ly, 5, 1);
+  ctx.fillRect(x + 34, ly + 1, 2, 5);
+  ctx.fillRect(x + 37, ly + 1, 2, 5);
+  ctx.fillRect(x + 34, ly + 6, 5, 1);
+  // R (x + 43)
+  ctx.fillRect(x + 43, ly, 2, 7);
+  ctx.fillRect(x + 45, ly, 3, 1);
+  ctx.fillRect(x + 47, ly + 1, 2, 2);
+  ctx.fillRect(x + 45, ly + 3, 3, 1);
+  ctx.fillRect(x + 46, ly + 4, 2, 1);
+  ctx.fillRect(x + 47, ly + 5, 2, 2);
+  // E (x + 52)
+  ctx.fillRect(x + 52, ly, 2, 7);
+  ctx.fillRect(x + 54, ly, 4, 1);
+  ctx.fillRect(x + 54, ly + 3, 3, 1);
+  ctx.fillRect(x + 54, ly + 6, 4, 1);
+
+  // 3. Storefront Paned Display Windows & Tall Open Doorway (16x26px)
+  // Left & Right paned windows
+  for (const wx of [x + 9, x + 51]) {
+    ctx.fillStyle = '#2c1e31';
+    ctx.fillRect(wx, y - 24, 16, 15);
+    ctx.fillStyle = '#f7e26b';
+    ctx.fillRect(wx + 2, y - 22, 12, 11);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(wx + 3, y - 21, 3, 3);
+    // Window muntins & sill
+    ctx.fillStyle = '#442434';
+    ctx.fillRect(wx + 7, y - 22, 2, 11);
+    ctx.fillRect(wx + 2, y - 17, 12, 2);
+    ctx.fillStyle = '#e4a672';
+    ctx.fillRect(wx - 1, y - 9, 18, 2);
+  }
+
+  // Tall center doorway (18px frame, 14x26px opening)
   ctx.fillStyle = '#442434';
-  ctx.fillRect(x - 2, y - 1, 44, 2);
-  ctx.fillStyle = '#b86f50';
-  ctx.fillRect(x - 1, y - 2, 42, 1);
-
-  // Storefront paned display windows & open doorway
-  ctx.fillStyle = '#442434';
-  ctx.fillRect(x + 6, y - 10, 8, 6);
-  ctx.fillRect(x + 27, y - 10, 8, 6);
-  ctx.fillStyle = '#f7e26b';
-  ctx.fillRect(x + 7, y - 9, 6, 4);
-  ctx.fillRect(x + 28, y - 9, 6, 4);
-  ctx.fillStyle = '#b86f50';
-  ctx.fillRect(x + 10, y - 9, 1, 4);
-  ctx.fillRect(x + 31, y - 9, 1, 4);
-
+  ctx.fillRect(x + 29, y - 29, 18, 27);
   ctx.fillStyle = '#262b44';
-  ctx.fillRect(x + 16, y - 10, 9, 9);
-  ctx.fillStyle = '#663931';
-  ctx.fillRect(x + 15, y - 10, 1, 9);
-  ctx.fillRect(x + 25, y - 10, 1, 9);
+  ctx.fillRect(x + 31, y - 27, 14, 25);
+  ctx.fillStyle = '#f7e26b';
+  ctx.fillRect(x + 31, y - 27, 14, 2); // Transom light
 
-  // Shopkeeper standing on the porch welcoming travelers (scaled to match doorway)
+  // 4. Full-Scale Shopkeeper Matt standing on the boardwalk welcoming the party (scale 1.0)
   const porchKeeperGrid = getCharacterFrameGrid(
     NPC_APPEARANCES.shopkeeper,
     'front',
     'idle',
     animTick % 2
   );
-  drawCharacterGridAt(ctx, porchKeeperGrid, x + 13, y - 17, 0.52);
+  drawCharacterGridAt(ctx, porchKeeperGrid, x + 16, y - 31, 1);
 
-  // Supply barrels, flour sacks & hitching rail out front
+  // 5. High Covered Porch Overhang, Shingled Awning & Support Posts (35px above ground)
+  ctx.fillStyle = '#2c1e31';
+  ctx.fillRect(x - 2, y - 37, 80, 3);
+  ctx.fillStyle = '#442434';
+  ctx.fillRect(x - 1, y - 34, 78, 3);
+  ctx.fillStyle = '#663931';
+  ctx.fillRect(x, y - 31, 76, 1);
+
+  // Porch timber posts with diagonal braces
+  for (const px of [x + 1, x + 72]) {
+    ctx.fillStyle = '#e4a672';
+    ctx.fillRect(px, y - 31, 3, 29);
+    ctx.fillStyle = '#b86f50';
+    ctx.fillRect(px + 2, y - 31, 1, 29);
+  }
+
+  // 6. Raised Wooden Boardwalk Deck & Steps
+  ctx.fillStyle = '#2c1e31';
+  ctx.fillRect(x - 4, y - 3, 82, 4);
   ctx.fillStyle = '#b86f50';
-  ctx.fillRect(x + 3, y - 6, 4, 5);
+  ctx.fillRect(x - 3, y - 3, 80, 2);
+  ctx.fillStyle = '#663931';
+  for (let bx = x; bx < x + 76; bx += 6) {
+    ctx.fillRect(bx, y - 3, 1, 3);
+  }
+  // Step on the left where the trail party walks up
   ctx.fillStyle = '#442434';
-  ctx.fillRect(x + 3, y - 5, 4, 1);
-  ctx.fillRect(x + 3, y - 3, 4, 1);
-  ctx.fillStyle = '#f6d6bd';
-  ctx.fillRect(x + 33, y - 5, 4, 4);
+  ctx.fillRect(x - 8, y - 1, 5, 2);
   ctx.fillStyle = '#e4a672';
-  ctx.fillRect(x + 33, y - 3, 4, 2);
+  ctx.fillRect(x - 7, y - 1, 4, 1);
+
+  // 7. Frontier Supply Barrels, Flour Sacks & Hitching Post
+  // Banded oak barrel on left of porch
+  ctx.fillStyle = '#b86f50';
+  ctx.fillRect(x + 5, y - 13, 8, 10);
+  ctx.fillStyle = '#8f563b';
+  ctx.fillRect(x + 7, y - 13, 4, 10);
+  ctx.fillStyle = '#2c1e31';
+  ctx.fillRect(x + 5, y - 11, 8, 1);
+  ctx.fillRect(x + 5, y - 6, 8, 1);
+
+  // Stacked white flour sacks on right of porch
+  ctx.fillStyle = '#f6d6bd';
+  ctx.fillRect(x + 60, y - 8, 10, 5);
+  ctx.fillStyle = '#e4a672';
+  ctx.fillRect(x + 61, y - 12, 8, 4);
+  ctx.fillStyle = '#ac2847';
+  ctx.fillRect(x + 63, y - 6, 4, 1);
+
+  // Timber hitching rail out front to the left of the boardwalk
   ctx.fillStyle = '#442434';
-  ctx.fillRect(x - 7, y - 5, 6, 1);
-  ctx.fillRect(x - 6, y - 5, 1, 5);
+  ctx.fillRect(x - 18, y - 11, 2, 11);
+  ctx.fillRect(x - 10, y - 11, 2, 11);
+  ctx.fillStyle = '#b86f50';
+  ctx.fillRect(x - 19, y - 10, 12, 2);
 }
 
 export function drawGeneralStoreInterior(ctx, width, height, animTick = 0) {

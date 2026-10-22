@@ -43,7 +43,7 @@ const ERAS = [
 ];
 
 const CATEGORIES = [
-  { id: 'hats', label: 'Hair / Hat', fullLabel: 'Hair or Hat (Pick One)', icon: '🎩' },
+  { id: 'hats', label: 'Hairstyle / Hat', fullLabel: 'Hairstyle or Hat (Pick One)', icon: '💇' },
   { id: 'shirts', label: 'Shirts', fullLabel: 'Shirts, Bodices & Coats', icon: '👕' },
   { id: 'pants', label: 'Pants / Skirts', fullLabel: 'Pants, Breeches & Skirts', icon: '👖' },
   { id: 'shoes', label: 'Shoes', fullLabel: 'Shoes, Boots & Moccasins', icon: '🥾' },
@@ -139,6 +139,58 @@ const SKIN_TONES = [
     pupil: '#ffffff',
     mouth: '#8f563b',
     femaleMouth: '#ec273f'
+  }
+];
+
+const HAIR_COLORS = [
+  {
+    id: 'chestnut_brown',
+    name: 'Chestnut Brown',
+    base: '#4d1b1b',
+    highlight: '#81492c',
+    shadow: '#30160d'
+  },
+  {
+    id: 'raven_black',
+    name: 'Raven Black',
+    base: '#22242b',
+    highlight: '#495368',
+    shadow: '#15161a'
+  },
+  {
+    id: 'golden_blonde',
+    name: 'Golden Blonde',
+    base: '#e5b742',
+    highlight: '#f7e26b',
+    shadow: '#a8782a'
+  },
+  {
+    id: 'auburn_red',
+    name: 'Auburn Red',
+    base: '#b84627',
+    highlight: '#e98537',
+    shadow: '#782115'
+  },
+  {
+    id: 'sandy_brown',
+    name: 'Sandy Brown',
+    base: '#a67449',
+    highlight: '#d4a373',
+    shadow: '#684323'
+  },
+  {
+    id: 'dark_chocolate',
+    name: 'Dark Chocolate',
+    base: '#3b2016',
+    highlight: '#5e382b',
+    shadow: '#24120b'
+  },
+  {
+    id: 'silver_gray',
+    name: 'Silver Gray',
+    base: '#9fa6b2',
+    highlight: '#e4e6eb',
+    shadow: '#59606d'
   }
 ];
 
@@ -2234,6 +2286,7 @@ export function addCustomClothingItem({ name, category, era = 'oregon_trail', ge
       era,
       gender,
       category,
+      ...(category === 'hats' ? { subType: subType || basePreset.subType || 'hat' } : {}),
       isCustom: true,
       front: (basePreset.front || []).map((pt) => [...pt]),
       side: (basePreset.side || []).map((pt) => [...pt]),
@@ -2352,6 +2405,7 @@ globalThis.CHARACTER_BOILERPLATE = {
   CATEGORIES,
   PRESET_COLOR_DYES,
   SKIN_TONES,
+  HAIR_COLORS,
   BASE_BODY_TEMPLATES,
   INITIAL_CLOTHING_BOILERPLATE,
   buildPixelsFromRowMap
@@ -2365,6 +2419,7 @@ export {
   CATEGORIES,
   PRESET_COLOR_DYES,
   SKIN_TONES,
+  HAIR_COLORS,
   BASE_BODY_TEMPLATES,
   INITIAL_CLOTHING_BOILERPLATE,
   buildPixelsFromRowMap

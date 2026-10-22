@@ -76,21 +76,14 @@ function easeProgress(progress) {
 
 function getStoreApproachLayout(progress, storeX, pathStartY) {
   const t = Math.max(0, Math.min(1, progress));
-  const house = { x: 50, footY: pathStartY + 1, scale: 0.55 };
-  const foreground = { footY: pathStartY + 3, scale: 0.9 };
-  const store = { x: storeX - 16, footY: pathStartY + 1, scale: 0.55 };
-  const foregroundEntryEnd = 0.24;
-  const backgroundEntryStart = 0.66;
-  const foregroundProgress = t <= foregroundEntryEnd
-    ? easeProgress(t / foregroundEntryEnd)
-    : t >= backgroundEntryStart
-      ? 1 - easeProgress((t - backgroundEntryStart) / (1 - backgroundEntryStart))
-      : 1;
+  const house = { x: 84, footY: pathStartY + 9 };
+  const store = { x: storeX - 18, footY: pathStartY + 9 };
+  const arcY = Math.sin(t * Math.PI) * 1.5;
 
   return {
     partyX: interpolate(house.x, store.x, t),
-    footY: interpolate(house.footY, foreground.footY, foregroundProgress),
-    scale: interpolate(house.scale, foreground.scale, foregroundProgress)
+    footY: interpolate(house.footY, store.footY, t) + arcY,
+    scale: 1
   };
 }
 
@@ -363,9 +356,9 @@ export function renderGameLandscapeStageLegacy(canvas, state, animTick = 0, opti
   // Apply the depth offset once to the whole scene, keeping the riverbed anchored below.
   const sceneLiftPx = riverSceneActive ? riverVisualProfile.waterlineOffsetPx : 0;
   const sceneFootY = charFootY - sceneLiftPx;
-  const horizonY = Math.max(12, sceneFootY - 20);
-  const pathStartY = Math.max(18, sceneFootY - 6);
-  const pathEndY = Math.min(H - 2, sceneFootY + 4);
+  const horizonY = Math.max(12, sceneFootY - 26);
+  const pathStartY = Math.max(18, sceneFootY - 10);
+  const pathEndY = Math.min(H - 2, sceneFootY + 6);
   canvas.__pixiBackdropMeta = {
     backdropId,
     sceneFootY,
@@ -386,7 +379,7 @@ export function renderGameLandscapeStageLegacy(canvas, state, animTick = 0, opti
         isFerryScene: riverCrossing?.method === 'ferry'
       }
     : null;
-  const storeX = W - 54;
+  const storeX = W - 86;
   const storeApproachLayout = isStoreApproach
     ? getStoreApproachLayout(state.generalStoreApproachProgress ?? 0, storeX, pathStartY)
     : null;
@@ -463,18 +456,18 @@ export function renderGameLandscapeStageLegacy(canvas, state, animTick = 0, opti
 
   const eraId = state.selectedEra || DEFAULT_PARTY_ERA_ID;
   if (isPreTrail) {
-    drawEraHomeBuilding(ctx, eraId, 12, charFootY - 4);
-    drawGeneralStoreBuilding(ctx, storeX, charFootY - 4, animTick);
+    drawEraHomeBuilding(ctx, eraId, 6, charFootY - 2);
+    drawGeneralStoreBuilding(ctx, storeX, charFootY - 2, animTick);
 
     if (eraId !== 'oregon_trail') {
-      const shimmerY = charFootY - 28;
+      const shimmerY = charFootY - 34;
       ctx.fillStyle = animTick % 2 === 0 ? 'rgba(0, 255, 102, 0.55)' : 'rgba(49, 162, 242, 0.55)';
-      ctx.fillRect(54, shimmerY, 2, 24);
+      ctx.fillRect(66, shimmerY, 2, 30);
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(54, shimmerY + ((animTick * 3) % 21), 2, 3);
+      ctx.fillRect(66, shimmerY + ((animTick * 3) % 27), 2, 3);
     }
   } else if (!isStoreInterior && (state.milesTraveled || 0) === 0 && scrollOffset < 180) {
-    drawGeneralStoreBuilding(ctx, 24 - Math.floor(scrollOffset * 0.8), charFootY - 4, animTick);
+    drawGeneralStoreBuilding(ctx, 16 - Math.floor(scrollOffset * 0.8), charFootY - 2, animTick);
   }
 
   if (!isPreTrail && !isStoreInterior && !isMoving && state.lastActionContext?.actionType === 'camp') {
@@ -502,7 +495,7 @@ export function renderGameLandscapeStageLegacy(canvas, state, animTick = 0, opti
   const crossingFarCartX = isGuideScene ? riverEnd + 2 : riverEnd + 8;
   const crossingArch = Math.sin(Math.PI * riverProgress);
   const memberSpacing = storeApproachLayout
-    ? 18 * storeApproachLayout.scale
+    ? 16
     : isStoreInterior
       ? 22
       : riverSceneActive
@@ -619,10 +612,10 @@ export function renderGameLandscapeStageLegacy(canvas, state, animTick = 0, opti
       id: 'shopkeeper',
       name: 'Matt',
       role: 'Shopkeeper',
-      headX: storeX + 13 + 8,
-      headY: Math.max(8, charFootY - 20),
-      footX: storeX + 13 + 8,
-      footY: charFootY - 5
+      headX: storeX + 16 + 15.5,
+      headY: Math.max(8, charFootY - 30),
+      footX: storeX + 16 + 15.5,
+      footY: charFootY - 3
     });
   }
 
@@ -642,12 +635,19 @@ export function renderGameLandscapeStageLegacy(canvas, state, animTick = 0, opti
   }
 
   const ferryPartyWalking = ferryLayout?.isBoarding || ferryLayout?.isDisembarking;
-  const effectiveAnimMode = isMoving && (!isFerryCrossing || ferryPartyWalking) ? 'walk' : 'idle';
+  const storeApproachProgress = state.generalStoreApproachProgress ?? 0;
+  const isStoreWalking = isStoreApproach && storeApproachProgress > 0 && storeApproachProgress < 1;
+  const effectiveAnimMode = (isStoreWalking || (isMoving && (!isFerryCrossing || ferryPartyWalking))) ? 'walk' : 'idle';
   const partyFootPositions = [];
 
-  party.forEach((member, idx) => {
+  const renderOrder = [...party.keys()].reverse();
+  for (const idx of renderOrder) {
+    const member = party[idx];
     const memberFrameCount = getCharacterFrameCount(member.appearance, 'side_right', effectiveAnimMode);
-    const memberFrameIndex = ((typeof rawWalkFrame === "number" ? rawWalkFrame : frameIndex) + idx) % memberFrameCount;
+    const approachFrame = Math.floor(storeApproachProgress * 64);
+    const memberFrameIndex = isStoreApproach
+      ? (isStoreWalking ? (approachFrame + idx) % memberFrameCount : 0)
+      : (((typeof rawWalkFrame === "number" ? rawWalkFrame : frameIndex) + idx) % memberFrameCount);
     const memberGrid = pixiActorLayer
       ? null
       : getCharacterFrameGrid(member.appearance, 'side_right', effectiveAnimMode, memberFrameIndex);
@@ -677,6 +677,12 @@ export function renderGameLandscapeStageLegacy(canvas, state, animTick = 0, opti
       footY: memberFootY
     });
 
+    const shadowW = Math.round(16 * memberScale);
+    const shadowH = Math.max(2, Math.round(3 * memberScale));
+    const shadowX = Math.round(drawX + 7.5 * memberScale);
+    // Soles of the shoes are at drawY + 29 * memberScale; anchor shadow directly under the soles
+    const shadowY = Math.round(drawY + 28 * memberScale);
+
     if (pixiActorLayer) {
       pixiActors.party.push({
         id: member.id || `member_${idx}`,
@@ -686,15 +692,20 @@ export function renderGameLandscapeStageLegacy(canvas, state, animTick = 0, opti
         scale: memberScale,
         frameIndex: memberFrameIndex,
         animationMode: effectiveAnimMode,
-        shadowX: drawX + 10 * memberScale,
-        shadowY: memberFootY,
-        shadowWidth: 12 * memberScale,
-        shadowHeight: 2 * memberScale,
+        shadowX,
+        shadowY,
+        shadowWidth: shadowW,
+        shadowHeight: shadowH,
         shadowVisible: !memberInWater
       });
     } else if (!memberInWater) {
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.30)';
-      ctx.fillRect(drawX + 10 * memberScale, memberFootY, 12 * memberScale, 2 * memberScale);
+      // Soft rounded oval contact shadow in Canvas 2D
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.16)';
+      ctx.fillRect(shadowX + 2, shadowY - 1, shadowW - 4, 1);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.36)';
+      ctx.fillRect(shadowX, shadowY, shadowW, 1);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
+      ctx.fillRect(shadowX + 1, shadowY + 1, shadowW - 2, 1);
     }
 
     if (!pixiActorLayer) {
@@ -707,7 +718,7 @@ export function renderGameLandscapeStageLegacy(canvas, state, animTick = 0, opti
       const puffOffset = (frameIndex + idx) % 2;
       foregroundContext.fillRect(drawX + 8 - puffOffset, memberFootY - 1 - puffOffset, 2, 1);
     }
-  });
+  }
 
   if (riverSceneActive) {
     const isWadingWithSplashes = riverCrossing?.phase === 'crossing'

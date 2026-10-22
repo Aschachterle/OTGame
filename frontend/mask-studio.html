@@ -11,7 +11,7 @@
     <!-- Top Application Navigation Bar -->
     <header class="app-header">
       <div class="brand-block">
-        <p class="eyebrow">IMMUTABLE TRAIL / 10-SECTION DEPTH &amp; ANATOMY WORKBENCH</p>
+        <p class="eyebrow">IMMUTABLE TRAIL / 16-SECTION DEPTH &amp; ANATOMY WORKBENCH</p>
         <h1>🎨 Multi-Section Depth &amp; Anatomy Mask Studio</h1>
       </div>
 
@@ -67,7 +67,7 @@
             <span>3. Facing</span>
             <select id="sprite-view" aria-label="Sprite facing">
               <option value="side_right" selected>Side Profile</option>
-              <option value="front">Front View</option>
+              <option value="front">Front View (Idle)</option>
             </select>
           </label>
           <label>
@@ -77,6 +77,11 @@
               <option value="idle">Idle · 1 frame</option>
             </select>
           </label>
+          <div class="pose-quick-pills" role="group" aria-label="Quick pose target switcher" style="display:flex; gap:4px; align-self:flex-end; padding-bottom:2px;">
+            <button type="button" class="secondary-button pose-quick-btn active" data-quick-pose="side-walk" title="Edit Side Profile 8-frame Walk Cycle Masks">🚶 Side Walk (8f)</button>
+            <button type="button" class="secondary-button pose-quick-btn" data-quick-pose="side-idle" title="Edit Side Profile Idle Mask">🧍 Side Idle</button>
+            <button type="button" class="secondary-button pose-quick-btn" data-quick-pose="front-idle" title="Edit Front-Facing (South) Idle Mask">🧍‍♂️ Front Idle (South)</button>
+          </div>
           <button id="sprite-play" class="secondary-button play-cycle-btn" type="button" aria-pressed="false">▶ Play Walk Cycle</button>
         </div>
         <output id="sprite-frame-readout" class="strip-readout" aria-live="polite">WALK · FRAME 1/8</output>
@@ -90,12 +95,12 @@
       <div class="breadcrumb-main">
         <span class="breadcrumb-eyebrow">EDITING ANATOMICAL MASK:</span>
         <div id="studio-breadcrumb-trail" class="breadcrumb-trail">
-          🎨 10-Section Depth Mask › Jedediah (Male) › Side Profile › WALK Frame 1
+          🎨 16-Section Depth Mask › Jedediah (Male) › Side Profile › WALK Frame 1
         </div>
-        <output id="mask-status-readout" class="status-badge">10 SECTIONS · 100% MAPPED</output>
+        <output id="mask-status-readout" class="status-badge">16 SECTIONS · 100% MAPPED</output>
       </div>
       <div id="studio-propagation-rule" class="propagation-rule-pill">
-        ℹ️ 10 Anatomical Sections: All sections are visible and editable at once in distinct colors so you can verify 100% sprite mapping coverage across each frame.
+        ℹ️ 16 Anatomical Sections: All sections are visible and editable at once in distinct colors so you can verify 100% sprite mapping coverage across each frame.
       </div>
     </section>
 
@@ -133,9 +138,11 @@
           </div>
         </div>
 
-        <!-- 14-Section Color Legend -->
+        <!-- 16-Section Color Legend -->
         <div id="mask-canvas-legend" class="mask-canvas-legend ten-sections">
-          <span class="legend-item"><span class="section-color-chip" style="background:#ffd166"></span>Head</span>
+          <span class="legend-item"><span class="section-color-chip" style="background:#ff9e00"></span>Hair</span>
+          <span class="legend-item"><span class="section-color-chip" style="background:#ffd166"></span>Head / Face</span>
+          <span class="legend-item"><span class="section-color-chip" style="background:#d4a373"></span>Neck</span>
           <span class="legend-item"><span class="section-color-chip" style="background:#f78c6c"></span>Torso</span>
           <span class="legend-item"><span class="section-color-chip" style="background:#80ed99"></span>FG Short Sleeve</span>
           <span class="legend-item"><span class="section-color-chip" style="background:#06d6a0"></span>FG Forearm</span>
@@ -231,15 +238,29 @@
         <!-- 10 Section Palette Buttons -->
         <div class="studio-palette-section" style="padding: 8px;">
           <div class="studio-palette-header">
-            <span>Choose Section Brush (Click or Press 1–0):</span>
+            <span>Choose Section Brush (Click or Press 1–0, H, N, O, P, -, =):</span>
           </div>
 
           <div id="mask-section-palette" class="section-palette-grid">
-            <button class="section-brush-btn" type="button" data-section-id="head" data-shortcut="1" title="Head: Face, hair, skull &amp; chin [Key 1]">
+            <button class="section-brush-btn" type="button" data-section-id="hair" data-shortcut="h" title="Hair: Scalp, crown, bangs, sideburns &amp; locks [Key H]">
+              <span class="section-color-chip" style="background:#ff9e00"></span>
+              <span class="section-btn-name">Hair</span>
+              <span class="section-btn-key">H</span>
+              <span class="section-btn-count" id="count-hair">0 px</span>
+            </button>
+
+            <button class="section-brush-btn" type="button" data-section-id="head" data-shortcut="1" title="Head / Face: Eyes, nose, cheeks, mouth, jaw &amp; chin [Key 1]">
               <span class="section-color-chip" style="background:#ffd166"></span>
-              <span class="section-btn-name">Head</span>
+              <span class="section-btn-name">Head / Face</span>
               <span class="section-btn-key">1</span>
               <span class="section-btn-count" id="count-head">0 px</span>
+            </button>
+
+            <button class="section-brush-btn" type="button" data-section-id="neck" data-shortcut="n" title="Neck: Throat, collar base &amp; chin junction [Key N]">
+              <span class="section-color-chip" style="background:#d4a373"></span>
+              <span class="section-btn-name">Neck</span>
+              <span class="section-btn-key">N</span>
+              <span class="section-btn-count" id="count-neck">0 px</span>
             </button>
 
             <button class="section-brush-btn" type="button" data-section-id="torso" data-shortcut="2" title="Torso: Chest, ribs &amp; upper back [Key 2]">
@@ -340,8 +361,8 @@
           <div class="studio-palette-header">
             <span>1-Click Mapping &amp; Anatomy Helpers</span>
           </div>
-          <button id="mask-btn-autodetect-all" class="secondary-button" type="button" style="min-height: 32px; font-weight: 700; color: #00ffaa; border-color: #00aa66;" title="Auto-detect and map all 10 anatomical sections on this frame">
-            🪄 Auto-Map All 10 Sections (1-Click)
+          <button id="mask-btn-autodetect-all" class="secondary-button" type="button" style="min-height: 32px; font-weight: 700; color: #00ffaa; border-color: #00aa66;" title="Auto-detect and map all 16 anatomical sections on this frame">
+            🪄 Auto-Map All 16 Sections (1-Click)
           </button>
           <button id="mask-btn-swap-limbs" class="secondary-button" type="button" style="min-height: 30px; font-size: 11px;" title="Swap Foreground and Background limb assignments (near <-> far)">
             🔄 Swap Near &amp; Far Limbs

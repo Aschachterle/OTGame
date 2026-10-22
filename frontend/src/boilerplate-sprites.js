@@ -165,7 +165,7 @@ export function getBoilerplateSpriteSize(gender) {
 
 export function getBoilerplateSpriteFrameCount(gender, animationMode = 'walk') {
   const sprites = SPRITES_BY_GENDER.get(gender);
-  if (!sprites) return animationMode === 'idle' ? 2 : 6;
+  if (!sprites) return animationMode === 'idle' ? 1 : 8;
   if (animationMode === 'idle') return 1;
   return Math.max(sprites.walkFrames.east.length, sprites.walkFrames.south.length, 1);
 }

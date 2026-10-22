@@ -323,14 +323,18 @@ export async function mountPixiStage(sourceCanvas) {
     ownedTextures.add(weatherLayer.portalTexture);
     textureFactory = new PixiTextureFactory();
     const shadowCanvas = document.createElement('canvas');
-    shadowCanvas.width = 12;
-    shadowCanvas.height = 2;
+    shadowCanvas.width = 16;
+    shadowCanvas.height = 3;
     const shadowContext = shadowCanvas.getContext('2d');
     if (!shadowContext) {
       throw new Error('Could not create the PixiJS party shadow texture.');
     }
-    shadowContext.fillStyle = 'rgba(0, 0, 0, 0.30)';
-    shadowContext.fillRect(0, 0, shadowCanvas.width, shadowCanvas.height);
+    shadowContext.fillStyle = 'rgba(0, 0, 0, 0.16)';
+    shadowContext.fillRect(2, 0, 12, 1);
+    shadowContext.fillStyle = 'rgba(0, 0, 0, 0.38)';
+    shadowContext.fillRect(0, 1, 16, 1);
+    shadowContext.fillStyle = 'rgba(0, 0, 0, 0.18)';
+    shadowContext.fillRect(1, 2, 14, 1);
     const shadowTexture = Texture.from(shadowCanvas);
     shadowTexture.source.scaleMode = 'nearest';
     ownedTextures.add(shadowTexture);
