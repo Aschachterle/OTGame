@@ -1740,34 +1740,6 @@ function saveCustomOverridesToStorage() {
 
 loadCustomOverridesFromStorage();
 
-function normalizeExistingBaseOverridesAsBald() {
-  let changed = false;
-  const frameKeys = [...CUSTOM_SPRITE_OVERRIDES.keys()];
-  for (const key of frameKeys) {
-    const match = key.match(/^base:(male|female):(east|south):(walk|idle):(\d+)$/);
-    if (!match) continue;
-    const [, gender, direction, animMode, frameIndex] = match;
-    const grid = CUSTOM_SPRITE_OVERRIDES.get(key);
-    if (!grid) continue;
-    const view = direction === 'south' ? 'front' : 'side';
-    const hairCoords = getFrameSectionMap(gender, view, animMode, Number(frameIndex), grid)?.hair || [];
-    let frameChanged = false;
-    for (const [x, y] of hairCoords) {
-      if (Number.isInteger(x) && Number.isInteger(y) && grid[y]?.[x]) {
-        grid[y][x] = null;
-        frameChanged = true;
-      }
-    }
-    if (frameChanged) {
-      CUSTOM_SPRITE_OVERRIDES.set(key, grid);
-      changed = true;
-    }
-  }
-  if (changed) saveCustomOverridesToStorage();
-}
-
-normalizeExistingBaseOverridesAsBald();
-
 export function getCustomSpriteOverride(key) {
   if (CUSTOM_SPRITE_OVERRIDES.has(key)) {
     return CUSTOM_SPRITE_OVERRIDES.get(key).map((row) => [...row]);
@@ -1900,20 +1872,13 @@ export function getBaseSpriteGrid(gender, direction = 'east', animMode = 'walk',
   const hairView = normDir === 'south' ? 'front' : 'side';
   const hairCoords = getFrameSectionMap(normGender, hairView, effectiveMode, frame, sourceGrid)?.hair || [];
   const baldGrid = sourceGrid.map((row) => [...row]);
-  let removedHairPixel = false;
   for (const [x, y] of hairCoords) {
     if (Number.isInteger(x) && Number.isInteger(y) && baldGrid[y]?.[x]) {
       baldGrid[y][x] = null;
-      removedHairPixel = true;
     }
   }
-  // Custom override grids are the Base Studio's editable source pixels. Keep
-  // the canonical in-memory/local draft bald too, so later edits and exports
-  // start from these pixels instead of reintroducing the old scalp fill.
-  if (removedHairPixel && customKey) {
-    CUSTOM_SPRITE_OVERRIDES.set(customKey, baldGrid.map((row) => [...row]));
-    saveCustomOverridesToStorage();
-  }
+  // This is a display/editing copy only. Frame reads must never rewrite source
+  // overrides: selecting frames or rendering a preview is not an edit action.
   return baldGrid;
 }
 
