@@ -2347,20 +2347,27 @@ export function getFrameSectionMap(gender, view = 'side', animMode = 'walk', fra
 
     for (const s of MASK_SECTIONS) {
       const customCoords = resolved[s.id];
-      merged[s.id] = Array.isArray(customCoords) && (s.id !== 'hair' || customCoords.length > 0)
+      const rawCoords = Array.isArray(customCoords)
         ? customCoords.map(([x, y]) => [x, y])
-        : (auto[s.id] || []);
+        : (custom.head === undefined && custom.hair === undefined ? (auto[s.id] || []) : []);
+      merged[s.id] = Array.isArray(baseGrid)
+        ? rawCoords.filter(([x, y]) => Boolean(baseGrid[y]?.[x]))
+        : rawCoords;
     }
     merged.skinRoles = custom.skinRoles && typeof custom.skinRoles === 'object'
       ? Object.fromEntries(Object.entries(custom.skinRoles).map(([role, coords]) => [
         role,
-        Array.isArray(coords) ? coords.map(([x, y]) => [x, y]) : []
+        Array.isArray(coords)
+          ? coords.filter(([x, y]) => !Array.isArray(baseGrid) || Boolean(baseGrid[y]?.[x])).map(([x, y]) => [x, y])
+          : []
       ]))
       : {};
     merged.hairRoles = custom.hairRoles && typeof custom.hairRoles === 'object'
       ? Object.fromEntries(Object.entries(custom.hairRoles).map(([role, coords]) => [
         role,
-        Array.isArray(coords) ? coords.map(([x, y]) => [x, y]) : []
+        Array.isArray(coords)
+          ? coords.filter(([x, y]) => !Array.isArray(baseGrid) || Boolean(baseGrid[y]?.[x])).map(([x, y]) => [x, y])
+          : []
       ]))
       : {};
     return merged;
@@ -2371,6 +2378,26 @@ export function getFrameSectionMap(gender, view = 'side', animMode = 'walk', fra
     return auto;
   }
   return getAutoDetectedSectionMap(gender, view, animMode, frameIndex, baseGrid);
+}
+
+export function pruneDeletedPixelsFromFrameMask(gender, view = 'side', animMode = 'walk', frameIndex = 0, spriteGrid = null) {
+  if (!Array.isArray(spriteGrid)) return;
+  const currentMap = getFrameSectionMap(gender, view, animMode, frameIndex, null);
+  const pruned = {};
+  for (const s of MASK_SECTIONS) {
+    pruned[s.id] = (currentMap[s.id] || []).filter(([x, y]) => Boolean(spriteGrid[y]?.[x]));
+  }
+  for (const roleKey of ['skinRoles', 'hairRoles']) {
+    if (currentMap[roleKey] && typeof currentMap[roleKey] === 'object') {
+      pruned[roleKey] = Object.fromEntries(
+        Object.entries(currentMap[roleKey]).map(([role, coords]) => [
+          role,
+          (Array.isArray(coords) ? coords : []).filter(([x, y]) => Boolean(spriteGrid[y]?.[x]))
+        ])
+      );
+    }
+  }
+  setFrameSectionMap(gender, view, animMode, frameIndex, pruned);
 }
 
 export function setFrameSectionMap(gender, view = 'side', animMode = 'walk', frameIndex = 0, sectionMap = {}) {
